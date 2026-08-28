@@ -30,6 +30,6 @@ _One line: what this was for._
 
 - [ ] Branch is `task/VAM-nnn-slug`, not `main`
 - [ ] Every commit signed off (`git commit -s`)
-- [ ] No commit message mentions Claude or AI
+- [ ] Commit messages follow `AGENTS.md`
 - [ ] Nothing added in the audio path allocates, locks or waits
-- [ ] Reviewed by the `pr-reviewer` agent, findings addressed or answered
+- [ ] Reviewed before merge, findings addressed or answered
