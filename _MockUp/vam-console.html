@@ -1,0 +1,1684 @@
+<title>VAM Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+/* ============================================================
+   VAM Console — mockup of the Virtual Audio Mixer.  Round 2.
+   Single committed dark theme (U6): a bright screen next to a
+   camera operator in a dim chamber is a problem.  Every colour
+   is painted explicitly so the page holds on any host ground.
+   ============================================================ */
+:root{
+  --ground:#0d1013;--panel:#151a1f;--raised:#1e252c;--sunken:#0a0d10;
+  --line:#2b343d;--line-soft:#212a32;
+  --ink:#e4e8ea;--ink-dim:#a8b4bf;--ink-mute:#75838f;
+  --brass:#d6a64a;--brass-dim:#8a6d31;
+  --sig-lo:#4fb477;--sig-mid:#c9c34a;--sig-hi:#e5a32e;--sig-clip:#e0503c;
+  --teal:#39b9ae;--violet:#9b8cd9;--blue:#6ea8ff;
+  --ok:#4fb477;--warn:#e5a32e;--bad:#e0503c;
+  --rail-w:62px;--bar-h:46px;
+  --f-cond:"Barlow Condensed","Arial Narrow",sans-serif;
+  --f-sans:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--f-sans);
+  font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased;overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+:focus-visible{outline:2px solid var(--brass);outline-offset:1px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.lbl{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.09em;font-weight:600}
+
+.app{display:grid;grid-template-columns:var(--rail-w) 1fr;grid-template-rows:var(--bar-h) 1fr;height:100vh}
+
+/* ---------- status bar (U1) ---------- */
+.statusbar{grid-column:1/-1;display:flex;align-items:center;
+  background:linear-gradient(180deg,#1a2128,#12171c);border-bottom:1px solid var(--line);padding-right:10px}
+.brand{width:var(--rail-w);display:flex;align-items:center;justify-content:center;
+  border-right:1px solid var(--line);height:100%}
+.brand b{font-family:var(--f-cond);font-size:19px;letter-spacing:.06em;color:var(--brass)}
+.stat{display:flex;align-items:center;gap:7px;padding:0 13px;height:100%;border-right:1px solid var(--line-soft)}
+.stat .k{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.09em;font-size:11px;color:var(--ink-mute)}
+.stat .v{font-family:var(--f-mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+.stat.grow{flex:1;border-right:none;justify-content:flex-end;gap:10px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 7px currentColor;color:var(--ok)}
+.dot.rec{background:var(--bad);color:var(--bad);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+.zero{color:var(--ok)}
+.chip{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.08em;font-size:11px;
+  padding:2px 7px;border:1px solid var(--line);border-radius:2px;color:var(--ink-dim)}
+.chip.on{border-color:var(--brass);color:var(--brass);background:rgba(214,166,74,.1)}
+.toggle-spec{border:1px solid var(--line);border-radius:2px;padding:4px 10px;font-family:var(--f-cond);
+  text-transform:uppercase;letter-spacing:.08em;font-size:11px;color:var(--ink-mute)}
+.toggle-spec:hover{color:var(--ink)}
+body.spec .toggle-spec{border-color:var(--brass);color:var(--brass);background:rgba(214,166,74,.12)}
+
+/* ---------- rail (U2) ---------- */
+.rail{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;
+  padding:6px 0;overflow-y:auto}
+.rail button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 2px;
+  color:var(--ink-mute);border-left:2px solid transparent;position:relative}
+.rail button svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.6;
+  stroke-linecap:round;stroke-linejoin:round}
+.rail button span{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.05em;font-size:9.5px;line-height:1}
+.rail button:hover{color:var(--ink-dim);background:rgba(255,255,255,.03)}
+.rail button.on{color:var(--brass);border-left-color:var(--brass);background:rgba(214,166,74,.07)}
+.rail .sep{height:1px;background:var(--line-soft);margin:6px 10px}
+.rail .phase{position:absolute;top:6px;right:6px;width:5px;height:5px;border-radius:50%;background:var(--line)}
+.rail .phase.p1{background:var(--brass-dim)}
+.rail .phase.pl{background:#4a3d6b}
+
+/* ---------- views ---------- */
+.stage{overflow:hidden;position:relative;background:var(--ground)}
+.view{display:none;height:100%;overflow:auto}
+.view.on{display:block}
+#v-mixer.on{display:flex;flex-direction:column;overflow:hidden}
+.pad{padding:20px 24px;max-width:1180px}
+h1{font-family:var(--f-cond);font-size:26px;font-weight:600;letter-spacing:.02em;margin:0 0 3px;
+  text-wrap:balance;text-transform:uppercase}
+.sub{color:var(--ink-mute);font-size:12.5px;margin:0 0 20px;max-width:64ch}
+h2{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.09em;font-size:13px;
+  color:var(--ink-dim);margin:26px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line-soft)}
+h2:first-of-type{margin-top:0}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:14px 16px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.08em;font-size:11px;
+  color:var(--ink-mute);text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);font-weight:600}
+td{padding:7px 10px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+.tw{overflow-x:auto}
+.pill{display:inline-flex;align-items:center;gap:5px;font-family:var(--f-cond);text-transform:uppercase;
+  letter-spacing:.07em;font-size:10.5px;padding:2px 7px;border-radius:2px;border:1px solid}
+.pill.ok{color:var(--ok);border-color:rgba(79,180,119,.4);background:rgba(79,180,119,.1)}
+.pill.warn{color:var(--warn);border-color:rgba(229,163,46,.4);background:rgba(229,163,46,.1)}
+.pill.bad{color:var(--bad);border-color:rgba(224,80,60,.4);background:rgba(224,80,60,.1)}
+.pill.idle{color:var(--ink-mute);border-color:var(--line)}
+.btn{border:1px solid var(--line);border-radius:2px;padding:6px 13px;font-family:var(--f-cond);
+  text-transform:uppercase;letter-spacing:.08em;font-size:11.5px;color:var(--ink-dim);background:var(--raised)}
+.btn:hover{color:var(--ink);border-color:var(--ink-mute)}
+.btn.pri{background:var(--brass);border-color:var(--brass);color:#1a1408;font-weight:600}
+.btn.danger{color:var(--bad);border-color:rgba(224,80,60,.4)}
+.btn.sm{padding:3px 8px;font-size:11px}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.between{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.note{font-size:12px;color:var(--ink-mute);border-left:2px solid var(--brass-dim);padding:2px 0 2px 11px;margin:12px 0}
+.kv{display:grid;grid-template-columns:1fr auto;gap:6px 14px;font-size:12.5px;align-items:center}
+.kv .k{color:var(--ink-mute)}
+.kv .v{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+select,input[type=text]{font-family:var(--f-mono);font-size:12px;background:var(--sunken);color:var(--ink);
+  border:1px solid var(--line);border-radius:2px;padding:4px 7px;min-width:150px}
+select:hover,input[type=text]:hover{border-color:var(--ink-mute)}
+input.num{min-width:0;width:62px;text-align:right}
+.knob{display:flex;flex-direction:column;gap:4px;margin:9px 0}
+.knob .between{font-size:11.5px}
+.knob .between>span:first-child{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.07em;color:var(--ink-mute);
+  display:flex;align-items:center;gap:5px}
+.slider{height:5px;background:var(--sunken);border:1px solid var(--line);border-radius:2px;position:relative;cursor:pointer}
+.slider i{position:absolute;inset:0 auto 0 0;background:var(--brass);border-radius:2px}
+.slider b{position:absolute;top:50%;width:13px;height:13px;margin:-6.5px 0 0 -6.5px;border-radius:50%;
+  background:var(--ink);border:1px solid var(--ground)}
+.sw{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-dim);cursor:pointer}
+.sw i{width:30px;height:16px;border-radius:8px;background:var(--sunken);border:1px solid var(--line);
+  position:relative;transition:.15s;flex:0 0 30px}
+.sw i::after{content:"";position:absolute;top:1.5px;left:1.5px;width:11px;height:11px;border-radius:50%;
+  background:var(--ink-mute);transition:.15s}
+.sw.on i{background:rgba(214,166,74,.25);border-color:var(--brass)}
+.sw.on i::after{left:15px;background:var(--brass)}
+
+/* help affordance (U14) + tooltip (U15) */
+.hlp{width:14px;height:14px;border-radius:50%;border:1px solid var(--line);color:var(--ink-mute);
+  font-size:9.5px;line-height:1;display:inline-flex;align-items:center;justify-content:center;
+  font-family:var(--f-mono);flex:0 0 14px}
+.hlp:hover{border-color:var(--brass);color:var(--brass)}
+#pop{position:fixed;z-index:200;max-width:330px;background:#1c232b;border:1px solid var(--brass-dim);
+  border-radius:3px;padding:10px 12px;font-size:12.5px;line-height:1.5;color:var(--ink-dim);
+  box-shadow:0 10px 30px rgba(0,0,0,.6);display:none}
+#pop b{color:var(--brass);font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.07em;
+  display:block;margin-bottom:4px;font-size:12px}
+#tip{position:fixed;z-index:210;background:#0a0d10;border:1px solid var(--line);border-radius:2px;
+  padding:3px 7px;font-size:11.5px;color:var(--ink-dim);pointer-events:none;display:none;white-space:nowrap}
+
+/* ---------- mixer ---------- */
+.mixtool{display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid var(--line);
+  background:var(--panel);flex:0 0 auto}
+.mixer{display:grid;grid-template-columns:1fr auto;flex:1;min-height:0}
+.strips{display:flex;gap:2px;padding:10px 10px 10px 12px;overflow-x:auto;align-items:stretch}
+.buses{display:flex;gap:2px;padding:10px 12px 10px 10px;
+  background:linear-gradient(90deg,#0a0d10,#11161a);border-left:1px solid var(--line)}
+.strip{width:128px;flex:0 0 128px;background:var(--panel);border:1px solid var(--line);border-top-width:0;
+  border-radius:2px;display:flex;flex-direction:column;position:relative;overflow:hidden;transition:opacity .15s}
+.strip.sel{border-color:var(--brass);box-shadow:inset 0 0 0 1px rgba(214,166,74,.3)}
+.strip.muted{filter:saturate(.16) brightness(.6)}
+.strip.muted::before{content:"MUTED";position:absolute;top:46px;left:0;right:0;text-align:center;z-index:5;
+  font-family:var(--f-cond);letter-spacing:.22em;font-size:11px;color:var(--bad);pointer-events:none}
+.strip.drag{opacity:.35}
+.strip .top{height:3px}
+.strip .hd{padding:5px 7px;border-bottom:1px solid var(--line-soft);cursor:pointer;display:flex;gap:6px;align-items:flex-start}
+.grip{font-family:var(--f-mono);color:#3d474f;font-size:12px;line-height:1;cursor:grab;padding-top:2px;letter-spacing:-2px}
+.grip:hover{color:var(--brass)}
+.strip .nm{display:block;font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.04em;font-size:14px;
+  font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15}
+.strip .dev{display:block;font-family:var(--f-mono);font-size:9px;color:var(--ink-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.strip .rate{font-family:var(--f-mono);font-size:9px;color:var(--ink-mute);display:flex;justify-content:space-between}
+
+/* automix + speaking, with its floor and ceiling visible (U19) */
+.ax{padding:5px 7px 6px;border-bottom:1px solid var(--line-soft)}
+.axtop{display:flex;align-items:center;gap:6px}
+.spk{width:9px;height:9px;border-radius:50%;background:var(--line);flex:0 0 9px;transition:.1s}
+.spk.on{background:var(--brass);box-shadow:0 0 9px var(--brass)}
+.axbar{flex:1;height:9px;background:var(--sunken);border:1px solid var(--line);border-radius:1px;position:relative;overflow:hidden}
+.axbar i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,var(--brass-dim),var(--brass));transition:width .09s linear}
+.axscale{display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:8.5px;
+  color:var(--ink-mute);margin-top:2px;padding-left:15px}
+.axscale b{color:var(--brass);font-weight:400}
+
+/* meter + fader */
+.mf{flex:1;display:flex;gap:6px;padding:8px 7px;min-height:118px}
+.meter{width:14px;flex:0 0 14px;background:var(--sunken);border:1px solid var(--line);border-radius:1px;
+  position:relative;overflow:hidden}
+.meter i{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(180deg,
+  var(--sig-clip) 0%,var(--sig-hi) 12%,var(--sig-mid) 28%,var(--sig-lo) 50%);transition:height .05s linear}
+/* Channel held at the automix floor — it is still making sound, but none of it
+   is reaching the mix. Grey says that without pretending the signal is gone. */
+.meter.ducked i{background:linear-gradient(180deg,#5c6874,#39434e)}
+.meter u{position:absolute;left:0;right:0;height:1px;background:var(--ink);opacity:.75}
+.meter .thr{position:absolute;left:-1px;right:-1px;height:0;border-top:1px dashed var(--bad);opacity:.85}
+.meter .ticks{position:absolute;inset:0;background-image:repeating-linear-gradient(180deg,
+  transparent 0 11px,rgba(0,0,0,.55) 11px 12px)}
+.fader{flex:1;position:relative;background:var(--sunken);border:1px solid var(--line);border-radius:2px;cursor:ns-resize}
+.fader .cap{position:absolute;left:2px;right:2px;height:24px;background:linear-gradient(180deg,#39434e,#232b33);
+  border:1px solid #4a5763;border-radius:2px;box-shadow:0 2px 4px rgba(0,0,0,.5)}
+.fader .cap::after{content:"";position:absolute;left:3px;right:3px;top:50%;height:1px;background:var(--brass);opacity:.7}
+.fader .unity{position:absolute;left:0;right:0;height:1px;background:var(--line);top:28%}
+.gr{width:6px;flex:0 0 6px;background:var(--sunken);border:1px solid var(--line);border-radius:1px;position:relative}
+.gr i{position:absolute;left:0;right:0;top:0;background:var(--sig-hi);opacity:.85;transition:height .07s linear}
+.val{font-family:var(--f-mono);font-size:11.5px;text-align:center;padding:3px 0;color:var(--ink-dim);
+  border-top:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft)}
+
+/* chain indicator — replaces the five little letter buttons (B0) */
+.chainbar{display:flex;align-items:center;gap:3px;padding:6px 7px;cursor:pointer;border-bottom:1px solid var(--line-soft)}
+.chainbar .seg{height:5px;flex:1;background:var(--brass-dim);border-radius:1px}
+.chainbar .seg.byp{background:#2b343d}
+.chainbar .n{font-family:var(--f-mono);font-size:9.5px;color:var(--ink-mute);flex:0 0 auto}
+.chainbar:hover .seg{background:var(--brass)}
+
+/* bus sends: full-width rows, real touch targets (D2a) */
+.sends{display:flex;flex-direction:column;gap:2px;padding:5px 6px}
+.sends b{display:flex;align-items:center;justify-content:space-between;height:26px;padding:0 7px;
+  border:1px solid var(--line);border-radius:2px;background:var(--sunken);cursor:pointer;
+  font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.06em;font-size:12px;
+  font-weight:500;color:var(--ink-mute)}
+.sends b em{font-family:var(--f-mono);font-size:10px;font-style:normal;opacity:.75}
+.sends b.on{color:#101418;background:var(--sig-lo);border-color:var(--sig-lo);font-weight:600}
+.sends b.on.mon{background:var(--brass);border-color:var(--brass)}
+.sends b.locked{background:rgba(224,80,60,.12);border-color:rgba(224,80,60,.35);color:var(--bad);cursor:not-allowed}
+
+.msm{display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px;padding:3px 6px 8px}
+.msm b{font-family:var(--f-cond);font-size:12px;text-align:center;padding:8px 0;border:1px solid var(--line);
+  border-radius:2px;color:var(--ink-mute);background:var(--sunken);cursor:pointer;font-weight:600;letter-spacing:.06em}
+.msm b.m.on{background:var(--bad);border-color:var(--bad);color:#fff}
+.msm b.s.on{background:var(--brass);border-color:var(--brass);color:#1a1408}
+.msm b.o.on{background:var(--raised);border-color:var(--ink-mute);color:var(--ink)}
+
+/* compact density (U4) */
+body.compact .strip{width:58px;flex-basis:58px}
+body.compact .strip .dev,body.compact .strip .rate,body.compact .axscale,
+body.compact .sends,body.compact .chainbar .n,body.compact .grip,body.compact .gr{display:none}
+body.compact .strip .nm{font-size:11.5px}
+body.compact .msm{grid-template-columns:1fr 1fr;gap:2px}
+body.compact .msm b.o{display:none}
+body.compact .strip.muted::before{font-size:8px;letter-spacing:.1em}
+
+/* add tile (U17) */
+.addtile{width:44px;flex:0 0 44px;border:1px dashed var(--line);border-radius:2px;background:transparent;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--ink-mute)}
+.addtile:hover{border-color:var(--brass);color:var(--brass);background:rgba(214,166,74,.05)}
+.addtile span{font-size:22px;line-height:1;font-family:var(--f-cond)}
+.addtile em{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.1em;font-size:9.5px;
+  font-style:normal;writing-mode:vertical-rl;transform:rotate(180deg)}
+
+.bstrip{width:112px;flex:0 0 112px;background:var(--raised);border:1px solid var(--line);border-radius:2px;
+  display:flex;flex-direction:column}
+.bstrip.master{width:132px;flex-basis:132px;border-color:var(--brass-dim)}
+.bstrip .hd{padding:6px 7px;border-bottom:1px solid var(--line-soft);cursor:pointer}
+.bstrip .out{font-family:var(--f-mono);font-size:9px;color:var(--ink-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lim{display:flex;align-items:center;gap:5px;padding:5px 7px;border-bottom:1px solid var(--line-soft);
+  font-family:var(--f-cond);font-size:10.5px;letter-spacing:.07em;color:var(--ink-mute)}
+.lim i{width:6px;height:6px;border-radius:50%;background:var(--line)}
+.lim i.on{background:var(--sig-hi);box-shadow:0 0 6px var(--sig-hi)}
+body.compact .bstrip{width:64px;flex-basis:64px}
+body.compact .bstrip.master{width:74px;flex-basis:74px}
+body.compact .bstrip .out,body.compact .lim{display:none}
+
+/* monitor bar in the mixer (D5 reachable without leaving the mixer) */
+.monbar{flex:0 0 auto;border-top:1px solid var(--line);background:var(--panel);padding:0 12px}
+.monbar .mhead{display:flex;align-items:center;gap:10px;padding:6px 0}
+.monrow{display:flex;align-items:center;gap:8px;padding:5px 0 8px;border-top:1px solid var(--line-soft);flex-wrap:wrap}
+.monrow .nm{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.08em;font-size:12.5px;
+  color:var(--brass);width:64px;flex:0 0 64px}
+.monrow .grp{display:flex;align-items:center;gap:4px}
+.monrow .gl{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.09em;font-size:9.5px;color:var(--ink-mute);margin-right:2px}
+.mchip{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.05em;font-size:11.5px;
+  padding:4px 9px;border:1px solid var(--line);border-radius:2px;background:var(--sunken);color:var(--ink-mute);cursor:pointer}
+.mchip.on{color:#101418;background:var(--brass);border-color:var(--brass);font-weight:600}
+.mchip.bus.on{background:var(--teal);border-color:var(--teal)}
+.monbar.collapsed .monrow{display:none}
+
+/* ---------- overlays (U3) ---------- */
+.ovl{position:absolute;top:0;right:0;bottom:0;width:min(620px,92%);background:var(--panel);
+  border-left:1px solid var(--line);box-shadow:-14px 0 40px rgba(0,0,0,.5);transform:translateX(101%);
+  transition:transform .18s ease;display:flex;flex-direction:column;z-index:20}
+.ovl.wide{width:min(1000px,96%)}
+.ovl.on{transform:none}
+.ovl .ohd{display:flex;align-items:center;gap:10px;padding:11px 15px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#1a2128,#151a1f)}
+.ovl .ohd .nm{font-family:var(--f-cond);text-transform:uppercase;font-size:18px;letter-spacing:.04em;flex:1}
+.ovl .obody{flex:1;overflow-y:auto;padding:14px 15px}
+.swatch{width:10px;height:10px;border-radius:1px;flex:0 0 10px;display:inline-block}
+
+/* modifier chain (B0) */
+.mod{background:var(--raised);border:1px solid var(--line);border-radius:2px;margin-bottom:3px}
+.mod.anchor{background:#11161b;border-style:dashed;border-color:#333e49}
+.mod.byp{opacity:.5}
+.mod .mh{display:flex;align-items:center;gap:8px;padding:8px 11px;cursor:pointer}
+.mod .mh .t{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.08em;font-size:13px;flex:1}
+.mod .mh .cost{font-family:var(--f-mono);font-size:10px;color:var(--ink-mute)}
+.mod .mh .fid{font-family:var(--f-mono);font-size:9.5px;color:var(--brass-dim)}
+.mod .mb{padding:0 11px 11px;display:none}
+.mod.open .mb{display:block}
+.mod .anchornote{font-size:11.5px;color:var(--ink-mute);padding:0 11px 9px}
+.anchoricon{color:var(--ink-mute);font-size:12px;line-height:1;flex:0 0 auto}
+.mod.dragging{opacity:.4}
+.mod.over{border-color:var(--brass)}
+.addmod{width:100%;border:1px dashed var(--line);border-radius:2px;padding:9px;color:var(--ink-mute);
+  font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.09em;font-size:12px;margin-top:4px}
+.addmod:hover{border-color:var(--brass);color:var(--brass)}
+.tap{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--ink-mute);
+  border-left:2px solid var(--teal);padding:4px 0 4px 10px;margin:3px 0 3px 18px}
+.flow{text-align:center;color:#333e49;font-size:11px;line-height:1.1}
+
+.eqwrap{position:relative;margin-top:8px}
+.eqbox{width:100%;height:120px;background:var(--sunken);border:1px solid var(--line);border-radius:2px;display:block}
+.eqh{position:absolute;width:13px;height:13px;margin:-6.5px 0 0 -6.5px;border-radius:50%;
+  background:var(--brass);border:1px solid #1a1408;cursor:grab}
+.eqh.off{background:var(--ink-mute)}
+.bandtable td,.bandtable th{padding:4px 7px}
+
+/* preset bar */
+.presetbar{background:var(--raised);border:1px solid var(--line);border-radius:2px;padding:9px 11px;
+  display:flex;flex-direction:column;gap:9px}
+.presetbar .r{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.presetbar .r.acts{padding-top:8px;border-top:1px solid var(--line-soft)}
+.dirty{color:var(--warn);font-family:var(--f-mono);font-size:11px}
+
+/* matrix */
+.mx{border-collapse:separate;border-spacing:0;font-size:12px;width:100%}
+.mx th{position:sticky;top:0;background:var(--panel);z-index:2}
+.mx td.cell{text-align:center;font-family:var(--f-mono);font-size:11.5px;cursor:pointer;
+  border-left:1px solid var(--line-soft);min-width:84px}
+.mx td.cell.on{background:rgba(79,180,119,.13);color:var(--ink)}
+.mx td.cell.off{color:#3d474f}
+.mx td.cell.excl{background:rgba(224,80,60,.1);color:var(--bad);font-family:var(--f-cond);letter-spacing:.05em;cursor:not-allowed}
+.mx td.rowh{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.05em;font-size:12.5px;
+  white-space:nowrap;position:sticky;left:0;background:var(--panel)}
+
+.srcgroup{margin-top:10px}
+.srcgroup .gl{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.09em;font-size:10.5px;
+  color:var(--ink-mute);display:block;margin-bottom:5px}
+.srcgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:4px}
+.srcgrid b{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.05em;font-size:11.5px;
+  padding:7px 9px;border:1px solid var(--line);border-radius:2px;background:var(--sunken);
+  color:var(--ink-mute);cursor:pointer;font-weight:500;display:flex;align-items:center;gap:6px}
+.srcgrid b.on{color:var(--ink);border-color:var(--brass-dim);background:rgba(214,166,74,.13)}
+.srcgrid.buses b.on{border-color:var(--teal);background:rgba(57,185,174,.12)}
+
+.tabs{display:flex;border-bottom:1px solid var(--line);margin-bottom:16px;flex-wrap:wrap}
+.tabs button{padding:8px 15px;font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.08em;
+  font-size:12px;color:var(--ink-mute);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button.on{color:var(--brass);border-bottom-color:var(--brass)}
+.tab{display:none}.tab.on{display:block}
+
+.spark{width:100%;height:120px;display:block;background:var(--sunken);border:1px solid var(--line);border-radius:2px}
+.hist{display:flex;align-items:flex-end;gap:2px;height:70px;background:var(--sunken);
+  border:1px solid var(--line);border-radius:2px;padding:6px}
+.hist i{flex:1;background:var(--brass-dim);border-radius:1px 1px 0 0;min-height:1px}
+.band{height:96px;background:var(--sunken);border:1px solid var(--line);border-radius:2px;width:100%;display:block}
+.axrow{display:grid;grid-template-columns:130px 1fr 60px 50px 66px;gap:10px;align-items:center;
+  padding:7px 0;border-bottom:1px solid var(--line-soft)}
+.axrow:last-child{border-bottom:none}
+.axrow .n{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.05em;font-size:13px;
+  display:flex;align-items:center;gap:7px}
+.sharebar{height:13px;background:var(--sunken);border:1px solid var(--line);border-radius:1px;position:relative;overflow:hidden}
+.sharebar i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,var(--brass-dim),var(--brass));transition:width .1s linear}
+.logbox{background:var(--sunken);border:1px solid var(--line);border-radius:2px;padding:9px 11px;
+  font-family:var(--f-mono);font-size:11.5px;line-height:1.65;max-height:300px;overflow:auto}
+.logbox .t{color:var(--ink-mute)}.logbox .w{color:var(--warn)}.logbox .e{color:var(--bad)}.logbox .i{color:var(--ink-dim)}
+.steps{display:flex;margin-bottom:20px}
+.steps div{flex:1;padding:9px 12px;border:1px solid var(--line);border-right:none;background:var(--panel);
+  font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.07em;font-size:11.5px;color:var(--ink-mute)}
+.steps div:last-child{border-right:1px solid var(--line)}
+.steps div.on{background:rgba(214,166,74,.12);color:var(--brass);border-color:var(--brass-dim)}
+.steps div b{font-family:var(--f-mono);font-size:11px;margin-right:6px;color:var(--ink-mute)}
+
+[data-fid]{position:relative}
+body.spec [data-fid]::after{content:attr(data-fid);position:absolute;top:-1px;right:-1px;z-index:9;
+  font-family:var(--f-mono);font-size:8.5px;line-height:1;padding:2px 3px;background:var(--brass);
+  color:#151004;border-radius:0 0 0 3px;pointer-events:none;font-weight:600}
+body.spec .strip,body.spec .bstrip{outline:1px dashed rgba(214,166,74,.22)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="app">
+  <div class="statusbar">
+    <div class="brand"><b>VAM</b></div>
+    <div class="stat" data-fid="U1" data-tip="Engine process state. It runs headless — closing this window does not stop it."><span class="dot"></span><span class="k">Engine</span><span class="v">Running</span></div>
+    <div class="stat" data-fid="F6" data-tip="Buffer underruns and overruns since the engine started. This number must stay at zero."><span class="k">Dropouts</span><span class="v zero" id="drops">0</span></div>
+    <div class="stat" data-tip="Load on the audio thread. Above 70% the callback starts missing its deadline."><span class="k">CPU</span><span class="v" id="cpu">18%</span></div>
+    <div class="stat" data-tip="How much of the 10 ms callback deadline is still unused, worst case."><span class="k">Headroom</span><span class="v" id="head">64%</span></div>
+    <div class="stat" data-fid="E4" data-tip="Multitrack recording — every input raw, plus the stream bus."><span class="dot rec"></span><span class="k">Rec</span><span class="v" id="rect">01:47:12</span><span class="k">·</span><span class="v">412 GB</span></div>
+    <div class="stat" data-tip="Time since the engine started."><span class="k">Session</span><span class="v" id="clk">01:52:40</span></div>
+    <div class="stat grow">
+      <button class="chip on" id="axchip" data-fid="C10"
+        data-tip="Global automix bypass. Click to switch gain sharing off for every channel at once.">Automix on</button>
+      <span class="chip" data-fid="G6" data-tip="Connected remote clients">1 client</span>
+      <button class="toggle-spec" id="specbtn" data-tip="Stamp feature catalogue IDs onto the components">Feature IDs</button>
+    </div>
+  </div>
+
+  <nav class="rail" id="rail"></nav>
+
+  <main class="stage">
+
+    <!-- ---------------- MIXER ---------------- -->
+    <section class="view on" id="v-mixer">
+      <div class="mixtool">
+        <button class="btn" onclick="openMatrix()" data-fid="U20" data-tip="All sends at once — the same data as the buttons on the strips">Routing matrix</button>
+        <span class="chip" data-tip="Chain preset applied to the selected strip">Preset · Jabra shared</span>
+        <span style="flex:1"></span>
+        <span class="chip" data-tip="Drag a strip by its grip to reorder" data-fid="U13">Drag to reorder</span>
+        <button class="btn" id="density" data-fid="U4" data-tip="Fit more strips on screen — meters and mutes only">Compact</button>
+      </div>
+
+      <div class="mixer">
+        <div class="strips" id="strips"></div>
+        <div class="buses" id="buses"></div>
+      </div>
+
+      <div class="monbar" id="monbar" data-fid="D5">
+        <div class="mhead">
+          <b class="lbl" style="font-size:12px;color:var(--ink-dim)">Monitors</b>
+          <span class="sub" style="margin:0">What each pair of headphones hears. Changing it never touches what goes out.</span>
+          <span style="flex:1"></span>
+          <button class="btn sm" onclick="document.getElementById('monbar').classList.toggle('collapsed')">Collapse</button>
+        </div>
+        <div id="monrows"></div>
+      </div>
+
+      <aside class="ovl" id="ovl-ch">
+        <div class="ohd">
+          <span class="swatch" id="och-sw" style="width:12px;height:12px"></span>
+          <span class="nm" id="och-nm">Jabra Left</span>
+          <button class="btn sm" onclick="stepCh(-1)">◀</button>
+          <button class="btn sm" onclick="stepCh(1)">▶</button>
+          <button class="btn sm" onclick="closeOvl()">Close</button>
+        </div>
+        <div class="obody" id="och-body"></div>
+      </aside>
+
+      <aside class="ovl" id="ovl-bus">
+        <div class="ohd"><span class="nm" id="obu-nm">Stream</span>
+          <button class="btn sm" onclick="closeOvl()">Close</button></div>
+        <div class="obody" id="obu-body"></div>
+      </aside>
+
+      <aside class="ovl wide" id="ovl-mx">
+        <div class="ohd"><span class="nm">Routing matrix</span>
+          <button class="btn sm" onclick="closeOvl()">Close</button></div>
+        <div class="obody">
+          <p class="sub">Every input against every bus. The strip buttons cover the fast path; this is the
+            whole picture, and it is where a wiring mistake is actually visible.</p>
+          <div class="tw"><table class="mx" id="mxtable"></table></div>
+          <div class="note"><b>Online</b> is a mix-minus bus (D4). Its own source is excluded automatically and
+            shown as <span style="color:var(--bad)">N-1</span> — it cannot be switched on by hand. Hearing your
+            own voice back with 200 ms of delay makes a meeting unusable, and it is the easiest mistake to make.</div>
+          <h2>Bus to bus</h2>
+          <div class="card"><div class="row"><span class="pill idle">None configured</span>
+            <button class="btn" data-fid="D9">Add route</button>
+            <span class="sub" style="margin:0">Cycle detection refuses a route that feeds a bus back into itself.</span></div></div>
+        </div>
+      </aside>
+
+      <aside class="ovl" id="ovl-add">
+        <div class="ohd"><span class="nm" id="oadd-nm">Add input</span>
+          <button class="btn sm" onclick="closeOvl()">Close</button></div>
+        <div class="obody" id="oadd-body"></div>
+      </aside>
+    </section>
+
+    <!-- ---------------- AUTOMIX ---------------- -->
+    <section class="view" id="v-automix">
+      <div class="pad">
+        <h1>Automix</h1>
+        <p class="sub">Gain sharing, not gating. Each channel's gain is its own level divided by the sum of all
+          levels, smoothed — so nothing ever audibly opens or closes.</p>
+        <p class="sub" data-fid="C10" style="margin-top:-12px">Never mandatory. The global switch lives in the
+          status bar, where it is one click from any view if the automixer misbehaves mid-session — and where
+          it turns amber while it is off, so nobody forgets. Individual channels opt out under
+          <b>Participate in gain sharing</b> in the channel panel; the audience microphone and the online feed
+          are out by default.</p>
+
+        <h2>Last 30 seconds — who held the gain</h2>
+        <canvas class="band" id="band" width="1100" height="96" data-fid="C9"></canvas>
+        <p class="sub" style="margin-top:8px">This band is how an operator learns to trust the automixer
+          instead of reaching for the faders.</p>
+        <h2>Channels</h2>
+        <div class="card" id="axrows" data-fid="C1"></div>
+        <h2>Parameters</h2>
+        <div class="grid3" id="axparams"></div>
+        <h2>Groups and overrides <span class="chip">Phase 1</span></h2>
+        <div class="grid2">
+          <div class="card" data-fid="C5">
+            <div class="between"><b class="lbl" style="font-size:12px">Groups</b><button class="btn sm">Add group</button></div>
+            <table style="margin-top:8px"><tbody>
+              <tr><td>Room</td><td class="mono">Jabra L · Jabra R · Mayor · Audience</td></tr>
+              <tr><td>Online</td><td class="mono">Teams input</td></tr></tbody></table>
+            <p class="sub" style="margin:8px 0 0">Independent sharing sets. Online participants should not
+              compete for gain with microphones in the room.</p>
+          </div>
+          <div class="card" id="axover"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------------- MONITORS ---------------- -->
+    <section class="view" id="v-monitors">
+      <div class="pad">
+        <h1>Monitors</h1>
+        <p class="sub">Each headphone feed is a full bus with its own source selection — not a monitor of the
+          master. The same switching is reachable from the bar at the bottom of the mixer, because during
+          setup you change it while you are adjusting everything else.</p>
+        <div class="grid2" id="monpanels" data-fid="D5"></div>
+        <h2>Remote monitoring <span class="chip">Phase 1</span></h2>
+        <div class="card" data-fid="G7">
+          <table><thead><tr><th>Client</th><th>Hearing</th><th>Codec</th><th>Latency</th><th>Jitter buffer</th></tr></thead>
+          <tbody><tr><td>Tablet — control desk</td><td class="mono">Monitor 1</td><td class="mono">Opus 64 kbps</td>
+            <td class="mono">78 ms</td><td class="mono">40 ms</td></tr></tbody></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------------- RECORDING ---------------- -->
+    <section class="view" id="v-recording">
+      <div class="pad">
+        <h1>Recording</h1>
+        <p class="sub">Every input is recorded raw, before any processing. If the automix misbehaves during a
+          session, the session is still recoverable afterwards — and for a public body the multitrack is the record.</p>
+        <div class="grid2">
+          <div class="card" data-fid="E3">
+            <b class="lbl" style="font-size:13px">What is captured</b>
+            <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
+              <label class="sw on"><i></i> All inputs, pre-DSP — 5 tracks</label>
+              <label class="sw on"><i></i> Stream bus — 1 stereo track</label>
+              <label class="sw"><i></i> All buses — 5 stereo tracks</label>
+              <label class="sw on" data-fid="E4"><i></i> Start automatically with the engine</label>
+            </div>
+            <div class="kv" style="margin-top:14px">
+              <span class="k">Format</span><span class="v"><select><option>WAV · 24-bit · 48 kHz</option><option>FLAC · 24-bit · 48 kHz</option></select></span>
+              <span class="k">Destination</span><span class="v"><input type="text" value="D:\Council" style="width:190px"></span>
+              <span class="k">Written so far</span><span class="v">6.4 GB</span>
+              <span class="k">Projected for 4 h</span><span class="v">14.8 GB</span>
+            </div>
+          </div>
+          <div class="card" data-fid="E5">
+            <b class="lbl" style="font-size:13px">Disk guard</b>
+            <div class="knob" style="margin-top:12px">
+              <div class="between"><span>D: free</span><span>412 GB of 931 GB</span></div>
+              <div class="slider"><i style="width:56%"></i></div>
+            </div>
+            <p class="sub" style="margin:10px 0 0">Recording refuses to start if the disk will not hold the
+              projected session, and warns loudly at 20 GB remaining. Silent failure here loses the record of a
+              public meeting.</p>
+            <div class="row" style="margin-top:12px"><span class="pill ok">Enough space for 9 h 40 m</span></div>
+          </div>
+        </div>
+        <h2>Past sessions</h2>
+        <div class="tw"><table>
+          <thead><tr><th>Date</th><th>Duration</th><th>Tracks</th><th>Size</th><th>Dropouts</th><th></th></tr></thead>
+          <tbody>
+            <tr><td>2026-08-28</td><td class="mono">01:47:12</td><td class="mono">6</td><td class="mono">6.4 GB</td><td><span class="pill ok">0</span></td><td><button class="btn sm">Open folder</button></td></tr>
+            <tr><td>2026-06-24</td><td class="mono">03:12:40</td><td class="mono">6</td><td class="mono">11.7 GB</td><td><span class="pill ok">0</span></td><td><button class="btn sm">Open folder</button></td></tr>
+            <tr><td>2026-05-27</td><td class="mono">02:38:05</td><td class="mono">6</td><td class="mono">9.6 GB</td><td><span class="pill warn">3</span></td><td><button class="btn sm">Open folder</button></td></tr>
+          </tbody></table></div>
+      </div>
+    </section>
+
+    <!-- ---------------- SCENES ---------------- -->
+    <section class="view" id="v-scenes">
+      <div class="pad">
+        <h1>Scenes <span class="chip">Phase 1</span></h1>
+        <p class="sub">Named states to recall between session types. A recall shows what it would change before
+          it changes it — a snapshot that silently moves a live fader is a hazard, not a convenience.</p>
+        <div class="grid2">
+          <div class="card">
+            <div class="between"><b class="lbl" style="font-size:13px">Saved scenes</b><button class="btn sm pri">Save current</button></div>
+            <table style="margin-top:10px"><tbody>
+              <tr><td><b>Full council</b><br><span class="sub" style="margin:0">5 inputs · 5 buses · automix on</span></td>
+                <td style="text-align:right"><span class="pill ok">Active</span></td></tr>
+              <tr><td><b>Committee</b><br><span class="sub" style="margin:0">3 inputs · no audience mic</span></td>
+                <td style="text-align:right"><button class="btn sm">Recall</button></td></tr>
+              <tr><td><b>Sound check</b><br><span class="sub" style="margin:0">All modifiers bypassed · test tone on PA</span></td>
+                <td style="text-align:right"><button class="btn sm">Recall</button></td></tr>
+            </tbody></table>
+          </div>
+          <div class="card">
+            <b class="lbl" style="font-size:13px">Recall preview — Committee</b>
+            <div class="logbox" style="margin-top:10px;max-height:200px">
+              <div><span class="t">mute   </span><span class="i">Audience → ON</span></div>
+              <div><span class="t">fader  </span><span class="i">Jabra Left −3.0 → 0.0 dB</span></div>
+              <div><span class="t">automix</span><span class="i"> Audience → removed from group Room</span></div>
+              <div><span class="t">send   </span><span class="w">Online ← Mayor  0.0 → −6.0 dB</span></div>
+              <div><span class="t">chain  </span><span class="i">Audience → preset "Audience" (7 modifiers)</span></div>
+            </div>
+            <div class="row" style="margin-top:11px"><button class="btn pri">Apply 5 changes</button><button class="btn">Cancel</button></div>
+          </div>
+        </div>
+        <h2>Configuration file</h2>
+        <div class="card"><div class="row"><button class="btn" data-fid="H5">Export configuration</button>
+          <button class="btn">Import</button>
+          <span class="sub" style="margin:0">Plain text, so a setup can live in version control alongside the code.</span></div></div>
+      </div>
+    </section>
+
+    <!-- ---------------- REMOTE ---------------- -->
+    <section class="view" id="v-remote">
+      <div class="pad">
+        <h1>Remote and clients <span class="chip">Phase 1</span></h1>
+        <p class="sub">The local interface is a client of the same protocol as a tablet across the room. There
+          is no separate remote mode — which is why the remote path cannot quietly rot while nobody uses it.</p>
+        <div class="grid2">
+          <div class="card" data-fid="G8">
+            <b class="lbl" style="font-size:13px">Access</b>
+            <div class="kv" style="margin-top:11px">
+              <span class="k">Listening on</span><span class="v">192.168.1.42 : 8730</span>
+              <span class="k">Pairing PIN</span><span class="v" style="color:var(--brass);font-size:16px">418 209</span>
+              <span class="k">PIN expires</span><span class="v">in 4 m 12 s</span>
+              <span class="k">Transport</span><span class="v">WebSocket · TLS off (LAN)</span>
+            </div>
+            <div class="row" style="margin-top:12px"><button class="btn">New PIN</button><button class="btn danger">Disconnect all</button></div>
+          </div>
+          <div class="card" data-fid="G6">
+            <b class="lbl" style="font-size:13px">Connected clients</b>
+            <table style="margin-top:10px">
+              <thead><tr><th>Client</th><th>Role</th><th>Monitor</th><th>Latency</th><th></th></tr></thead>
+              <tbody>
+                <tr><td>Control desk <span class="sub" style="margin:0">· this machine</span></td><td class="mono">Operator</td><td class="mono">Monitor 1</td><td class="mono">—</td><td></td></tr>
+                <tr><td>iPad — chamber</td><td class="mono">Operator</td><td class="mono">Monitor 2</td><td class="mono">78 ms</td><td><button class="btn sm">Drop</button></td></tr>
+              </tbody></table>
+            <p class="sub" style="margin:11px 0 0">Losing WiFi must not disturb the engine, and reconnecting
+              resyncs state without a reload (G9).</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------------- INTEGRATIONS ---------------- -->
+    <section class="view" id="v-integrations">
+      <div class="pad">
+        <h1>Integrations <span class="chip">Later</span></h1>
+        <p class="sub">Nothing here gets built until everything before it is boring. It has a place in the
+          navigation now so it does not end up bolted onto Settings.</p>
+        <div class="grid2">
+          <div class="card" data-fid="J1">
+            <div class="between"><b class="lbl" style="font-size:13px">OBS Studio</b><span class="pill ok">Connected</span></div>
+            <div class="kv" style="margin-top:11px">
+              <span class="k">obs-websocket</span><span class="v">localhost : 4455</span>
+              <span class="k">Streaming</span><span class="v">Live · 01:52:40</span>
+              <span class="k">Recording</span><span class="v">Active</span>
+            </div>
+            <div class="row" style="margin-top:12px"><button class="btn">Stop stream</button><button class="btn">Stop recording</button></div>
+          </div>
+          <div class="card" data-fid="J2">
+            <b class="lbl" style="font-size:13px">Speaker to camera</b>
+            <table style="margin-top:10px">
+              <thead><tr><th>When this opens</th><th>Suggest</th><th>Mode</th></tr></thead>
+              <tbody>
+                <tr><td>Mayor 180°</td><td class="mono">Camera 2 — podium</td><td class="mono">Suggest</td></tr>
+                <tr><td>Jabra Left</td><td class="mono">Camera 3 — left bench</td><td class="mono">Suggest</td></tr>
+                <tr><td>Audience</td><td class="mono">Camera 1 — wide</td><td class="mono">Off</td></tr>
+              </tbody></table>
+            <p class="sub" style="margin:11px 0 0"><b>Suggest</b>, never cut. An automatic cut driven by a
+              microphone is how a stream ends up watching an empty chair.</p>
+          </div>
+          <div class="card" data-fid="J3">
+            <b class="lbl" style="font-size:13px">Control surfaces</b>
+            <div class="row" style="margin-top:10px"><span class="pill idle">No MIDI device</span><span class="pill idle">No Stream Deck</span></div>
+            <p class="sub" style="margin:10px 0 0">Physical mute buttons matter more than physical faders when
+              one operator is also cutting cameras.</p>
+          </div>
+          <div class="card" data-fid="B0c">
+            <b class="lbl" style="font-size:13px">Signal modifiers</b>
+            <p class="sub" style="margin:8px 0 0">Third-party modifiers load from a folder and appear in the
+              <b>Add modifier</b> list on every channel and bus. The host measures each one's cost and bypasses
+              anything that overruns its share rather than letting it take the session down.</p>
+            <div class="row" style="margin-top:11px"><span class="pill idle">3 built-in packs · 0 third-party</span>
+              <button class="btn sm">Open modifier folder</button></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------------- DIAGNOSTICS ---------------- -->
+    <section class="view" id="v-diagnostics">
+      <div class="pad">
+        <h1>Diagnostics</h1>
+        <p class="sub">Everything worth knowing and not worth looking at during a session. The rule for what
+          lives here rather than on the mixer: if seeing it every day would train you to ignore it, it goes here.</p>
+        <div class="tabs" data-tabs="diag">
+          <button class="on" data-tab="d-clocks">Clocks &amp; buffers</button>
+          <button data-tab="d-perf">Performance</button>
+          <button data-tab="d-signal">Signal</button>
+          <button data-tab="d-log">Log</button>
+          <button data-tab="d-proto">Protocol</button>
+          <button data-tab="d-soak">Soak &amp; export</button>
+        </div>
+
+        <div class="tab on" id="d-clocks">
+          <div class="tw"><table data-fid="K1">
+            <thead><tr><th>Device</th><th>Dir</th><th>Nominal</th><th>Measured</th><th>Drift</th><th>Correction</th><th>Fill</th><th>Under</th><th>Over</th></tr></thead>
+            <tbody id="clocktable"></tbody></table></div>
+          <h2>Drift over the session <span class="chip">per device · ppm</span></h2>
+          <canvas class="spark" id="driftg" width="1100" height="120" data-fid="K2"></canvas>
+          <h2>Dropout log</h2>
+          <div class="logbox" data-fid="K3">
+            <div><span class="t">— no underruns or overruns this session —</span></div>
+            <div><span class="t">14:02:11  </span><span class="i">Behringer UCA222 drift exceeded 60 ppm, resampler ratio widened to 1.000067</span></div>
+            <div><span class="t">13:31:48  </span><span class="i">Jabra Speak 750 (R) re-enumerated, re-attached to strip 2 in 340 ms</span></div>
+          </div>
+          <p class="sub" style="margin-top:9px">A list, not a counter. The counter tells you something happened;
+            this tells you what.</p>
+        </div>
+
+        <div class="tab" id="d-perf">
+          <div class="grid2">
+            <div class="card" data-fid="K4">
+              <div class="between"><b class="lbl" style="font-size:13px">Callback duration</b><span class="mono" style="font-size:11.5px">deadline 10.00 ms</span></div>
+              <div class="hist" id="cbhist" style="margin-top:11px"></div>
+              <div class="kv" style="margin-top:11px">
+                <span class="k">Median</span><span class="v">2.71 ms</span>
+                <span class="k">99th percentile</span><span class="v">4.18 ms</span>
+                <span class="k">Worst this session</span><span class="v" style="color:var(--warn)">6.92 ms</span>
+                <span class="k">Deadline misses</span><span class="v zero">0</span>
+              </div>
+            </div>
+            <div class="card" data-fid="K5">
+              <b class="lbl" style="font-size:13px">Garbage collector</b>
+              <div class="kv" style="margin-top:11px">
+                <span class="k">Audio-thread allocations</span><span class="v zero">0 bytes</span>
+                <span class="k">Gen 0 collections</span><span class="v">214</span>
+                <span class="k">Gen 1 / Gen 2</span><span class="v">18 / 2</span>
+                <span class="k">Longest pause</span><span class="v">1.9 ms</span>
+                <span class="k">Latency mode</span><span class="v">SustainedLowLatency</span>
+              </div>
+              <p class="sub" style="margin:11px 0 0">The first row is the one that matters and it is asserted at
+                zero by the test suite. If it ever moves, the build fails before anyone finds out during a session.</p>
+            </div>
+          </div>
+          <h2>Cost per modifier</h2>
+          <div class="tw"><table data-fid="K6">
+            <thead><tr><th>Modifier</th><th>Instances</th><th>Per instance</th><th>Total</th><th>Share of budget</th></tr></thead>
+            <tbody>
+              <tr><td>Denoise — RNNoise</td><td class="mono">5</td><td class="mono">0.94 ms</td><td class="mono">4.70 ms</td><td class="mono">63%</td></tr>
+              <tr><td>Adaptive gain</td><td class="mono">5</td><td class="mono">0.11 ms</td><td class="mono">0.55 ms</td><td class="mono">7%</td></tr>
+              <tr><td>Compressor</td><td class="mono">7</td><td class="mono">0.09 ms</td><td class="mono">0.63 ms</td><td class="mono">8%</td></tr>
+              <tr><td>Equaliser</td><td class="mono">6</td><td class="mono">0.08 ms</td><td class="mono">0.48 ms</td><td class="mono">6%</td></tr>
+              <tr><td>Gate</td><td class="mono">4</td><td class="mono">0.06 ms</td><td class="mono">0.24 ms</td><td class="mono">3%</td></tr>
+              <tr><td>Drift resampler</td><td class="mono">5</td><td class="mono">0.05 ms</td><td class="mono">0.25 ms</td><td class="mono">3%</td></tr>
+              <tr><td>High-pass filter</td><td class="mono">5</td><td class="mono">0.01 ms</td><td class="mono">0.05 ms</td><td class="mono">1%</td></tr>
+            </tbody></table></div>
+          <p class="sub" style="margin-top:9px">Per modifier rather than per stage, now that chains differ from
+            channel to channel. The denoise is the expensive one — worth knowing before guessing which knob to
+            turn when a sixteenth channel is added.</p>
+        </div>
+
+        <div class="tab" id="d-signal">
+          <div class="grid2">
+            <div class="card" data-fid="K8">
+              <b class="lbl" style="font-size:13px">Signal probe</b>
+              <p class="sub" style="margin:7px 0 10px">Tap between any two modifiers and listen to it on a
+                monitor bus. The tool for answering "which link broke this".</p>
+              <table><thead><tr><th>Probe point</th><th>Level</th><th></th></tr></thead>
+                <tbody>
+                  <tr><td class="mono">Jabra L · input</td><td class="mono">−31.2 dB</td><td><button class="btn sm">Listen</button></td></tr>
+                  <tr><td class="mono">Jabra L · after HPF</td><td class="mono">−33.8 dB</td><td><button class="btn sm">Listen</button></td></tr>
+                  <tr><td class="mono">Jabra L · after denoise</td><td class="mono">−36.1 dB</td><td><button class="btn sm">Listen</button></td></tr>
+                  <tr><td class="mono">Jabra L · after automix</td><td class="mono">−48.4 dB</td><td><button class="btn sm">Listen</button></td></tr>
+                </tbody></table>
+            </div>
+            <div class="card" data-fid="K9">
+              <b class="lbl" style="font-size:13px">Automix internals</b>
+              <div class="tw"><table style="margin-top:8px">
+                <thead><tr><th>Ch</th><th>VAD</th><th>Detector</th><th>Share</th><th>Gain</th></tr></thead>
+                <tbody id="axinternals"></tbody></table></div>
+              <p class="sub" style="margin:10px 0 0">What the mixer shows as a bar, in numbers.</p>
+            </div>
+          </div>
+          <h2>Graph state</h2>
+          <div class="card" data-fid="K10">
+            <div class="kv">
+              <span class="k">Snapshot version</span><span class="v">#4 812</span>
+              <span class="k">Swaps this session</span><span class="v">4 812</span>
+              <span class="k">Last swap</span><span class="v">2.1 s ago — reorder chain, Mayor 180°</span>
+              <span class="k">Nodes</span><span class="v">5 inputs · 37 modifiers · 5 buses · 5 outputs</span>
+            </div>
+            <p class="sub" style="margin:11px 0 0">Confirms a parameter or chain change actually reached the
+              audio thread, rather than being applied to a snapshot nobody is reading.</p>
+          </div>
+        </div>
+
+        <div class="tab" id="d-log">
+          <div class="row" style="margin-bottom:10px">
+            <span class="chip on">All</span><span class="chip">Info</span><span class="chip">Warning</span>
+            <span class="chip">Error</span><button class="btn sm" style="margin-left:auto">Open log folder</button></div>
+          <div class="logbox" data-fid="K7" style="max-height:420px" id="logbox"></div>
+        </div>
+
+        <div class="tab" id="d-proto">
+          <div class="grid2">
+            <div class="card" data-fid="K11">
+              <b class="lbl" style="font-size:13px">Control channel</b>
+              <div class="kv" style="margin-top:11px">
+                <span class="k">Protocol version</span><span class="v">vam/1.0</span>
+                <span class="k">Messages in / out</span><span class="v">18 402 / 21 117</span>
+                <span class="k">Rate</span><span class="v">3.1 / s</span>
+                <span class="k">Rejected</span><span class="v zero">0</span>
+              </div>
+            </div>
+            <div class="card">
+              <b class="lbl" style="font-size:13px">Meter channel</b>
+              <div class="kv" style="margin-top:11px">
+                <span class="k">Frame rate</span><span class="v">25 / s</span>
+                <span class="k">Frame size</span><span class="v">184 bytes</span>
+                <span class="k">Bandwidth</span><span class="v">4.6 kB/s per client</span>
+                <span class="k">Dropped frames</span><span class="v">12</span>
+              </div>
+              <p class="sub" style="margin:11px 0 0">Binary and separate from the control channel, so a slow
+                client throttles its meters instead of its faders.</p>
+            </div>
+          </div>
+          <h2>Recent traffic</h2>
+          <div class="logbox" style="max-height:200px">
+            <div><span class="t">15:41:02.118 </span><span class="i">→ chain/3/reorder  [hpf,gate,denoise,eq,agc,comp,deess]</span></div>
+            <div><span class="t">15:41:02.119 </span><span class="i">← ack   snapshot 4812</span></div>
+            <div><span class="t">15:40:58.640 </span><span class="i">→ set    channel/1/mute  false</span></div>
+            <div><span class="t">15:40:58.641 </span><span class="i">← ack   snapshot 4811</span></div>
+            <div><span class="t">15:40:44.002 </span><span class="i">← evt    device/uca222/drift  -67ppm</span></div>
+          </div>
+        </div>
+
+        <div class="tab" id="d-soak">
+          <div class="grid2">
+            <div class="card" data-fid="K13">
+              <b class="lbl" style="font-size:13px">Soak driver</b>
+              <p class="sub" style="margin:7px 0 11px">Drive the engine from generated signal or a file, faster
+                than realtime. Drift bugs do not show up in five minutes.</p>
+              <div class="kv">
+                <span class="k">Source</span><span class="v">Recorded session · 2026-06-24</span>
+                <span class="k">Speed</span><span class="v">8 ×</span>
+                <span class="k">Simulated</span><span class="v">26 h 04 m</span>
+                <span class="k">Dropouts</span><span class="v zero">0</span>
+                <span class="k">Allocations</span><span class="v zero">0 bytes</span>
+              </div>
+              <div class="row" style="margin-top:12px"><button class="btn pri">Start soak</button><button class="btn">Configure</button></div>
+            </div>
+            <div class="card" data-fid="K12">
+              <b class="lbl" style="font-size:13px">Diagnostic bundle</b>
+              <p class="sub" style="margin:7px 0 11px">One file: logs, configuration, device state, dropout
+                history and the last minutes of every counter. So a bad session can be investigated afterwards
+                instead of remembered.</p>
+              <div class="row"><button class="btn pri">Export bundle</button><span class="sub" style="margin:0">≈ 34 MB</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------------- SETTINGS ---------------- -->
+    <section class="view" id="v-settings">
+      <div class="pad">
+        <h1>Settings</h1>
+        <p class="sub">Application-level behaviour. Anything that affects audio lives on the view it belongs to,
+          not here.</p>
+        <div class="grid2">
+          <div class="card">
+            <b class="lbl" style="font-size:13px">Startup</b>
+            <div style="margin-top:11px;display:flex;flex-direction:column;gap:9px">
+              <label class="sw on" data-fid="H3"><i></i> Load last configuration on start</label>
+              <label class="sw on"><i></i> Start engine automatically</label>
+              <label class="sw"><i></i> Run as a Windows service</label>
+              <label class="sw" data-fid="H6"><i></i> Start in safe mode — all modifiers bypassed</label>
+            </div>
+            <p class="sub" style="margin:11px 0 0">Nobody configures a mixer ten minutes before a session. The
+              engine should come up in the state it went down in.</p>
+          </div>
+          <div class="card">
+            <b class="lbl" style="font-size:13px">Interface</b>
+            <div class="kv" style="margin-top:11px">
+              <span class="k">Language <button class="hlp" data-h="Language|Strings live in resource files from the first commit, so Czech is a translation rather than a refactor.">?</button></span>
+              <span class="v"><select><option>English</option><option>Čeština (community)</option></select></span>
+              <span class="k">Theme <button class="hlp" data-h="Theme|Deliberately not a choice. A bright screen next to a camera operator in a dim chamber is a problem.">?</button></span>
+              <span class="v"><select disabled><option>Dark — fixed</option></select></span>
+              <span class="k">Meter ballistics <button class="hlp" data-h="Meter ballistics|PPM rises fast and falls slowly, which is what you want for spotting a peak. RMS tracks perceived loudness instead. VU is slow and nostalgic.">?</button></span>
+              <span class="v"><select><option>PPM · 25 fps</option><option>RMS · 25 fps</option><option>VU</option></select></span>
+              <span class="k">Level scale</span><span class="v"><select><option>dBFS</option><option>dBu</option></select></span>
+              <span class="k">Meter refresh</span><span class="v"><select><option>25 / s</option><option>50 / s</option><option>10 / s — slow client</option></select></span>
+            </div>
+          </div>
+          <div class="card">
+            <b class="lbl" style="font-size:13px">Paths</b>
+            <div class="kv" style="margin-top:11px">
+              <span class="k">Recordings</span><span class="v"><input type="text" value="D:\Council" style="width:200px"></span>
+              <span class="k">Logs</span><span class="v"><input type="text" value="%PROGRAMDATA%\VAM\logs" style="width:200px"></span>
+              <span class="k">Modifiers</span><span class="v"><input type="text" value="%PROGRAMDATA%\VAM\modifiers" style="width:200px"></span>
+            </div>
+            <div class="row" style="margin-top:12px"><button class="btn sm">Browse…</button><button class="btn sm">Reset to defaults</button></div>
+          </div>
+          <div class="card">
+            <b class="lbl" style="font-size:13px">About</b>
+            <div class="kv" style="margin-top:11px">
+              <span class="k">Version</span><span class="v">0.1.0-dev</span>
+              <span class="k">Engine</span><span class="v">.NET 10 · NAudio</span>
+              <span class="k">Licence</span><span class="v">GPL-3.0</span>
+              <span class="k">Third party</span><span class="v">RNNoise (BSD) · Opus (BSD)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------------- WIZARD ---------------- -->
+    <section class="view" id="v-wizard">
+      <div class="pad">
+        <h1>First-run setup <span class="chip">Phase 1</span></h1>
+        <p class="sub">The first configuration gets done by hand anyway. This matters the day somebody other
+          than the author deploys VAM in another chamber.</p>
+        <div class="steps">
+          <div><b>1</b>Find devices</div><div class="on"><b>2</b>Assign to strips</div>
+          <div><b>3</b>Name and colour</div><div><b>4</b>Choose chain preset</div><div><b>5</b>Test tone and levels</div>
+        </div>
+        <div class="card">
+          <b class="lbl" style="font-size:13px">Step 2 — assign devices to strips</b>
+          <p class="sub" style="margin:7px 0 13px">Four capture devices found. Speak into each microphone; the
+            one that lights up is the one being assigned.</p>
+          <div class="tw"><table>
+            <thead><tr><th>Device</th><th>Channels</th><th>Signal</th><th>Assign to</th></tr></thead>
+            <tbody>
+              <tr><td>Jabra Speak 750</td><td class="mono">1 × mono</td><td><div style="height:9px;background:var(--sunken);border:1px solid var(--line)"><div style="height:100%;width:62%;background:var(--sig-lo)"></div></div></td><td><select><option>Strip 1 — Jabra Left</option><option>Not used</option></select></td></tr>
+              <tr><td>Jabra Speak 750 #2</td><td class="mono">1 × mono</td><td><div style="height:9px;background:var(--sunken);border:1px solid var(--line)"><div style="height:100%;width:14%;background:var(--sig-lo)"></div></div></td><td><select><option>Strip 2 — Jabra Right</option><option>Not used</option></select></td></tr>
+              <tr><td>USB Audio CODEC</td><td class="mono">2 × mono</td><td><div style="height:9px;background:var(--sunken);border:1px solid var(--line)"><div style="height:100%;width:38%;background:var(--sig-lo)"></div></div></td><td><select><option>Strips 3 and 4</option><option>Strip 3 only</option></select></td></tr>
+              <tr><td>VAM Virtual In</td><td class="mono">1 × stereo</td><td><div style="height:9px;background:var(--sunken);border:1px solid var(--line)"><div style="height:100%;width:5%;background:var(--sig-lo)"></div></div></td><td><select><option>Strip 5 — Online</option><option>Not used</option></select></td></tr>
+            </tbody></table></div>
+          <div class="row" style="margin-top:15px"><button class="btn">Back</button><button class="btn pri">Continue</button>
+            <button class="btn" style="margin-left:auto">Skip — configure by hand</button></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="pop"></div>
+<div id="tip"></div>
+
+<script>
+/* ============================================================
+   Mock state. Nothing talks to real audio — it exists so the
+   layout is judged against realistic density and numbers.
+   ============================================================ */
+const MODS={
+  hpf:   {t:"High-pass filter",  fid:"B1", cost:0.01, p:[["Frequency","110 Hz",34],["Slope","24 dB / oct",70]],
+          h:"Removes everything below the cutoff. The cheapest defence against desk thumps and floor rumble — most of a knock's energy lives under 100 Hz. Start at 100 Hz for speech and raise it until the voice thins out, then back off."},
+  gate:  {t:"Gate",              fid:"B2", cost:0.06, p:[["Threshold","−44.0 dB",41],["Hold","180 ms",30],["Release","320 ms",44]],
+          h:"Turns a channel down when nobody is speaking into it. Set the threshold just above the room noise, and keep the release slow — a fast release chatters on breaths. With the automixer running you need far less of this than you would expect."},
+  vad:   {t:"Voice activity",    fid:"B3", cost:0.02, p:[["Sensitivity","Medium",50]],
+          h:"Decides whether the signal is speech. It feeds the automixer, the speaking indicator and the speaker log. It reads the signal before the denoise, because denoise removes the very characteristics it keys on."},
+  dn:    {t:"Denoise — RNNoise", fid:"B4", cost:0.94, p:[["Amount","65 %",65]],
+          h:"A neural noise suppressor. Excellent on constant noise — ventilation, fans, projector hum. Not a fix for a chair scraping while somebody talks. Above about 80% it starts hollowing out the voice; 60–70% is the useful range."},
+  eq:    {t:"Equaliser",         fid:"B9", cost:0.08, eq:true,
+          h:"Four bands plus shelves. For speech the useful moves are a small cut around 250–400 Hz if the voice sounds boxy, and a gentle lift at 3–5 kHz for intelligibility. Drag a handle on the curve, or type the numbers."},
+  agc:   {t:"Adaptive gain",     fid:"B5", cost:0.11, p:[["Target","−23 LUFS",55],["Max gain","+18 dB",60],["Speed","Slow · 4 s",25]],
+          h:"The shared-microphone fix. Slowly moves each channel toward the same loudness, so the councillor two seats away lands where the one in front of the microphone does. Keep it slow — fast auto-gain pumps and chases room noise between sentences."},
+  comp:  {t:"Compressor",        fid:"B6", cost:0.09, p:[["Threshold","−18.0 dB",52],["Ratio","3.0 : 1",40],["Attack","8 ms",35],["Release","140 ms",44],["Makeup","+4.0 dB",44]],
+          h:"Evens out what is left after the adaptive gain, on a syllable timescale rather than a speaker timescale. 3:1 with a slowish attack is a safe starting point for speech. Watch the gain reduction meter — more than about 6 dB on average is too much."},
+  deess: {t:"De-esser",          fid:"B11",cost:0.04, p:[["Frequency","6.4 kHz",64],["Amount","3.0 dB",30]],
+          h:"A compressor that only listens to sibilance. Useful on a close microphone that turns every S into a hiss. Unnecessary on a distant shared microphone."},
+  thump: {t:"Thump suppressor",  fid:"B10",cost:0.07, p:[["Sensitivity","Medium",50],["Recovery","40 ms",30]],
+          h:"Catches the pen clicks and table knocks that survive the high-pass, using a short-window transient detector rather than a broadband gate. It removes the click without ducking the sentence around it."},
+  delay: {t:"Delay",             fid:"A12",cost:0.01, p:[["Delay","0.0 ms",0]],
+          h:"Time alignment. If two microphones pick up the same speaker at different distances, delaying the nearer one stops them fighting. 1 ms is roughly 34 cm."}
+};
+const CH=[
+  {n:"Jabra Left",  dev:"Jabra Speak 750",   nom:48000,meas:47998.6,col:"#6ea8ff",fader:-3.0,base:.62,
+   sends:{stream:1,online:1,mon1:1,mon2:1,pa:1},ax:true,virt:false,mute:false,preset:"Jabra shared",dirty:false,
+   chain:["hpf","gate","dn","eq","agc","comp"]},
+  {n:"Jabra Right", dev:"Jabra Speak 750 #2",nom:48000,meas:48001.9,col:"#6ea8ff",fader:-3.0,base:.28,
+   sends:{stream:1,online:1,mon1:1,mon2:0,pa:1},ax:true,virt:false,mute:false,preset:"Jabra shared",dirty:false,
+   chain:["hpf","gate","dn","eq","agc","comp"]},
+  {n:"Mayor 180°",  dev:"USB Audio CODEC 1", nom:48000,meas:47999.1,col:"#d6a64a",fader:0.0, base:.74,
+   sends:{stream:1,online:1,mon1:1,mon2:1,pa:1},ax:true,virt:false,mute:false,preset:"Studio 180°",dirty:true,
+   chain:["hpf","dn","eq","comp","deess"]},
+  {n:"Audience",    dev:"USB Audio CODEC 2", nom:48000,meas:47999.1,col:"#9b8cd9",fader:-8.5,base:.18,
+   sends:{stream:1,online:1,mon1:0,mon2:1,pa:0},ax:false,virt:false,mute:true,preset:"Audience",dirty:false,
+   chain:["hpf","thump","gate","dn","comp"]},
+  {n:"Online",      dev:"VAM Virtual In",    nom:48000,meas:48000.0,col:"#39b9ae",fader:-1.5,base:.34,
+   sends:{stream:1,online:0,mon1:1,mon2:1,pa:1},ax:false,virt:true,mute:false,preset:"Online",dirty:false,
+   chain:["eq","comp"]}
+];
+const BUS=[
+  {id:"stream",n:"Stream",out:"VAM Virtual Out → OBS",     fader:-2.0,master:true},
+  {id:"online",n:"Online",out:"USB CODEC — line out (N-1)",fader:-4.0},
+  {id:"mon1",  n:"Mon 1", out:"Realtek — headphone",       fader:-12.0,mon:true},
+  {id:"mon2",  n:"Mon 2", out:"Behringer UCA222",          fader:-9.0, mon:true},
+  {id:"pa",    n:"PA",    out:"Realtek — line out (rear)", fader:-6.0}
+];
+const AXDEPTH=-18;
+
+/* ---------- help + tooltips (U14, U15) ---------- */
+const pop=document.getElementById("pop"),tip=document.getElementById("tip");
+document.addEventListener("click",e=>{
+  const h=e.target.closest(".hlp");
+  if(h){e.stopPropagation();const[t,b]=h.dataset.h.split("|");
+    pop.innerHTML=`<b>${t}</b>${b}`;pop.style.display="block";
+    const r=h.getBoundingClientRect();
+    pop.style.left=Math.min(innerWidth-345,r.left-8)+"px";
+    pop.style.top=(r.bottom+7+pop.offsetHeight>innerHeight?r.top-pop.offsetHeight-7:r.bottom+7)+"px";
+    return;}
+  pop.style.display="none";
+});
+document.addEventListener("mousemove",e=>{
+  const el=e.target.closest("[data-tip]");
+  if(!el){tip.style.display="none";return;}
+  tip.textContent=el.dataset.tip;tip.style.display="block";
+  tip.style.left=Math.min(innerWidth-tip.offsetWidth-8,e.clientX+14)+"px";
+  tip.style.top=(e.clientY+22)+"px";
+});
+
+/* ---------- rail ---------- */
+const VIEWS=[
+  {id:"mixer",t:"Mixer",ph:"m",icon:'<path d="M4 3v18M10 3v18M16 3v18M22 3v18"/><circle cx="4" cy="9" r="2.2"/><circle cx="10" cy="15" r="2.2"/><circle cx="16" cy="7" r="2.2"/><circle cx="22" cy="13" r="2.2"/>'},
+  {id:"automix",t:"Automix",ph:"m",icon:'<path d="M3 17c3 0 3-10 6-10s3 10 6 10 3-6 6-6"/>'},
+  {id:"monitors",t:"Monitor",ph:"m",icon:'<path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="2" y="14" width="5" height="7" rx="1.6"/><rect x="17" y="14" width="5" height="7" rx="1.6"/>'},
+  {id:"recording",t:"Record",ph:"m",icon:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/>'},
+  {id:"sep"},
+  {id:"scenes",t:"Scenes",ph:"1",icon:'<rect x="3" y="6" width="14" height="12" rx="1"/><path d="M7 3h14v12"/>'},
+  {id:"remote",t:"Remote",ph:"1",icon:'<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/>'},
+  {id:"integrations",t:"Integr.",ph:"l",icon:'<path d="M10 3v6M14 3v6"/><rect x="7" y="9" width="10" height="6" rx="2"/><path d="M12 15v6"/>'},
+  {id:"sep"},
+  {id:"diagnostics",t:"Debug",ph:"m",icon:'<path d="M3 13h4l3 7 4-16 3 9h4"/>'},
+  {id:"settings",t:"Settings",ph:"m",icon:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>'},
+  {id:"wizard",t:"Setup",ph:"1",icon:'<path d="M12 3l2.2 5.2L20 9l-4 3.8 1 5.7-5-2.8-5 2.8 1-5.7L4 9l5.8-.8z"/>'}
+];
+const rail=document.getElementById("rail");
+VIEWS.forEach(v=>{
+  if(v.id==="sep"){const s=document.createElement("div");s.className="sep";rail.appendChild(s);return;}
+  const b=document.createElement("button");
+  b.className=v.id==="mixer"?"on":"";b.dataset.go=v.id;
+  b.innerHTML=`<svg viewBox="0 0 24 24">${v.icon}</svg><span>${v.t}</span>`+
+    (v.ph!=="m"?`<i class="phase ${v.ph==="1"?"p1":"pl"}"></i>`:"");
+  b.dataset.tip=v.t+(v.ph==="1"?" — phase 1":v.ph==="l"?" — later":"");
+  b.onclick=()=>go(v.id);rail.appendChild(b);
+});
+function go(id){
+  document.querySelectorAll(".view").forEach(v=>v.classList.toggle("on",v.id==="v-"+id));
+  document.querySelectorAll(".rail button").forEach(b=>b.classList.toggle("on",b.dataset.go===id));
+  closeOvl();
+}
+
+/* ---------- strips ---------- */
+const stripsEl=document.getElementById("strips");
+function renderStrips(){
+  stripsEl.innerHTML="";
+  CH.forEach((c,i)=>{
+    const el=document.createElement("div");
+    el.className="strip"+(c.mute?" muted":"");el.dataset.i=i;el.draggable=false;
+    el.innerHTML=`
+      <div class="top" style="background:${c.col}"></div>
+      <div class="hd" data-fid="U5" onclick="openCh(${i})">
+        <span class="grip" draggable="true" data-tip="Drag to reorder">⣿</span>
+        <span style="min-width:0;flex:1">
+          <span class="nm">${c.n}</span>
+          <span class="dev">${c.dev}</span>
+          <span class="rate" data-fid="A14" data-tip="Nominal rate vs the rate this device is actually running at"><span>${(c.nom/1000).toFixed(1)}k</span><b>${c.meas.toFixed(1)}</b></span>
+        </span>
+      </div>
+      <div class="ax" data-fid="C9" data-tip="Automix gain — where this channel currently sits between the depth floor and 0 dB">
+        <div class="axtop"><i class="spk" data-spk></i>
+          <div class="axbar"><i data-axb style="width:0%"></i></div></div>
+        <div class="axscale"><span>${AXDEPTH}</span><b data-axd>−∞</b><span>0 dB</span></div>
+      </div>
+      <div class="mf">
+        <div class="meter" data-fid="F1" data-tip="Peak level, with the gate threshold marked. Grey means the automixer has this channel at its floor — it is making sound, but none of it is reaching the mix.">
+          <i data-met style="height:0%"></i><u data-pk style="bottom:0%"></u>
+          <div class="thr" data-fid="U19" style="bottom:26%"></div><div class="ticks"></div></div>
+        <div class="gr" data-fid="F4" data-tip="Gain reduction"><i data-gr style="height:0%"></i></div>
+        <div class="fader" onclick="openCh(${i})" data-tip="Fader — ${c.fader.toFixed(1)} dB"><div class="unity"></div>
+          <div class="cap" style="top:${28+(-c.fader)*2.4}%"></div></div>
+      </div>
+      <div class="val">${c.fader>0?"+":""}${c.fader.toFixed(1)} dB</div>
+      <div class="chainbar" data-fid="B0" onclick="openCh(${i})" data-tip="${c.chain.length} modifiers — click to open the chain">
+        ${c.chain.map(()=>'<span class="seg"></span>').join("")}<span class="n">${c.chain.length}</span></div>
+      <div class="sends" data-fid="D2a">${BUS.map(b=>{
+        const locked=c.virt&&b.id==="online";
+        return `<b class="${locked?"locked":(c.sends[b.id]?"on":"")}${b.mon?" mon":""}" data-b="${b.id}"
+          data-tip="${locked?"Excluded automatically — mix-minus":"Send to "+b.n}">${b.n}<em>${locked?"N-1":(c.sends[b.id]?"0.0":"off")}</em></b>`;
+      }).join("")}</div>
+      <div class="msm"><b class="m${c.mute?" on":""}" data-tip="Mute">M</b><b class="s" data-tip="Solo — pre-fade listen">S</b><b class="o" data-tip="Sum to mono">Ø</b></div>`;
+    el.querySelectorAll(".sends b:not(.locked)").forEach(b=>b.onclick=e=>{
+      e.stopPropagation();const id=b.dataset.b;c.sends[id]=c.sends[id]?0:1;
+      b.classList.toggle("on");b.querySelector("em").textContent=c.sends[id]?"0.0":"off";});
+    el.querySelector(".msm .m").onclick=e=>{e.stopPropagation();c.mute=!c.mute;
+      el.classList.toggle("muted",c.mute);e.target.classList.toggle("on",c.mute);};
+    el.querySelectorAll(".msm .s,.msm .o").forEach(b=>b.onclick=e=>{e.stopPropagation();b.classList.toggle("on")});
+    const g=el.querySelector(".grip");
+    g.addEventListener("dragstart",e=>{dragFrom=i;el.classList.add("drag");e.dataTransfer.effectAllowed="move";});
+    g.addEventListener("dragend",()=>{el.classList.remove("drag")});
+    el.addEventListener("dragover",e=>{e.preventDefault()});
+    el.addEventListener("drop",e=>{e.preventDefault();
+      if(dragFrom===null||dragFrom===i)return;
+      const [m]=CH.splice(dragFrom,1);CH.splice(i,0,m);dragFrom=null;renderStrips();bindAnim();});
+    stripsEl.appendChild(el);
+  });
+  const add=document.createElement("button");
+  add.className="addtile";add.dataset.fid="U17";add.dataset.tip="Add an input";
+  add.innerHTML='<span>+</span><em>Add input</em>';
+  add.onclick=()=>openAdd("input");
+  stripsEl.appendChild(add);
+}
+let dragFrom=null;
+renderStrips();
+
+/* ---------- buses ---------- */
+const busesEl=document.getElementById("buses");
+function renderBuses(){
+busesEl.innerHTML="";
+BUS.forEach((b,i)=>{
+  const el=document.createElement("div");
+  el.className="bstrip"+(b.master?" master":"");
+  el.innerHTML=`
+    <div class="hd" onclick="openBus(${i})">
+      <div style="font-family:var(--f-cond);text-transform:uppercase;font-size:14px;letter-spacing:.05em;
+        color:${b.master?"var(--brass)":b.mon?"var(--teal)":"var(--ink)"}">${b.n}</div>
+      <div class="out">${b.out}</div></div>
+    <div class="lim" data-fid="D6" data-tip="Brick-wall limiter activity"><i data-lim></i> Limiter</div>
+    <div class="mf">
+      <div class="meter" data-fid="F5"><i data-bmet style="height:0%"></i><u data-bpk style="bottom:0%"></u><div class="ticks"></div></div>
+      <div class="fader" onclick="openBus(${i})"><div class="unity"></div>
+        <div class="cap" style="top:${28+(-b.fader)*2.4}%"></div></div></div>
+    <div class="val">${b.fader.toFixed(1)} dB</div>
+    <div class="msm" style="grid-template-columns:1fr"><b class="m" data-tip="Mute this bus">Mute</b></div>`;
+  el.querySelector(".msm b").onclick=e=>{e.stopPropagation();e.target.classList.toggle("on")};
+  busesEl.appendChild(el);
+});
+const addb=document.createElement("button");
+addb.className="addtile";addb.dataset.fid="U17";addb.dataset.tip="Add a bus, output or monitor";
+addb.innerHTML='<span>+</span><em>Add bus</em>';addb.onclick=()=>openAdd("output");
+busesEl.appendChild(addb);
+}
+renderBuses();
+
+/* A monitor is just a bus with the monitor role — pre-fader sends and its own
+   source selection. So adding one is adding a bus, and there is no fixed count. */
+function addBus(role){
+  const n=BUS.filter(b=>b.mon).length+1;
+  const id=role==="mon"?`mon${n}`:`bus${BUS.length+1}`;
+  BUS.push({id,n:role==="mon"?`Mon ${n}`:`Bus ${BUS.length+1}`,
+    out:"— no output device —",fader:-12.0,mon:role==="mon"});
+  CH.forEach(c=>c.sends[id]=0);
+  if(role==="mon")MONSEL[id]=[];
+  BS.push({lvl:.2,pk:.2});
+  renderBuses();renderStrips();renderMon();renderMonPanels();renderMatrix();bindAnim();
+  closeOvl();
+}
+
+/* ---------- monitor bar ---------- */
+const MONSEL={mon1:["stream","Jabra Left","Jabra Right","Mayor 180°"],mon2:["online","Mayor 180°","Audience"]};
+const monBuses=()=>BUS.filter(b=>b.mon);
+function renderMon(){
+  document.getElementById("monrows").innerHTML=monBuses().map(m=>`
+    <div class="monrow">
+      <span class="nm">${m.n}</span>
+      <span class="grp"><span class="gl">Buses</span>${BUS.filter(b=>!b.mon).map(b=>
+        `<b class="mchip bus ${MONSEL[m.id].includes(b.id)?"on":""}" data-m="${m.id}" data-s="${b.id}">${b.n}</b>`).join("")}</span>
+      <span class="grp"><span class="gl">Inputs</span>${CH.map(c=>
+        `<b class="mchip ${MONSEL[m.id].includes(c.n)?"on":""}" data-m="${m.id}" data-s="${c.n}">${c.n}</b>`).join("")}</span>
+      <span style="flex:1"></span>
+      <span class="mono" style="font-size:11.5px;color:var(--ink-mute)">${m.fader.toFixed(1)} dB</span>
+    </div>`).join("");
+  document.querySelectorAll(".mchip").forEach(c=>c.onclick=()=>{
+    const a=MONSEL[c.dataset.m],s=c.dataset.s;
+    a.includes(s)?a.splice(a.indexOf(s),1):a.push(s);c.classList.toggle("on");renderMonPanels();});
+}
+renderMon();
+
+/* ---------- overlays ---------- */
+let curCh=0;
+function closeOvl(){document.querySelectorAll(".ovl").forEach(o=>o.classList.remove("on"));
+  document.querySelectorAll(".strip").forEach(s=>s.classList.remove("sel"))}
+function stepCh(d){openCh((curCh+d+CH.length)%CH.length)}
+function openMatrix(){closeOvl();document.getElementById("ovl-mx").classList.add("on")}
+function openAdd(kind){
+  closeOvl();
+  document.getElementById("oadd-nm").textContent=kind==="input"?"Add input":"Add bus or output";
+  document.getElementById("oadd-body").innerHTML=`
+    <div class="row" style="margin-bottom:14px">
+      <span class="chip ${kind==="input"?"on":""}">Input</span>
+      <span class="chip ${kind==="output"?"on":""}">Output / bus</span>
+    </div>
+    <h2>Physical devices</h2>
+    <div class="card"><table><tbody>
+      ${(kind==="input"
+        ? [["Webcam microphone","Logitech C920","Not in use"],["Line in","Realtek High Definition Audio","Not in use"],["Jabra Speak 750","Jabra","In use — strip 1"]]
+        : [["Speakers","Realtek High Definition Audio","Not in use"],["Headphone (rear)","Realtek","Not in use"],["UCA222","Behringer","In use — Mon 2"]]
+      ).map(d=>`<tr><td><b>${d[0]}</b><br><span class="sub" style="margin:0">${d[1]}</span></td>
+        <td class="mono" style="color:var(--ink-mute)">${d[2]}</td>
+        <td style="text-align:right"><button class="btn sm ${d[2].startsWith("In use")?"":"pri"}">Add</button></td></tr>`).join("")}
+    </tbody></table></div>
+    <h2>Virtual endpoints <span class="chip" data-fid="A6">Signed driver</span></h2>
+    <div class="card">
+      <table><tbody>
+        <tr><td><b>VAM Virtual In</b><br><span class="sub" style="margin:0">Recording endpoint — what Teams or Zoom plays into</span></td>
+          <td class="mono" style="color:var(--ink-mute)">In use — strip 5</td><td style="text-align:right"><button class="btn sm">Add</button></td></tr>
+        <tr><td><b>VAM Virtual Out</b><br><span class="sub" style="margin:0">Playback endpoint — what OBS captures</span></td>
+          <td class="mono" style="color:var(--ink-mute)">In use — Stream</td><td style="text-align:right"><button class="btn sm">Add</button></td></tr>
+        <tr><td><b>Create a new virtual endpoint</b><br><span class="sub" style="margin:0">Appears in Windows under this name</span></td>
+          <td><input type="text" value="VAM Aux 1" style="width:150px"></td><td style="text-align:right"><button class="btn sm pri">Create</button></td></tr>
+      </tbody></table>
+      <p class="sub" style="margin:12px 0 0">VAM depends on an existing signed driver rather than shipping its
+        own. A native OBS source over shared memory (E7) and a VAM-branded WDM driver (E8) are both later work —
+        a driver fault takes the stream down with it.</p>
+    </div>
+    ${kind==="output"?`<h2>New bus</h2>
+    <div class="card">
+      <div class="row"><input type="text" value="Sub-mix" style="width:160px">
+        <button class="btn pri" onclick="addBus('bus')">Create output bus</button></div>
+      <p class="sub" style="margin:11px 0 0">A bus with an output device feeds that device; a bus without one
+        is an internal sub-mix feeding other buses. <b>Monitors are buses too</b> — same object, with pre-fader
+        sends and their own source selection — but they are created on the
+        <a href="#" onclick="go('monitors');return false" style="color:var(--brass)">Monitors</a> view, so
+        there is one place to think about headphones.</p>
+    </div>`:""}`;
+  document.getElementById("ovl-add").classList.add("on");
+}
+
+function knob(l,v,w,h){
+  return `<div class="knob"><div class="between"><span>${l}${h?` <button class="hlp" data-h="${l}|${h}">?</button>`:""}</span>
+    <span>${v}</span></div><div class="slider"><i style="width:${w}%"></i><b style="left:${w}%"></b></div></div>`;
+}
+function modBlock(c,key,idx){
+  const m=MODS[key];
+  return `<div class="mod" draggable="true" data-idx="${idx}" data-key="${key}">
+    <div class="mh" onclick="this.parentNode.classList.toggle('open')">
+      <span class="grip">⣿</span>
+      <label class="sw on" onclick="event.stopPropagation();this.classList.toggle('on');this.closest('.mod').classList.toggle('byp')"><i></i></label>
+      <span class="t">${m.t}</span>
+      <button class="hlp" data-h="${m.t}|${m.h}">?</button>
+      <span class="cost" data-tip="Measured cost on the audio thread">${m.cost.toFixed(2)} ms</span>
+      <span class="fid">${m.fid}</span>
+    </div>
+    <div class="mb">
+      ${m.eq?`<div class="eqwrap"><canvas class="eqbox" data-eq></canvas></div>
+        <table class="bandtable" style="margin-top:8px"><thead><tr><th>Band</th><th>Type</th><th>Freq</th><th>Gain</th><th>Q</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td class="mono">Low shelf</td><td><input class="num" type="text" value="120"></td><td><input class="num" type="text" value="-4.0"></td><td><input class="num" type="text" value="0.7"></td></tr>
+          <tr><td>2</td><td class="mono">Bell</td><td><input class="num" type="text" value="330"></td><td><input class="num" type="text" value="-3.5"></td><td><input class="num" type="text" value="1.2"></td></tr>
+          <tr><td>3</td><td class="mono">Bell</td><td><input class="num" type="text" value="3800"></td><td><input class="num" type="text" value="+3.0"></td><td><input class="num" type="text" value="0.9"></td></tr>
+          <tr><td>4</td><td class="mono">High shelf</td><td><input class="num" type="text" value="9000"></td><td><input class="num" type="text" value="+1.5"></td><td><input class="num" type="text" value="0.7"></td></tr>
+        </tbody></table>
+        <p class="sub" style="margin:8px 0 0" data-fid="U18">Drag a handle on the curve, or type the numbers.</p>`
+        :(m.p||[]).map(p=>knob(p[0],p[1],p[2])).join("")}
+    </div></div>`;
+}
+function openCh(i){
+  curCh=i;const c=CH[i];closeOvl();
+  document.querySelectorAll(".strip")[i].classList.add("sel");
+  document.getElementById("och-sw").style.background=c.col;
+  document.getElementById("och-nm").textContent=c.n;
+  document.getElementById("och-body").innerHTML=`
+    <div class="presetbar" data-fid="B12">
+      <div class="r">
+        <span class="lbl" style="font-size:11px;color:var(--ink-mute)">Chain preset</span>
+        <select><option>${c.preset}</option><option>Jabra shared</option><option>Studio 180°</option><option>Audience</option><option>Online</option></select>
+        ${c.dirty?`<span class="dirty" data-tip="The live chain no longer matches the preset it came from">● modified</span>`:""}
+        <span style="flex:1"></span>
+        <button class="hlp" data-h="Chain presets|A preset is a whole chain — which modifiers, in what order, with what settings — not just a set of numbers. That is why &quot;Jabra shared&quot; and &quot;Studio 180°&quot; are genuinely different objects rather than the same strip with different values. Everything in this box acts on the preset library, never on the channel itself — removing the input is further down, under Input and device.">?</button>
+      </div>
+      <div class="r acts">
+        <button class="btn sm">Apply to channel</button>
+        <button class="btn sm">Overwrite preset</button>
+        <button class="btn sm">Save as new…</button>
+        <span style="flex:1"></span>
+        <button class="btn sm danger" data-tip="Removes the preset from the library. The channel and its chain are untouched.">Delete preset</button>
+      </div>
+    </div>
+
+    <h2>Input and device</h2>
+    <div class="card">
+      <div class="kv">
+        <span class="k">Device</span><span class="v"><select><option>${c.dev}</option><option>Change…</option></select></span>
+        <span class="k">Mode <button class="hlp" data-h="Shared or exclusive|Exclusive mode gives lower latency and stops Windows resampling behind your back, but nothing else can use the device. Prefer exclusive for microphones, shared for the virtual endpoint.">?</button></span>
+          <span class="v"><select><option>Exclusive</option><option>Shared</option></select></span>
+        <span class="k">Buffer</span><span class="v"><select><option>10 ms</option><option>20 ms</option><option>5 ms</option></select></span>
+        <span class="k">Nominal / measured</span><span class="v">${c.nom.toFixed(1)} / ${c.meas.toFixed(1)} Hz</span>
+        <span class="k">Name</span><span class="v"><input type="text" value="${c.n}" style="width:170px"></span>
+        <span class="k">Colour</span><span class="v"><span class="swatch" style="background:${c.col};width:16px;height:16px"></span></span>
+      </div>
+      <div class="row" style="margin-top:12px"><button class="btn sm">Test tone</button>
+        <span style="flex:1"></span>
+        <button class="btn sm danger" data-fid="U17"
+          data-tip="Removes the strip “${c.n}” from the mixer. Presets are not affected.">Remove input “${c.n}”</button></div>
+    </div>
+
+    <h2>Chain <span class="chip" data-fid="B0a">Drag to reorder</span></h2>
+    <div class="mod anchor open"><div class="mh" onclick="this.parentNode.classList.toggle('open')">
+      <span class="anchoricon" data-tip="Fixed position — this link cannot be dragged">⚓</span>
+      <span class="t">Input · trim, polarity, mono</span>
+      <button class="hlp" data-h="Fixed head|Trim, polarity and mono fold describe the signal arriving rather than a treatment of it, so they cannot be dragged further down the chain. Their settings are edited here like any other link — only the position is fixed.">?</button>
+      <span class="fid">A8 · A11 · B8a</span></div>
+      <div class="anchornote">Always first in the chain. Settings below are editable.</div>
+      <div class="mb">
+        ${knob("Trim","+6.0 dB",62,"Digital gain before anything else in the chain, ±24 dB. Set it so the meter sits around −18 dBFS when someone speaks normally — everything downstream assumes a sane input level.")}
+        <label class="sw"><i></i> Invert polarity
+          <button class="hlp" data-h="Polarity|Flips the waveform. It matters when two microphones pick up the same speaker: out of phase they cancel each other and the voice goes thin and hollow. Flip one and listen — if it suddenly gets fuller, leave it flipped.">?</button></label>
+        <label class="sw" style="margin-top:8px"><i></i> Sum to mono
+          <button class="hlp" data-h="Mono fold|Sums a stereo device to one channel. Almost every conference microphone wants this — a stereo image is meaningless for a single voice and doubles the work downstream.">?</button></label>
+      </div></div>
+    <div class="flow">↓</div>
+    <div class="tap" data-fid="B3">Voice activity tap — reads the signal <b style="color:var(--teal)">before</b> the denoise, because denoise removes what the detector keys on</div>
+    <div class="flow">↓</div>
+    <div id="chainlist">${c.chain.map((k,n)=>modBlock(c,k,n)).join('<div class="flow">↓</div>')}</div>
+    <button class="addmod" onclick="addModList(${i})">＋ Add modifier</button>
+    <div class="flow">↓</div>
+    <div class="mod anchor open"><div class="mh" onclick="this.parentNode.classList.toggle('open')">
+      <span class="anchoricon" data-tip="Fixed position — this link cannot be dragged">⚓</span>
+      <span class="t">Fader · automix gain</span>
+      <button class="hlp" data-h="Fixed tail|The automix gain is applied after the fader, so the operator's fader keeps meaning what it says. Neither can be dragged into the middle of the chain — but both are edited here.">?</button>
+      <span class="fid">B8 · C1 · C2</span></div>
+      <div class="anchornote">Always last in the chain. Settings below are editable.</div>
+      <div class="mb">
+        ${knob("Fader",`${c.fader>0?"+":""}${c.fader.toFixed(1)} dB`,Math.round(70+c.fader*2),
+          "The same fader as on the strip. Everything before it is treatment; everything after it is the automixer deciding how much of this channel the mix gets right now.")}
+        <div style="border-top:1px solid var(--line-soft);margin:10px 0 9px"></div>
+        <label class="sw ${c.ax?"on":""}" data-fid="C2"><i></i> Participate in gain sharing
+          <button class="hlp" data-h="Per-channel automix|Channels that are not really competing for the same room should stay out — the audience microphone and the online feed are out by default. There is also a global bypass in the status bar if the automixer has to go away entirely.">?</button></label>
+        ${knob("Automix weight","0.0 dB",50,"Biases the sharing for a microphone that is quieter or further away by nature. Positive weight makes this channel win ties against the others.")}
+        <div class="kv"><span class="k">Group</span><span class="v">${c.virt?"Online":"Room"}</span></div>
+      </div></div>
+
+    <h2>Sends</h2>
+    <div class="card" data-fid="D2">
+      ${BUS.map(b=>{
+        const locked=c.virt&&b.id==="online";
+        return `<div class="between" style="padding:6px 0;border-bottom:1px solid var(--line-soft)">
+        <span class="lbl" style="font-size:12px;color:${c.sends[b.id]&&!locked?"var(--ink)":"var(--ink-mute)"}">${b.n}</span>
+        <span class="row">${locked?'<span class="pill bad">Excluded — N-1</span>':
+          `<span class="mono" style="font-size:11.5px">${c.sends[b.id]?"0.0 dB":"off"}</span>
+           <span class="chip">${b.mon?"pre":"post"}</span>`}</span></div>`;}).join("")}
+      <p class="sub" style="margin:10px 0 0">Monitor sends are pre-fader by default, so moving a fader does not
+        change what the operator hears.</p>
+    </div>`;
+  document.getElementById("ovl-ch").classList.add("on");
+  wireChainDrag(i);drawEq();
+}
+function addModList(i){
+  const used=CH[i].chain;
+  const avail=Object.keys(MODS).filter(k=>k!=="vad");
+  const html=avail.map(k=>`<b class="mchip" data-add="${k}">${MODS[k].t}${used.includes(k)?" ·2":""}</b>`).join(" ");
+  const box=document.createElement("div");
+  box.className="card";box.style.marginTop="6px";
+  box.innerHTML=`<div class="lbl" style="font-size:11px;color:var(--ink-mute);margin-bottom:7px">Built in</div>
+    <div class="row">${html}</div>
+    <div class="lbl" style="font-size:11px;color:var(--ink-mute);margin:12px 0 7px">Third party <span class="chip">Phase 1</span></div>
+    <p class="sub" style="margin:0">Modifiers dropped into the modifier folder appear here. The host measures
+      each one and bypasses anything that overruns its share of the callback.</p>`;
+  document.querySelector(".addmod").after(box);
+  box.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>{
+    CH[i].chain.push(b.dataset.add);CH[i].dirty=true;renderStrips();bindAnim();openCh(i);});
+}
+function wireChainDrag(i){
+  const list=document.getElementById("chainlist");if(!list)return;
+  let from=null;
+  list.querySelectorAll(".mod").forEach(m=>{
+    m.addEventListener("dragstart",e=>{from=+m.dataset.idx;m.classList.add("dragging");e.dataTransfer.effectAllowed="move"});
+    m.addEventListener("dragend",()=>{m.classList.remove("dragging");list.querySelectorAll(".mod").forEach(x=>x.classList.remove("over"))});
+    m.addEventListener("dragover",e=>{e.preventDefault();m.classList.add("over")});
+    m.addEventListener("dragleave",()=>m.classList.remove("over"));
+    m.addEventListener("drop",e=>{e.preventDefault();
+      const to=+m.dataset.idx;if(from===null||from===to)return;
+      const ch=CH[i].chain;const[x]=ch.splice(from,1);ch.splice(to,0,x);
+      CH[i].dirty=true;from=null;renderStrips();bindAnim();openCh(i);});
+  });
+}
+function openBus(i){
+  const b=BUS[i];closeOvl();
+  document.getElementById("obu-nm").textContent=b.n;
+  document.getElementById("obu-body").innerHTML=`
+    <div class="card"><div class="kv">
+      <span class="k">Output device</span><span class="v"><select><option>${b.out}</option><option>Change…</option></select></span>
+      <span class="k">Channels</span><span class="v"><select><option>Stereo</option><option>Mono</option></select></span>
+      <span class="k">Name</span><span class="v"><input type="text" value="${b.n}" style="width:150px"></span>
+    </div>
+    <div class="row" style="margin-top:12px"><button class="btn sm danger" data-fid="U17">Remove this bus</button></div></div>
+    ${b.id==="online"?`
+    <h2>Mix-minus sources</h2>
+    <div class="card" data-fid="D4">
+      <table><tbody>${CH.map(c=>`<tr><td>${c.n}</td><td style="text-align:right">${c.virt
+        ?'<span class="pill bad">Excluded — N-1</span>':'<span class="pill ok">Included</span>'}</td></tr>`).join("")}</tbody></table>
+      <p class="sub" style="margin:10px 0 0">The online participants are removed from their own return
+        automatically, and it cannot be switched on by hand.</p></div>`:""}
+    <h2>Chain <span class="chip">Drag to reorder</span></h2>
+    <div id="chainlist">
+      ${modBlock(null,"eq",0)}<div class="flow">↓</div>${modBlock(null,"comp",1)}
+      <div class="flow">↓</div>
+      <div class="mod"><div class="mh" onclick="this.parentNode.classList.toggle('open')">
+        <span class="grip">⣿</span><label class="sw on" onclick="event.stopPropagation()"><i></i></label>
+        <span class="t">Brick-wall limiter</span>
+        <button class="hlp" data-h="Limiter|The last line of defence before the stream. Set the ceiling to −1 dBFS and forget about it. Not optional on the stream bus — one thump reaching a clipped encoder is worse than any amount of processing.">?</button>
+        <span class="cost">0.03 ms</span><span class="fid">D6</span></div>
+        <div class="mb">${knob("Ceiling","−1.0 dBFS",92)}${knob("Release","60 ms",30)}</div></div>
+    </div>
+    <button class="addmod">＋ Add modifier</button>
+    ${b.master?`<h2>Loudness</h2>
+    <div class="card" data-fid="D11"><div class="kv">
+      <span class="k">Integrated</span><span class="v">−22.8 LUFS</span>
+      <span class="k">Short term</span><span class="v">−21.4 LUFS</span>
+      <span class="k">True peak</span><span class="v">−1.2 dBTP</span>
+      <span class="k">Target</span><span class="v">−23 LUFS (EBU R128)</span></div></div>`:""}`;
+  document.getElementById("ovl-bus").classList.add("on");drawEq();
+}
+function drawEq(){
+  document.querySelectorAll("[data-eq]").forEach(cv=>{
+    const r=cv.getBoundingClientRect();
+    cv.width=Math.max(300,r.width||500);cv.height=120;
+    const x=cv.getContext("2d"),w=cv.width,h=cv.height;
+    x.clearRect(0,0,w,h);x.fillStyle="#0a0d10";x.fillRect(0,0,w,h);
+    x.strokeStyle="#212a32";x.lineWidth=1;
+    for(let i=1;i<8;i++){x.beginPath();x.moveTo(i*w/8,0);x.lineTo(i*w/8,h);x.stroke()}
+    x.strokeStyle="#2b343d";x.beginPath();x.moveTo(0,h/2);x.lineTo(w,h/2);x.stroke();
+    const bands=[[.13,-17],[.30,-13],[.62,12],[.86,6]];
+    const curve=t=>bands.reduce((a,[p,g])=>a+g*Math.exp(-Math.pow((t-p)*7,2)),0);
+    x.beginPath();x.strokeStyle="#d6a64a";x.lineWidth=1.8;
+    for(let i=0;i<=w;i++){const y=h/2-curve(i/w);i?x.lineTo(i,y):x.moveTo(i,y)}
+    x.stroke();
+    x.fillStyle="rgba(214,166,74,.09)";x.lineTo(w,h/2);x.lineTo(0,h/2);x.closePath();x.fill();
+    bands.forEach(([p,g])=>{
+      x.beginPath();x.arc(p*w,h/2-curve(p),6,0,7);x.fillStyle="#d6a64a";x.fill();
+      x.strokeStyle="#1a1408";x.lineWidth=1;x.stroke();
+    });
+    x.fillStyle="#75838f";x.font="9.5px 'IBM Plex Mono',monospace";
+    ["30","100","300","1k","3k","10k"].forEach((l,i)=>x.fillText(l,(i+.5)*w/6-8,h-4));
+  });
+}
+
+/* ---------- matrix ---------- */
+function renderMatrix(){
+  const t=document.getElementById("mxtable");
+  t.innerHTML=`<thead><tr><th style="position:sticky;left:0;background:var(--panel)">Input</th>
+    ${BUS.map(b=>`<th style="text-align:center">${b.n}</th>`).join("")}</tr></thead>
+    <tbody>${CH.map(c=>`<tr>
+      <td class="rowh"><span class="swatch" style="background:${c.col};margin-right:7px"></span>${c.n}</td>
+      ${BUS.map(b=>{
+        if(c.virt&&b.id==="online")return '<td class="cell excl">N-1</td>';
+        return c.sends[b.id]
+          ?`<td class="cell on">0.0 <span style="color:var(--ink-mute);font-size:9.5px">${b.mon?"pre":"post"}</span></td>`
+          :'<td class="cell off">—</td>';}).join("")}</tr>`).join("")}</tbody>`;
+  t.querySelectorAll(".cell:not(.excl)").forEach(c=>c.onclick=()=>{
+    c.classList.toggle("on");c.classList.toggle("off");
+    c.innerHTML=c.classList.contains("on")?'0.0 <span style="color:var(--ink-mute);font-size:9.5px">post</span>':"—";});
+}
+renderMatrix();
+
+/* ---------- automix view ---------- */
+function renderAx(){
+  document.getElementById("axrows").innerHTML=CH.map(c=>`
+    <div class="axrow"><div class="n"><span class="swatch" style="background:${c.col}"></span>${c.n}</div>
+      <div class="sharebar"><i data-axshare style="width:0%"></i></div>
+      <div class="mono" data-axgain style="font-size:11.5px;color:var(--ink-dim)">−18.0 dB</div>
+      <div><span class="pill ${c.ax?"ok":"idle"}" style="font-size:9.5px">${c.ax?"In":"Out"}</span></div>
+      <div class="mono" style="font-size:11.5px;color:var(--ink-mute)">w 0.0 dB</div></div>`).join("");
+  document.getElementById("axinternals").innerHTML=CH.map((c,i)=>
+    `<tr><td class="mono">${i+1}</td><td data-vad><span class="pill idle" style="font-size:9.5px">—</span></td>
+     <td class="mono" data-det>−52.0</td><td class="mono" data-shr>0.00</td><td class="mono" data-gn>−18.0</td></tr>`).join("");
+}
+renderAx();
+document.getElementById("axparams").innerHTML=`
+  <div class="card" data-fid="C3">${knob("Depth","−18.0 dB",58,
+    "How far a silent channel is pushed down relative to the one speaking. −15 dB is polite and keeps the room alive; −30 dB is aggressive and makes a quiet interjection disappear. This is the floor drawn on every strip's automix bar.")}
+    <p class="sub" style="margin:6px 0 0">Drawn as the left end of the bar on every strip.</p></div>
+  <div class="card" data-fid="C4">${knob("NOM attenuation","On · 3.0 dB / double",50,
+    "Number of open microphones. Every doubling of open microphones adds about 3 dB to the bus, so this subtracts it back. Without it the mix gets louder as the room gets busier.")}</div>
+  <div class="card">${knob("Response","Fast · 120 ms",34,
+    "How quickly gain moves between speakers. Slower is smoother but clips the first syllable of an interjection. 100–150 ms is the usual compromise for a council chamber.")}</div>`;
+document.getElementById("axover").innerHTML=`
+  ${knob("Priority channel","Mayor 180°",100,"The chair override. When this microphone opens it ducks everything else rather than sharing with it. Standard on conference systems, and this room has a chair.")}
+  <label class="sw on" data-fid="C7"><i></i> Last-mic hold — keep the most recent speaker open
+    <button class="hlp" data-h="Last-mic hold|Without it, the room goes completely dead between speakers and the stream sounds broken. With it, the most recent microphone stays open until another one takes over.">?</button></label>`;
+
+/* ---------- monitors view ---------- */
+function renderMonPanels(){
+  document.getElementById("monpanels").innerHTML=monBuses().map(m=>{
+    const sel=MONSEL[m.id]||[];
+    const live=m.out.startsWith("—");
+    return `<div class="card">
+      <div class="between"><b class="lbl" style="font-size:14px">${m.n}</b>
+        <span class="pill ${live?"warn":"ok"}">${live?"No output device":"Active"}</span></div>
+      <div class="kv" style="margin-top:9px">
+        <span class="k">Output</span><span class="v"><select><option>${m.out}</option><option>Realtek — headphone</option><option>Behringer UCA222</option><option>Change…</option></select></span>
+        <span class="k">Level</span><span class="v">${m.fader.toFixed(1)} dB</span>
+        <span class="k">Limiter</span><span class="v">−3.0 dBFS</span></div>
+      <div class="srcgroup"><span class="gl">Buses</span>
+        <div class="srcgrid buses">${BUS.filter(b=>!b.mon).map(b=>
+          `<b class="${sel.includes(b.id)?"on":""}">${b.n}</b>`).join("")}</div></div>
+      <div class="srcgroup"><span class="gl">Inputs</span>
+        <div class="srcgrid">${CH.map(c=>
+          `<b class="${sel.includes(c.n)?"on":""}"><span class="swatch" style="background:${c.col}"></span>${c.n}</b>`).join("")}</div></div>
+      <div class="row" style="margin-top:11px">
+        <span class="sub" style="margin:0;flex:1">A solo on any strip overrides this selection until it is released.</span>
+        <button class="btn sm danger">Remove ${m.n}</button></div>
+    </div>`;}).join("")
+    +`<button class="card" data-fid="U17" onclick="addBus('mon')"
+        style="border-style:dashed;color:var(--ink-mute);display:flex;flex-direction:column;
+        align-items:center;justify-content:center;gap:6px;min-height:150px;cursor:pointer">
+        <span style="font-size:28px;font-family:var(--f-cond);line-height:1">＋</span>
+        <b class="lbl" style="font-size:13px">Add monitor</b>
+        <span class="sub" style="margin:0;text-align:center;max-width:34ch">A monitor is a bus with the monitor
+          role — pre-fader sends and its own source selection. There is no fixed number of them.</span>
+      </button>`;
+}
+renderMonPanels();
+
+/* ---------- diagnostics tables ---------- */
+const DEVROWS=[
+  ["Jabra Speak 750","in",47998.6,-29],["Jabra Speak 750 #2","in",48001.9,40],
+  ["USB Audio CODEC","in",47999.1,-19],["VAM Virtual In","in",48000.0,0],
+  ["VAM Virtual Out","out",48000.0,0],["USB CODEC — line out","out",47999.1,-19],
+  ["Realtek — headphone","out",48002.4,50],["Behringer UCA222","out",47996.8,-67]
+];
+document.getElementById("clocktable").innerHTML=DEVROWS.map(d=>
+  `<tr><td>${d[0]}</td><td class="mono" style="color:var(--ink-mute)">${d[1]}</td><td class="mono">48000.0</td>
+   <td class="mono">${d[2].toFixed(2)}</td>
+   <td class="mono" style="color:${Math.abs(d[3])>50?"var(--warn)":"var(--ink)"}">${d[3]>0?"+":""}${d[3]} ppm</td>
+   <td class="mono">×${(1+d[3]/1e6).toFixed(7)}</td><td class="mono">52%</td>
+   <td class="mono zero">0</td><td class="mono zero">0</td></tr>`).join("");
+document.getElementById("logbox").innerHTML=[
+  ["15:41:02","i","Chain reordered on Mayor 180° — denoise moved before equaliser, snapshot 4812"],
+  ["15:38:14","i","Monitor 2 source set changed — added Audience"],
+  ["15:22:07","w","Behringer UCA222 drift -67 ppm exceeds warning threshold of 60 ppm"],
+  ["15:22:07","i","Resampler ratio for UCA222 widened to 1.0000670"],
+  ["14:55:31","i","Automix depth changed -15.0 → -18.0 dB"],
+  ["14:12:00","i","Recording started — D:\\Council\\2026-08-28 — 6 tracks"],
+  ["13:31:48","w","Jabra Speak 750 (R) disappeared from the endpoint list"],
+  ["13:31:48","i","Strip 2 muted automatically, session continues"],
+  ["13:31:49","i","Strip 2 re-attached and unmuted after 340 ms"],
+  ["13:29:02","i","Engine started — 5 inputs, 37 modifiers, 5 buses, 5 outputs, 48000 Hz"],
+  ["13:29:02","i","GC latency mode SustainedLowLatency, tiered compilation disabled"],
+  ["13:29:01","i","Configuration loaded from %PROGRAMDATA%\\VAM\\config.json"]
+].map(([t,l,m])=>`<div><span class="t">${t}  </span><span class="${l}">${m}</span></div>`).join("");
+const cb=document.getElementById("cbhist");
+for(let i=0;i<44;i++){const b=document.createElement("i");b.style.height=(12+Math.random()*Math.random()*70)+"%";cb.appendChild(b)}
+
+/* ---------- tabs ---------- */
+document.querySelectorAll("[data-tabs]").forEach(g=>{
+  g.querySelectorAll("button").forEach(b=>b.onclick=()=>{
+    g.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+    const scope=g.closest(".view");
+    g.querySelectorAll("button").forEach(x=>{
+      const el=scope.querySelector("#"+x.dataset.tab);if(el)el.classList.toggle("on",x===b);});
+  });
+});
+/* global automix bypass (C10) — reachable from any view, and impossible to forget */
+let AXON=true;
+function setAx(on){
+  AXON=on;
+  const chip=document.getElementById("axchip");
+  chip.classList.toggle("on",on);
+  chip.textContent=on?"Automix on":"Automix OFF";
+  chip.style.color=on?"":"var(--warn)";
+  chip.style.borderColor=on?"":"var(--warn)";
+  chip.style.background=on?"":"rgba(229,163,46,.14)";
+  const m=document.getElementById("axmaster");if(m)m.classList.toggle("on",on);
+  const s=document.getElementById("axstate");
+  if(s){s.className="pill "+(on?"ok":"warn");
+    s.textContent=on?`Sharing across ${CH.filter(c=>c.ax).length} channels`:"Bypassed — every channel at its fader value";}
+}
+document.getElementById("axchip").onclick=()=>setAx(!AXON);
+
+document.getElementById("specbtn").onclick=()=>document.body.classList.toggle("spec");
+document.getElementById("density").onclick=e=>{
+  document.body.classList.toggle("compact");
+  e.target.textContent=document.body.classList.contains("compact")?"Wide":"Compact";
+};
+
+/* ---------- animation ---------- */
+const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+const S=CH.map(c=>({lvl:c.base,pk:c.base,spk:0,share:0,gr:0,ph:Math.random()*7}));
+const BS=BUS.map(()=>({lvl:.5,pk:.5}));
+const hist=[],dhist=DEVROWS.map(()=>[]);
+let $strips=[],$bus=[],$share=[],$gain=[],$vad=[],$det=[],$shr=[],$gn=[];
+function bindAnim(){
+  $strips=[...document.querySelectorAll(".strip")];
+  $bus=[...document.querySelectorAll(".bstrip")];
+  $share=[...document.querySelectorAll("[data-axshare]")];
+  $gain=[...document.querySelectorAll("[data-axgain]")];
+  $vad=[...document.querySelectorAll("[data-vad]")];
+  $det=[...document.querySelectorAll("[data-det]")];
+  $shr=[...document.querySelectorAll("[data-shr]")];
+  $gn=[...document.querySelectorAll("[data-gn]")];
+}
+bindAnim();
+const band=document.getElementById("band"),bx=band.getContext("2d");
+const dg=document.getElementById("driftg"),dgx=dg.getContext("2d");
+let t=0;
+function tick(){
+  t++;
+  let sum=0;
+  S.forEach((s,i)=>{
+    const c=CH[i];
+    const talk=Math.max(0,Math.sin(t/95+s.ph)-.55)/.45;
+    const target=c.virt?.10+talk*.55:(i===3?.10+talk*.30:.06+talk*.78);
+    s.lvl+=(target-s.lvl)*.14;
+    s.lvl=Math.max(0,Math.min(1,s.lvl+(Math.random()-.5)*.05));
+    if(c.mute)s.lvl*=.4;
+    s.spk=talk>.12?1:0;
+    s.gr=Math.max(0,s.lvl-.55)*1.5;
+    s.det=AXON&&c.ax&&!c.mute?Math.pow(s.lvl,2.2):0;
+    sum+=s.det;
+  });
+  S.forEach(s=>{s.share=sum>0.001?s.det/sum:0});
+  $strips.forEach((el,i)=>{
+    const s=S[i];if(!s)return;
+    s.pk=Math.max(s.lvl,s.pk-.004);
+    const q=k=>el.querySelector(k);
+    q("[data-met]").style.height=(s.lvl*100).toFixed(1)+"%";
+    q("[data-pk]").style.bottom=(s.pk*100).toFixed(1)+"%";
+    const gr=q("[data-gr]");if(gr)gr.style.height=(s.gr*100).toFixed(1)+"%";
+    q("[data-spk]").classList.toggle("on",s.spk===1&&CH[i].ax&&!CH[i].mute);
+    q("[data-axb]").style.width=(s.share*100).toFixed(1)+"%";
+    const live=AXON&&CH[i].ax;
+    const g=live?Math.max(AXDEPTH,20*Math.log10(Math.max(s.share,1e-3))):0;
+    q("[data-axd]").textContent=live?g.toFixed(1):"bypass";
+    q(".ax").style.opacity=live?"1":".45";
+    /* at the floor = contributing nothing to the mix, so the meter greys out (U19) */
+    q(".meter").classList.toggle("ducked",live&&g<=AXDEPTH+1);
+  });
+  $bus.forEach((el,i)=>{
+    const mix=i===0?(AXON?S.reduce((a,s,n)=>a+s.lvl*s.share*1.9+(CH[n].ax?0:s.lvl*.4),0)
+                          :S.reduce((a,s)=>a+s.lvl*.5,0))
+            :i===1?S.reduce((a,s,n)=>a+(CH[n].virt?0:s.lvl*.5),0)
+            :S.reduce((a,s)=>a+s.lvl*.35,0);
+    const v=Math.min(1,mix),b=BS[i];
+    b.lvl+=(v-b.lvl)*.25;b.pk=Math.max(b.lvl,b.pk-.004);
+    el.querySelector("[data-bmet]").style.height=(b.lvl*100).toFixed(1)+"%";
+    el.querySelector("[data-bpk]").style.bottom=(b.pk*100).toFixed(1)+"%";
+    const l=el.querySelector("[data-lim]");if(l)l.classList.toggle("on",b.lvl>.88);
+  });
+  S.forEach((s,i)=>{
+    if($share[i])$share[i].style.width=(s.share*100).toFixed(1)+"%";
+    if($gain[i])$gain[i].textContent=AXON&&CH[i].ax
+      ?Math.max(AXDEPTH,20*Math.log10(Math.max(s.share,1e-3))).toFixed(1)+" dB":"bypass";
+    if($vad[i])$vad[i].innerHTML=`<span class="pill ${s.spk?"ok":"idle"}" style="font-size:9.5px">${s.spk?"Speech":"—"}</span>`;
+    if($det[i])$det[i].textContent=(20*Math.log10(Math.max(s.lvl,1e-3))).toFixed(1);
+    if($shr[i])$shr[i].textContent=s.share.toFixed(2);
+    if($gn[i])$gn[i].textContent=(CH[i].ax?Math.max(AXDEPTH,20*Math.log10(Math.max(s.share,1e-3))):0).toFixed(1);
+  });
+  hist.push(S.map(s=>s.share));if(hist.length>275)hist.shift();
+  if(document.getElementById("v-automix").classList.contains("on"))drawBand();
+  if(document.getElementById("v-diagnostics").classList.contains("on")&&t%6===0)drawDrift();
+  requestAnimationFrame(tick);
+}
+function drawBand(){
+  const w=band.width,h=band.height;
+  bx.clearRect(0,0,w,h);bx.fillStyle="#0a0d10";bx.fillRect(0,0,w,h);
+  const step=w/275;
+  hist.forEach((frame,x)=>{let y=h;
+    frame.forEach((v,i)=>{const hh=v*h;
+      bx.fillStyle=CH[i]?CH[i].col:"#666";bx.globalAlpha=CH[i]&&CH[i].ax?.88:.2;
+      bx.fillRect(x*step,y-hh,Math.ceil(step),hh);y-=hh;});});
+  bx.globalAlpha=1;bx.strokeStyle="#2b343d";bx.strokeRect(.5,.5,w-1,h-1);
+  bx.fillStyle="#75838f";bx.font="10px 'IBM Plex Mono',monospace";
+  bx.fillText("−30 s",6,h-6);bx.fillText("now",w-32,h-6);
+}
+function drawDrift(){
+  const w=dg.width,h=dg.height;
+  DEVROWS.forEach((d,i)=>{
+    dhist[i].push(d[3]+Math.sin(t/220+i)*6+(Math.random()-.5)*2);
+    if(dhist[i].length>260)dhist[i].shift();});
+  dgx.clearRect(0,0,w,h);dgx.fillStyle="#0a0d10";dgx.fillRect(0,0,w,h);
+  dgx.strokeStyle="#212a32";
+  [0,.25,.5,.75,1].forEach(p=>{dgx.beginPath();dgx.moveTo(0,p*h);dgx.lineTo(w,p*h);dgx.stroke()});
+  dgx.strokeStyle="#3d474f";dgx.beginPath();dgx.moveTo(0,h/2);dgx.lineTo(w,h/2);dgx.stroke();
+  const step=w/260,cols=["#6ea8ff","#6ea8ff","#d6a64a","#39b9ae","#39b9ae","#9b8cd9","#4fb477","#e5a32e"];
+  DEVROWS.forEach((d,i)=>{
+    dgx.beginPath();dgx.strokeStyle=cols[i];dgx.lineWidth=1.4;
+    dhist[i].forEach((v,x)=>{const y=h/2-v*(h/2)/90;x?dgx.lineTo(x*step,y):dgx.moveTo(x*step,y)});
+    dgx.stroke();});
+  dgx.fillStyle="#75838f";dgx.font="10px 'IBM Plex Mono',monospace";
+  dgx.fillText("+90 ppm",6,12);dgx.fillText("0",6,h/2-4);dgx.fillText("−90 ppm",6,h-6);
+}
+if(!reduce)tick();else{drawBand();drawDrift()}
+
+let sec=6760;
+setInterval(()=>{
+  if(reduce)return;sec++;
+  const f=n=>String(n).padStart(2,"0");
+  document.getElementById("clk").textContent=`${f((sec/3600)|0)}:${f(((sec/60)|0)%60)}:${f(sec%60)}`;
+  const r=sec-432;
+  document.getElementById("rect").textContent=`${f((r/3600)|0)}:${f(((r/60)|0)%60)}:${f(r%60)}`;
+  document.getElementById("cpu").textContent=(16+Math.round(Math.random()*5))+"%";
+  document.getElementById("head").textContent=(60+Math.round(Math.random()*8))+"%";
+},1000);
+addEventListener("resize",drawEq);
+</script>
