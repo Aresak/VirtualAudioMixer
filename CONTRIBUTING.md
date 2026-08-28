@@ -55,9 +55,19 @@ cannot be relicensed later without asking you.
 
 ## Style
 
-Match the code around you. There are no analyzers and no warnings-as-errors, and
-none are wanted — the audio-path rule above is the only hard constraint, and it is
-about behaviour rather than formatting.
+Style is enforced at build time, not left to habit. The build treats warnings as
+errors (`TreatWarningsAsErrors`) and runs Roslyn's built-in code-style analyzers
+as part of compilation (`EnforceCodeStyleInBuild`), configured in `.editorconfig`;
+the `...Async` suffix is enforced by the Microsoft.VisualStudio.Threading
+analyzers. There is no third-party style analyzer in the tree — the dedicated one
+for these guidelines is no longer maintained — so the build enforces the subset it
+can (explicit types over `var`, file-scoped namespaces, braces, modifier order,
+accessibility, field naming, the async suffix) and the rest is convention: write
+C# to the [C# Coding Guidelines](https://csharpcodingguidelines.com/) and match the
+code around you.
+
+The audio-path rule above remains the only hard *behavioural* constraint; the
+style rules here are about form.
 
 ## Testing
 
