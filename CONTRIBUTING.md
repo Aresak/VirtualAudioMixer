@@ -109,6 +109,12 @@ and report what it did.
 
 ### The allocation gate
 
+Where the boundary is drawn — what counts as the audio path and what does not — is
+[`docs/audio-path.md`](docs/audio-path.md). Read it before writing anything that runs
+on the mix thread or a device thread; it decides several cases that look obvious and
+are not.
+
+
 `AllocationAssert` in `tests/Vam.TestKit/Allocations/AllocationAssert.cs` asserts
 that a region of code allocates nothing. Use the closure-free overload — the one
 taking a state argument and a `static` lambda — everywhere: a capturing lambda

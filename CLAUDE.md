@@ -26,8 +26,8 @@ only repeats what must never be missed.
 | Rules | `AGENTS.md` |
 | Licence map | `LICENSING.md` |
 | UI mockup — the design of record | `_MockUp/vam-console.html` |
-| Audio path boundary | `docs/audio-path.md` (created by VAM-008) |
-| Task definitions | Not in this repository yet. Ask before starting a task you cannot read |
+| Audio path boundary | `docs/audio-path.md` |
+| Task definitions | GitHub issues on this repository, and the vault. Ask before starting a task you cannot read |
 
 ## Project layout
 
