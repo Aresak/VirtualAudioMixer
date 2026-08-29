@@ -1,3 +1,58 @@
+Virtual Audio Mixer (VAM)
+Copyright (C) 2026 Tomáš Malčánek (Aresak) and the VAM contributors
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE.  See the GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License along
+with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Not every part of this repository is under this licence.  The shared user
+interface library and the client application are under the Mozilla Public
+License 2.0, and the protocol contracts and generated client SDK are under the
+Apache License 2.0.  See LICENSING.md for the map.
+
+
+================================================================================
+ADDITIONAL PERMISSION UNDER GNU AGPL VERSION 3 SECTION 7 — SIGNAL MODIFIER API
+================================================================================
+
+The point of the signal modifier API is that other people write modifiers.  This
+additional permission exists so that writing one does not force a licence choice
+on its author.
+
+As a special exception, the copyright holders of this program give you
+permission to combine this program with independent modules that communicate
+with it solely through the interfaces in the VAM Signal Modifier API — that is,
+the public types of the Vam.Modifiers.Abstractions assembly and the contracts it
+defines — and to convey the resulting work.  Those independent modules may carry
+terms of your choice, and you need not provide their source code, provided that:
+
+  (a) the independent module communicates with this program only through that
+      API, and does not otherwise copy from or link against the rest of this
+      program; and
+
+  (b) you do not modify this program itself, other than through that API.  Any
+      modification of this program remains subject to the GNU Affero General
+      Public License in full, including its section 13.
+
+This exception is an additional permission under section 7 of the GNU Affero
+General Public License version 3.  If you modify this file, you may extend this
+exception to your version of the file, but you are not obliged to do so.  If you
+do not wish to do so, delete this exception statement from your version.
+
+
+================================================================================
+The full text of the GNU Affero General Public License version 3 follows.
+================================================================================
+
+
                     GNU AFFERO GENERAL PUBLIC LICENSE
                        Version 3, 19 November 2007
 
