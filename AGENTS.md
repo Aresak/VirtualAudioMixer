@@ -74,8 +74,15 @@ out.
 
 Match the code around you.
 
-There are no analyzers and no warnings-as-errors, and none are wanted. The audio-path rule is the only hard
-constraint and it is about behaviour, not formatting. Do not add a linter because it feels tidy.
+Analyzers are wanted, but only the ones that catch defects. The build treats warnings as errors and runs
+Roslyn's code-style analyzers and `Microsoft.VisualStudio.Threading.Analyzers`, which catches sync-over-async,
+`.Result` and blocking calls. In a project whose first rule is that nothing waits, that is a second enforcement
+mechanism for rule 1 rather than a tidiness exercise. Warnings-as-errors has already earned its place: CA1416 is
+what forced the Windows device layer into its own project instead of letting it fail somewhere later.
+
+No analyzer whose job is taste. Naming, spacing and ordering live in `.claude/skills/csharp-code-writer` and
+`.claude/skills/razor-markup-formatting`, where a person decides. Do not add an analyzer because it feels tidy.
+Add one because it catches a bug you can name.
 
 ## Testing
 

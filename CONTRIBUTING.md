@@ -66,8 +66,14 @@ accessibility, field naming, the async suffix) and the rest is convention: write
 C# to the [C# Coding Guidelines](https://csharpcodingguidelines.com/) and match the
 code around you.
 
+The conventions themselves are written down in `.claude/skills/csharp-code-writer`
+and `.claude/skills/razor-markup-formatting`, so they are one document rather than
+folklore.
+
 The audio-path rule above remains the only hard *behavioural* constraint; the
-style rules here are about form.
+style rules here are about form. Three of the C# conventions are inverted below
+that line — returning collection interfaces, avoiding nulls via LINQ, and avoiding
+`ref`/`out` — because each of them allocates. The skill says which and why.
 
 ## Testing
 
