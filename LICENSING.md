@@ -8,6 +8,7 @@ everything. This page is the map. The short version:
 | **Engine, test utilities and engine tests** — `src/Vam.Engine`, `tests/Vam.TestKit`, `tests/Vam.Engine.Tests` — and everything not listed below | [AGPL-3.0-or-later](LICENSE) | The engine is where the value is. AGPL is the only common licence that cares about running software over a network: modify VAM and offer it as a service, and you publish the changes. |
 | **Signal modifier API and modifiers written against it** | AGPL-3.0-or-later **plus a linking exception** — see the top of [LICENSE](LICENSE) | The point of the modifier API is that other people write modifiers. Without the exception, a plugin loaded into the process would be a derivative work and would have to be AGPL too. |
 | **Shared UI library and client application** — `src/Vam.Ui`, `src/Vam.Client` | [MPL-2.0](licenses/MPL-2.0.txt) | File-level copyleft: improvements to the UI come back, but the licence does not conflict with mobile app store terms the way AGPL does. |
+| **Cross-cutting primitives** — `src/Vam.Core` | [Apache-2.0](licenses/Apache-2.0.txt) | It holds the exception base every other project derives from, so it is a dependency of the AGPL engine and the MPL client alike. A copyleft licence on a type that everything references would reach places the split was drawn to keep separate. It deliberately contains nothing worth protecting. |
 | **Protocol contracts (`.proto`) and the generated client SDK** — `src/Vam.Protocol` | [Apache-2.0](licenses/Apache-2.0.txt) | Anybody should be able to write a client, a control surface or a bridge without inheriting copyleft. A Stream Deck plugin, a hardware desk, someone else's app — all welcome, on their own terms. |
 
 Every project directory carries its own `LICENSE` file, copied from
@@ -15,6 +16,7 @@ Every project directory carries its own `LICENSE` file, copied from
 
 | Project directory | `LICENSE` is a copy of |
 |---|---|
+| `src/Vam.Core` | [`licenses/Apache-2.0.txt`](licenses/Apache-2.0.txt) |
 | `src/Vam.Engine` | [`licenses/AGPL-3.0.txt`](licenses/AGPL-3.0.txt) |
 | `src/Vam.Protocol` | [`licenses/Apache-2.0.txt`](licenses/Apache-2.0.txt) |
 | `src/Vam.Ui` | [`licenses/MPL-2.0.txt`](licenses/MPL-2.0.txt) |
