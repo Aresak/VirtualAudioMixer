@@ -1,3 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <ItemGroup>
+    <ProjectReference Include="..\Vam.Core\Vam.Core.csproj" />
+  </ItemGroup>
+
 </Project>
