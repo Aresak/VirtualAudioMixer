@@ -22,18 +22,24 @@ Every project directory carries its own `LICENSE` file, copied from
 | `src/Vam.Ui` | [`licenses/MPL-2.0.txt`](licenses/MPL-2.0.txt) |
 | `src/Vam.Client` | [`licenses/MPL-2.0.txt`](licenses/MPL-2.0.txt) |
 | `src/Vam.Engine.Windows` | [`licenses/AGPL-3.0.txt`](licenses/AGPL-3.0.txt) |
+| `src/Vam.Modifiers.Abstractions` | the root [`LICENSE`](LICENSE) — AGPL **plus the modifier exception** |
 | `tests/Vam.TestKit` | [`licenses/AGPL-3.0.txt`](licenses/AGPL-3.0.txt) |
 | `tests/Vam.Engine.Tests` | [`licenses/AGPL-3.0.txt`](licenses/AGPL-3.0.txt) |
 | `tests/Vam.Engine.Windows.Tests` | [`licenses/AGPL-3.0.txt`](licenses/AGPL-3.0.txt) |
 
 ### Which projects carry the modifier exception
 
-`src/Vam.Engine` only, and its `LICENSE` is a byte-for-byte copy of the root
+`src/Vam.Engine` and `src/Vam.Modifiers.Abstractions`, and both carry a byte-for-byte copy of the root
 [`LICENSE`](LICENSE) rather than of `licenses/AGPL-3.0.txt`. The exception is what lets somebody
-write a closed-source modifier, the modifier API lives in this project, and a per-project
-`LICENSE` is the file a person actually opens when deciding whether they are allowed to. A plain
-AGPL copy there would contradict the root file and the contradiction would favour the reading
-that kills the plugin ecosystem.
+write a closed-source modifier, and a per-project `LICENSE` is the file a person actually opens
+when deciding whether they are allowed to. A plain AGPL copy there would contradict the root file
+and the contradiction would favour the reading that kills the plugin ecosystem.
+
+`src/Vam.Modifiers.Abstractions` is the assembly the exception names, and it **references
+nothing** — no project, no functional package. That is a licence condition rather than a
+preference: condition (a) of the exception is only testable if the assembly a third party links
+against is genuinely standalone, and one reference to the engine would make the permission it
+grants stop meaning anything.
 
 `src/Vam.Engine.Windows` does **not** carry it either, and the reason is the same one. It is the
 WASAPI device layer; no part of the modifier API lives there, so there is no combined work for the

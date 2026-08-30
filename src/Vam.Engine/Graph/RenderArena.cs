@@ -54,6 +54,20 @@ public sealed class RenderArena
     public Span<float> Plane(int index, int frameCount) =>
         buffer.AsSpan(index * BlockFrames, frameCount);
 
+    /// <summary>
+    /// A run of planes as one contiguous span.
+    /// </summary>
+    /// <remarks>
+    /// For anything that works on a whole strip at once - a modifier chain, which needs every
+    /// channel of a stereo source in one call rather than one channel at a time. The planes really
+    /// are adjacent, which is the payoff for one arena rather than an array of arrays.
+    /// </remarks>
+    /// <param name="firstPlane">First plane of the run.</param>
+    /// <param name="planeCount">How many.</param>
+    /// <returns>The run, at full plane stride.</returns>
+    public Span<float> Region(int firstPlane, int planeCount) =>
+        buffer.AsSpan(firstPlane * BlockFrames, planeCount * BlockFrames);
+
     /// <summary>Zeroes every plane. Control thread, when a plan is first installed.</summary>
     public void Clear() => Array.Clear(buffer);
 }

@@ -1,6 +1,7 @@
 using Vam.Engine.Devices;
 using Vam.Engine.Devices.Abstractions;
 using Vam.Engine.Graph;
+using Vam.Engine.Modifiers;
 
 namespace Vam.TestKit.Graph;
 
@@ -42,11 +43,12 @@ public sealed class ConsoleFixture
 
     /// <summary>Builds a console over a configuration.</summary>
     /// <param name="config">What to compile.</param>
-    public ConsoleFixture(GraphConfig config)
+    /// <param name="registry">What modifiers exist. Null for a console with no chains.</param>
+    public ConsoleFixture(GraphConfig config, ModifierRegistry? registry = null)
     {
         ArgumentNullException.ThrowIfNull(config);
 
-        Controller = new GraphController(config, BlockFrames, SampleRate);
+        Controller = new GraphController(config, BlockFrames, SampleRate, registry);
     }
 
     /// <summary>The control side.</summary>

@@ -1,4 +1,5 @@
 using Vam.Engine.Devices.Abstractions;
+using Vam.Engine.Modifiers;
 
 namespace Vam.Engine.Graph;
 
@@ -29,4 +30,13 @@ public sealed record ChannelConfig
 
     /// <summary>Mute, solo, polarity and mono fold.</summary>
     public ChannelFlags Flags { get; init; } = ChannelFlags.None;
+
+    /// <summary>
+    /// The modifier chain between the head stage and the fader. B0.
+    /// </summary>
+    /// <remarks>
+    /// Order is part of the configuration rather than an incidental list order. A gate before a
+    /// denoise and a gate after one are different microphones.
+    /// </remarks>
+    public List<ModifierSetting> Chain { get; init; } = [];
 }

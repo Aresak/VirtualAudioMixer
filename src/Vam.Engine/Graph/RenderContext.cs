@@ -62,6 +62,19 @@ public ref struct RenderContext
     /// <summary>Where the primary output's audio goes, interleaved at that device's channel count.</summary>
     public readonly Span<float> Output => output;
 
+    /// <summary>Distance between the start of one plane and the next.</summary>
+    /// <remarks>
+    /// Not the same as <see cref="FrameCount"/> when a block comes up short, which is why anything
+    /// addressing more than one plane at a time has to be told both.
+    /// </remarks>
+    public readonly int Stride => arena.BlockFrames;
+
+    /// <summary>A run of planes as one contiguous span, for anything working on a whole strip.</summary>
+    /// <param name="firstPlane">First plane of the run.</param>
+    /// <param name="planeCount">How many.</param>
+    /// <returns>The run, at full plane stride.</returns>
+    public readonly Span<float> Region(int firstPlane, int planeCount) => arena.Region(firstPlane, planeCount);
+
     /// <summary>One mono working plane.</summary>
     /// <param name="index">Which plane.</param>
     /// <returns>The plane, <see cref="FrameCount"/> frames long.</returns>

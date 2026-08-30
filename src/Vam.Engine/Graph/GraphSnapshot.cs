@@ -1,3 +1,5 @@
+using Vam.Engine.Modifiers;
+
 namespace Vam.Engine.Graph;
 
 /// <summary>
@@ -21,18 +23,31 @@ public sealed class GraphSnapshot
 {
     readonly ChannelParams[] channels;
     readonly BusParams[] buses;
+    readonly ChainParams[] chains;
 
     /// <summary>Builds the first snapshot for a plan.</summary>
     /// <param name="plan">The compiled graph.</param>
     /// <param name="channels">Per-strip parameters.</param>
     /// <param name="buses">Per-bus parameters.</param>
     /// <param name="sends">How much of each strip reaches each bus.</param>
-    public GraphSnapshot(GraphPlan plan, ChannelParams[] channels, BusParams[] buses, SendMatrix sends)
-        : this(plan, channels, buses, sends, version: 0)
+    /// <param name="chains">Each strip's modifier chain settings.</param>
+    public GraphSnapshot(
+        GraphPlan plan,
+        ChannelParams[] channels,
+        BusParams[] buses,
+        SendMatrix sends,
+        ChainParams[]? chains = null)
+        : this(plan, channels, buses, sends, chains ?? EmptyChains(channels.Length), version: 0)
     {
     }
 
-    GraphSnapshot(GraphPlan plan, ChannelParams[] channels, BusParams[] buses, SendMatrix sends, long version)
+    GraphSnapshot(
+        GraphPlan plan,
+        ChannelParams[] channels,
+        BusParams[] buses,
+        SendMatrix sends,
+        ChainParams[] chains,
+        long version)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(channels);
@@ -45,6 +60,7 @@ public sealed class GraphSnapshot
 
         this.channels = channels;
         this.buses = buses;
+        this.chains = chains;
 
         IsAnySoloed = AnySoloed(channels);
     }
@@ -109,7 +125,7 @@ public sealed class GraphSnapshot
         ChannelParams[] changed = [.. channels];
         changed[channelIndex] = parameters;
 
-        return new GraphSnapshot(Plan, changed, buses, Sends, Version + 1);
+        return new GraphSnapshot(Plan, changed, buses, Sends, chains, Version + 1);
     }
 
     /// <summary>Produces a snapshot with one bus changed and everything else shared.</summary>
@@ -121,26 +137,59 @@ public sealed class GraphSnapshot
         BusParams[] changed = [.. buses];
         changed[busIndex] = parameters;
 
-        return new GraphSnapshot(Plan, channels, changed, Sends, Version + 1);
+        return new GraphSnapshot(Plan, channels, changed, Sends, chains, Version + 1);
     }
 
     /// <summary>Produces a snapshot with every strip replaced and the plan shared.</summary>
     /// <param name="parameters">The new per-strip parameters.</param>
     /// <returns>The new snapshot.</returns>
     public GraphSnapshot WithChannels(ChannelParams[] parameters) =>
-        new(Plan, parameters, buses, Sends, Version + 1);
+        new(Plan, parameters, buses, Sends, chains, Version + 1);
 
     /// <summary>Produces a snapshot with every bus replaced and the plan shared.</summary>
     /// <param name="parameters">The new per-bus parameters.</param>
     /// <returns>The new snapshot.</returns>
     public GraphSnapshot WithBuses(BusParams[] parameters) =>
-        new(Plan, channels, parameters, Sends, Version + 1);
+        new(Plan, channels, parameters, Sends, chains, Version + 1);
 
     /// <summary>Produces a snapshot with a new send matrix and everything else shared.</summary>
     /// <param name="sends">The new matrix.</param>
     /// <returns>The new snapshot.</returns>
     public GraphSnapshot WithSends(SendMatrix sends) =>
-        new(Plan, channels, buses, sends, Version + 1);
+        new(Plan, channels, buses, sends, chains, Version + 1);
+
+    /// <summary>Produces a snapshot with every chain replaced and the plan shared.</summary>
+    /// <param name="parameters">The new chain settings, one per strip.</param>
+    /// <returns>The new snapshot.</returns>
+    public GraphSnapshot WithChains(ChainParams[] parameters) =>
+        new(Plan, channels, buses, Sends, parameters, Version + 1);
+
+    /// <summary>Produces a snapshot with one strip's chain changed and everything else shared.</summary>
+    /// <param name="channelIndex">Which strip.</param>
+    /// <param name="parameters">Its new chain settings.</param>
+    /// <returns>The new snapshot.</returns>
+    public GraphSnapshot WithChain(int channelIndex, ChainParams parameters)
+    {
+        ChainParams[] changed = [.. chains];
+        changed[channelIndex] = parameters;
+
+        return new GraphSnapshot(Plan, channels, buses, Sends, changed, Version + 1);
+    }
+
+    /// <summary>One strip's chain settings.</summary>
+    /// <param name="channelIndex">Which strip.</param>
+    /// <returns>Its settings, or an empty chain when it has none.</returns>
+    public ChainParams ChainOf(int channelIndex) =>
+        channelIndex >= 0 && channelIndex < chains.Length ? chains[channelIndex] : ChainParams.Empty;
+
+    static ChainParams[] EmptyChains(int count)
+    {
+        ChainParams[] empty = new ChainParams[count];
+
+        Array.Fill(empty, ChainParams.Empty);
+
+        return empty;
+    }
 
     static bool AnySoloed(ChannelParams[] channels)
     {

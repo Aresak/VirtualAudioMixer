@@ -1,5 +1,8 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using Vam.Engine.Devices;
+using Vam.Engine.Graph.Nodes;
+using Vam.Engine.Modifiers;
 
 namespace Vam.Engine.Graph;
 
@@ -31,15 +34,24 @@ public sealed class GraphController
     /// <param name="config">The console. Owned by this controller from here on.</param>
     /// <param name="blockFrames">Frames per block.</param>
     /// <param name="sampleRate">The rate the engine runs at, for the smoothing time.</param>
-    public GraphController(GraphConfig config, int blockFrames, int sampleRate)
+    /// <param name="registry">
+    /// What modifiers exist. Null means a console with no chains, which is what everything before
+    /// EPIC-04 assumed and what a test that is not about modifiers still wants.
+    /// </param>
+    public GraphController(GraphConfig config, int blockFrames, int sampleRate, ModifierRegistry? registry = null)
     {
         ArgumentNullException.ThrowIfNull(config);
 
         this.config = config;
 
-        compiler = new GraphCompiler(blockFrames, sampleRate);
+        BlockTicks = (long)(Stopwatch.Frequency * (double)blockFrames / sampleRate);
+
+        compiler = new GraphCompiler(blockFrames, sampleRate, registry);
         Publisher = new SnapshotPublisher(compiler.Compile(config, busOutputs));
     }
+
+    /// <summary>Timer ticks one block of audio lasts. What the cost guard measures against.</summary>
+    public long BlockTicks { get; }
 
     /// <summary>Where the audio thread takes its snapshot from.</summary>
     public SnapshotPublisher Publisher { get; }
@@ -81,6 +93,43 @@ public sealed class GraphController
     }
 
     /// <summary>
+    /// Bypasses any modifier that is costing more than its share of a block. B0b.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Control thread, and that is the whole point. The audio thread measures — a timestamp
+    /// difference into a pre-allocated slot — and never decides. A modifier that has started
+    /// overrunning is switched out by publishing a snapshot with its bypass bit set, which takes
+    /// effect at a block boundary like every other parameter change.
+    /// </para>
+    /// <para>
+    /// The alternative is a callback that runs late, and a callback that runs late is a dropout on
+    /// the recording of a public meeting. One badly-behaved modifier should cost its own effect and
+    /// nothing else.
+    /// </para>
+    /// </remarks>
+    /// <param name="budgetFraction">
+    /// How much of a block one modifier may take. A quarter leaves room for the rest of the chain,
+    /// the other strips and the graph around them.
+    /// </param>
+    /// <returns>Links newly bypassed. Zero means nothing was published.</returns>
+    public int GuardCostBudget(double budgetFraction = 0.25)
+    {
+        GraphSnapshot snapshot = Publisher.Current;
+        int bypassed = 0;
+
+        foreach (AudioNode node in snapshot.Plan.Nodes)
+        {
+            if (node is ChainNode chain)
+            {
+                bypassed += BypassOverruns(chain, budgetFraction);
+            }
+        }
+
+        return bypassed;
+    }
+
+    /// <summary>
     /// Compiles a new plan and publishes it. For a change to the shape of the console.
     /// </summary>
     /// <remarks>
@@ -88,7 +137,8 @@ public sealed class GraphController
     /// Adding a strip or a bus is worth that; moving a fader is not, which is why they are different
     /// methods rather than one that decides.
     /// </remarks>
-    public void Recompile() => Publisher.Publish(compiler.Compile(config, busOutputs));
+    public void Recompile() =>
+        Publisher.Publish(compiler.Compile(config, busOutputs, Publisher.Current.Plan));
 
     /// <summary>
     /// Sends a bus to a device other than the one keeping time. D7.
@@ -229,6 +279,51 @@ public sealed class GraphController
             default:
                 throw new ArgumentOutOfRangeException(nameof(command), command.Kind, "Unknown graph command.");
         }
+    }
+
+    /// <summary>Raised when a modifier is switched out for overrunning its budget. Control thread.</summary>
+    public event EventHandler<ModifierOverrun>? Overran;
+
+    int BypassOverruns(ChainNode node, double budgetFraction)
+    {
+        ChainParams parameters = Publisher.Current.ChainOf(node.ChannelIndex);
+        int bypassed = 0;
+
+        for (int link = 0; link < node.Chain.Count; link++)
+        {
+            ModifierCost cost = node.Chain.Costs[link];
+
+            // Ignored until it has been measured for a while. A modifier's first blocks include the
+            // first-call compilation of everything it touches, and bypassing on that would switch
+            // out a perfectly good denoise a hundred milliseconds into every session.
+            if (cost.BlockCount < 64 || parameters.IsBypassed(link))
+            {
+                continue;
+            }
+
+            double fraction = cost.FractionOfBudget(BlockTicks);
+
+            if (fraction <= budgetFraction)
+            {
+                continue;
+            }
+
+            parameters = parameters.WithBypass(link, isBypassed: true);
+            bypassed++;
+
+            Overran?.Invoke(this, new ModifierOverrun(
+                node.ChannelIndex,
+                link,
+                node.Chain.Modifiers[link].Descriptor.Name,
+                fraction));
+        }
+
+        if (bypassed > 0)
+        {
+            Publisher.Publish(Publisher.Current.WithChain(node.ChannelIndex, parameters));
+        }
+
+        return bypassed;
     }
 
     static ChannelFlags Toggle(ChannelFlags flags, GraphCommand command) =>

@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Vam.Core\Vam.Core.csproj" />
+    <ProjectReference Include="..\Vam.Modifiers.Abstractions\Vam.Modifiers.Abstractions.csproj" />
   </ItemGroup>
 
   <ItemGroup>
