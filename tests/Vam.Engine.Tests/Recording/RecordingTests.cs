@@ -186,6 +186,50 @@ public class RecordingTests : IDisposable
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
+    public void ClosingASessionTwiceIsNotAnError()
+    {
+        RecordingSession session = new(directory, new DiskGuard(NullLogger<DiskGuard>.Instance), NullLogger<RecordingSession>.Instance);
+
+        session.AddTrack(
+            "Mayor 180 degrees",
+            new RecordingFormat { SampleRate = SampleRate, ChannelCount = 1, BlockFrames = BlockFrames });
+
+        Assert.True(session.Start(TimeSpan.FromSeconds(10)).CanStart);
+
+        ConsoleFixture console = Build(session);
+
+        console.Feed(0, 0.4f);
+
+        for (int block = 0; block < 20; block++)
+        {
+            console.Render();
+        }
+
+        session.Stop();
+
+        // Held onto, because Dispose empties the session's list. The track outlives it and its file
+        // is the thing worth checking.
+        RecordingTrack track = session.Tracks[0];
+        long written = track.FramesWritten;
+
+        // Closing runs on every path out, including a fault, which means it runs more than once: an
+        // operator stopping a recording and then the engine shutting down is the ordinary case. A
+        // second call that threw turned a tidy exit into an unhandled exception on the way out of
+        // the process, with the meeting already on disk.
+        session.Stop();
+        session.Dispose();
+        session.Dispose();
+
+        Assert.Equal(written, track.FramesWritten);
+
+        // And the file is still a file, with its sizes patched exactly once.
+        float[] read = ReadSamples(track.Path);
+
+        Assert.NotEmpty(read);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
     public void TappingForTheRecordingAllocatesNothing()
     {
         using RecordingSession session = new(directory, new DiskGuard(NullLogger<DiskGuard>.Instance), NullLogger<RecordingSession>.Instance);

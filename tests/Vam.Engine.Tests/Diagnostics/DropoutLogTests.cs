@@ -76,6 +76,51 @@ public class DropoutLogTests
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
+    public void ReadingForTheViewDoesNotStealFromThePump()
+    {
+        DropoutLog log = new(64);
+
+        for (int index = 0; index < 5; index++)
+        {
+            log.Record(index, DropoutKind.CaptureUnderrun, index, index);
+        }
+
+        DropoutRecord[] peeked = new DropoutRecord[64];
+        int seen = log.Peek(peeked);
+
+        Assert.Equal(5, seen);
+
+        // The diagnostics view reads and the pump drains. If the view drained, opening it would
+        // delete the lines that were about to be written to the log file, and the operator looking
+        // for a fault would be the reason nobody else could find it afterwards.
+        DropoutRecord[] drained = new DropoutRecord[64];
+
+        Assert.Equal(5, log.Drain(drained));
+        Assert.Equal(peeked[0].EndpointIndex, drained[0].EndpointIndex);
+        Assert.Equal(peeked[4].EndpointIndex, drained[4].EndpointIndex);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void PeekingAWrappedRingGivesTheRecentPastInOrder()
+    {
+        DropoutLog log = new(8);
+
+        for (int index = 0; index < 40; index++)
+        {
+            log.Record(index, DropoutKind.CaptureUnderrun, 1, index);
+        }
+
+        DropoutRecord[] peeked = new DropoutRecord[64];
+        int seen = log.Peek(peeked);
+
+        Assert.Equal(log.Capacity, seen);
+        Assert.Equal(32, peeked[0].EndpointIndex);
+        Assert.Equal(39, peeked[seen - 1].EndpointIndex);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
     public void ThePumpNamesTheEndpointAndFoldsRepeats()
     {
         DropoutLog log = new(512);
