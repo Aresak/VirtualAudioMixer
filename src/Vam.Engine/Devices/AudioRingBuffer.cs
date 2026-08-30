@@ -149,6 +149,12 @@ public sealed class AudioRingBuffer
     /// available is left untouched - the caller decides whether that means silence.
     /// </param>
     /// <returns>Frames actually read, which may be fewer than asked for.</returns>
+    /// <remarks>
+    /// Over the fourteen-statement limit, deliberately. A ring read is one wrap-around copy: the
+    /// available count, the split into two runs at the boundary, both copies and the cursor
+    /// publish. Every one of those is part of the same indivisible step, and a helper between them
+    /// is a helper called on the audio thread for no benefit an operator could hear.
+    /// </remarks>
     public int Read(Span<float> destination)
     {
         int wanted = destination.Length / channelCount;

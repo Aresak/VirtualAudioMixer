@@ -203,9 +203,31 @@ public sealed class VamEngine : IDisposable
 
         OpenDevices(config);
         StartRecording(config);
+        StartClock(config);
+        StartTelemetry(config);
 
+        control = new Thread(Run)
+        {
+            IsBackground = true,
+            Name = "vam-control"
+        };
+
+        StartedAt = DateTimeOffset.UtcNow;
+
+        control.Start();
+
+        logger.LogInformation(
+            "Engine running: {Channels} strips, {Buses} buses, clock on {Clock}.",
+            config.Channels.Count,
+            config.Buses.Count,
+            Clock!.PrimaryDeviceId.IsNone ? "the fallback timer" : Clock.PrimaryDeviceId.Value);
+    }
+
+    /// <summary>Builds the clock, points it at the primary bus's device and starts it.</summary>
+    void StartClock(GraphConfig config)
+    {
         Clock = new MasterClock(
-            backend,
+            backend!,
             Channels,
             new MasterClockOptions
             {
@@ -227,17 +249,21 @@ public sealed class VamEngine : IDisposable
         Clock.Preferred = PrimaryOutputDeviceOf(config);
         Clock.Poll();
 
-        BusOutputs = new BusOutputHost(backend, loggers);
-        Faults = new FaultWatch(Graph, Channels, loggers.CreateLogger<FaultWatch>());
+        BusOutputs = new BusOutputHost(backend!, loggers);
+        Faults = new FaultWatch(Graph!, Channels, loggers.CreateLogger<FaultWatch>());
 
         BindBusOutputs(config);
+    }
 
+    /// <summary>Starts everything that reports on the engine rather than being part of it.</summary>
+    void StartTelemetry(GraphConfig config)
+    {
         dropoutPump = new DropoutPump(Dropouts, loggers.CreateLogger<DropoutPump>());
         dropoutPump.SetNames([.. config.Channels.Select(channel => channel.Name)]);
 
         Meters = BuildMeterPublisher();
         meterPlan = Graph!.Publisher.Current.Plan;
-        VirtualEndpoints = VirtualEndpointReport.From(backend);
+        VirtualEndpoints = VirtualEndpointReport.From(backend!);
 
         // Said once at startup, whichever way it went. A first-time user without a virtual driver
         // gets a sentence naming what is missing and where to get it, and everything that does not
@@ -250,22 +276,6 @@ public sealed class VamEngine : IDisposable
         {
             logger.LogWarning("{Report}", VirtualEndpoints.Description);
         }
-
-        control = new Thread(Run)
-        {
-            IsBackground = true,
-            Name = "vam-control"
-        };
-
-        StartedAt = DateTimeOffset.UtcNow;
-
-        control.Start();
-
-        logger.LogInformation(
-            "Engine running: {Channels} strips, {Buses} buses, clock on {Clock}.",
-            config.Channels.Count,
-            config.Buses.Count,
-            Clock.PrimaryDeviceId.IsNone ? "the fallback timer" : Clock.PrimaryDeviceId.Value);
     }
 
     /// <summary>Saves the console, stops everything and closes the files.</summary>
@@ -643,7 +653,11 @@ public sealed class VamEngine : IDisposable
             root,
             DateTimeOffset.Now.ToString("yyyy-MM-dd_HH-mm-ss", System.Globalization.CultureInfo.InvariantCulture));
 
-        Recording = new RecordingSession(directory, new DiskGuard(loggers.CreateLogger<DiskGuard>()), loggers.CreateLogger<RecordingSession>());
+        Recording = new RecordingSession(
+            directory,
+            new DiskGuard(loggers.CreateLogger<DiskGuard>()),
+            loggers.CreateLogger<RecordingSession>()
+        );
 
         foreach (ChannelConfig channel in config.Channels)
         {
@@ -953,7 +967,6 @@ public sealed class VamEngine : IDisposable
     void Run()
     {
         TimeSpan interval = options.ControlInterval;
-        TimeSpan meterInterval = TimeSpan.FromSeconds(1.0 / MeterPublisher.FramesPerSecond);
 
         while (!stopping.IsCancellationRequested)
         {
@@ -972,44 +985,54 @@ public sealed class VamEngine : IDisposable
             // they become sentences somebody can read afterwards.
             dropoutPump?.Pump();
 
-            // Once a second, so the status bar has a number that means "now" rather than "ever".
-            sinceLoad += interval;
-
-            if (sinceLoad >= TimeSpan.FromSeconds(1))
-            {
-                Load = Callbacks.TakeRecentWorst();
-                sinceLoad = TimeSpan.Zero;
-            }
-
-            sinceCorrection += interval;
-            sinceMeters += interval;
-
-            if (sinceCorrection >= options.CorrectionInterval)
-            {
-                Channels.UpdateCorrections(sinceCorrection);
-
-                // A monitor's device has its own clock and drifts against the graph exactly as an
-                // input does. Left uncorrected its ring empties, and somebody's headphones start
-                // clicking an hour in.
-                BusOutputs?.UpdateCorrections(sinceCorrection);
-                RecordDrift(sinceCorrection);
-                sinceCorrection = TimeSpan.Zero;
-            }
-
-            if (sinceMeters >= meterInterval)
-            {
-                FollowMeterNode();
-            }
-
-            if (sinceMeters >= meterInterval && Meters is not null)
-            {
-                Meters.Publish(
-                    sinceMeters,
-                    AutomixState(),
-                    Graph?.Config.AutomixDepthDb ?? -15.0,
-                    SpeakingNow());
-                sinceMeters = TimeSpan.Zero;
-            }
+            Tick(interval);
         }
+    }
+
+    /// <summary>The parts of the control loop that do not run on every pass.</summary>
+    void Tick(TimeSpan interval)
+    {
+        // Once a second, so the status bar has a number that means "now" rather than "ever".
+        sinceLoad += interval;
+        sinceCorrection += interval;
+        sinceMeters += interval;
+
+        if (sinceLoad >= TimeSpan.FromSeconds(1))
+        {
+            Load = Callbacks.TakeRecentWorst();
+            sinceLoad = TimeSpan.Zero;
+        }
+
+        if (sinceCorrection >= options.CorrectionInterval)
+        {
+            Channels.UpdateCorrections(sinceCorrection);
+
+            // A monitor's device has its own clock and drifts against the graph exactly as an input
+            // does. Left uncorrected its ring empties, and somebody's headphones start clicking an
+            // hour in.
+            BusOutputs?.UpdateCorrections(sinceCorrection);
+            RecordDrift(sinceCorrection);
+            sinceCorrection = TimeSpan.Zero;
+        }
+
+        PublishMeters();
+    }
+
+    void PublishMeters()
+    {
+        if (sinceMeters < TimeSpan.FromSeconds(1.0 / MeterPublisher.FramesPerSecond))
+        {
+            return;
+        }
+
+        FollowMeterNode();
+
+        Meters?.Publish(
+            sinceMeters,
+            AutomixState(),
+            Graph?.Config.AutomixDepthDb ?? -15.0,
+            SpeakingNow());
+
+        sinceMeters = TimeSpan.Zero;
     }
 }

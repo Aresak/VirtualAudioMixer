@@ -50,11 +50,17 @@ public class ProtocolGateTests : IAsyncLifetime
     {
         // Two channels, like every real microphone on the machine this was found on. A speakerphone,
         // a headset and most USB microphones present a stereo endpoint whatever is behind it.
-        devices.AddDevice(DeviceDirection.Capture, new NullDeviceOptions("Mayor 180 degrees", ChannelCount: 2, Signal: NullSignal.Tone));
+        devices.AddDevice(
+            DeviceDirection.Capture,
+            new NullDeviceOptions("Mayor 180 degrees", ChannelCount: 2, Signal: NullSignal.Tone)
+        );
 
         // One piece of hardware with a microphone and a speaker, the way a speakerphone is. Sending
         // its own microphone to its own speaker is the loop mix-minus exists to refuse.
-        devices.AddDevice(DeviceDirection.Capture, new NullDeviceOptions("Lectern", Signal: NullSignal.Tone, ContainerId: Speakerphone));
+        devices.AddDevice(
+            DeviceDirection.Capture,
+            new NullDeviceOptions("Lectern", Signal: NullSignal.Tone, ContainerId: Speakerphone)
+        );
         devices.AddDevice(DeviceDirection.Render, new NullDeviceOptions("Monitor", ChannelCount: 2));
         devices.AddDevice(DeviceDirection.Render, new NullDeviceOptions("Lectern", ChannelCount: 2, ContainerId: Speakerphone));
 
@@ -186,7 +192,8 @@ public class ProtocolGateTests : IAsyncLifetime
     /// <summary>Reads meter frames until one shows a channel above silence, or gives up.</summary>
     static async Task<bool> SawALevelAsync(Mixer.MixerClient live)
     {
-        using CancellationTokenSource giveUp = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        using CancellationTokenSource giveUp =
+            CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
 
         giveUp.CancelAfter(TimeSpan.FromSeconds(5));
 
@@ -242,7 +249,10 @@ public class ProtocolGateTests : IAsyncLifetime
     [Trait("Category", TestCategories.Unit)]
     public async Task AnOldClientIsRefusedWithASentenceRatherThanMisbehaving()
     {
-        HelloReply refused = await client!.HelloAsync(new HelloRequest { ProtocolVersion = 0, ClientName = "old tablet" }, cancellationToken: Token);
+        HelloReply refused = await client!.HelloAsync(
+            new HelloRequest { ProtocolVersion = 0, ClientName = "old tablet" },
+            cancellationToken: Token
+        );
 
         Assert.False(refused.Accepted);
 
@@ -356,8 +366,14 @@ public class ProtocolGateTests : IAsyncLifetime
     [Trait("Category", TestCategories.Unit)]
     public async Task TheConsoleSurvivesBeingSavedAndLoaded()
     {
-        await client!.ApplyAsync(new Command { SetFader = new SetFader { ChannelIndex = 1, Decibels = -12 } }, cancellationToken: Token);
-        await client.ApplyAsync(new Command { SetTrim = new SetTrim { ChannelIndex = 1, Decibels = 4 } }, cancellationToken: Token);
+        await client!.ApplyAsync(
+            new Command { SetFader = new SetFader { ChannelIndex = 1, Decibels = -12 } },
+            cancellationToken: Token
+        );
+        await client.ApplyAsync(
+            new Command { SetTrim = new SetTrim { ChannelIndex = 1, Decibels = 4 } },
+            cancellationToken: Token
+        );
 
         engine!.SaveConsole();
 

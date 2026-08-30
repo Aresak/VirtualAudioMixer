@@ -150,7 +150,11 @@ public class RecordingTests : IDisposable
     [Trait("Category", TestCategories.Unit)]
     public void ASessionWithRoomStartsAndWritesEveryStrip()
     {
-        using RecordingSession session = new(directory, new DiskGuard(NullLogger<DiskGuard>.Instance), NullLogger<RecordingSession>.Instance);
+        using RecordingSession session = new(
+            directory,
+            new DiskGuard(NullLogger<DiskGuard>.Instance),
+            NullLogger<RecordingSession>.Instance
+        );
 
         RecordingFormat format = new() { SampleRate = SampleRate, ChannelCount = 1, BlockFrames = BlockFrames };
 
@@ -188,7 +192,11 @@ public class RecordingTests : IDisposable
     [Trait("Category", TestCategories.Unit)]
     public void ClosingASessionTwiceIsNotAnError()
     {
-        RecordingSession session = new(directory, new DiskGuard(NullLogger<DiskGuard>.Instance), NullLogger<RecordingSession>.Instance);
+        RecordingSession session = new(
+            directory,
+            new DiskGuard(NullLogger<DiskGuard>.Instance),
+            NullLogger<RecordingSession>.Instance
+        );
 
         session.AddTrack(
             "Mayor 180 degrees",
@@ -232,7 +240,11 @@ public class RecordingTests : IDisposable
     [Trait("Category", TestCategories.Unit)]
     public void TappingForTheRecordingAllocatesNothing()
     {
-        using RecordingSession session = new(directory, new DiskGuard(NullLogger<DiskGuard>.Instance), NullLogger<RecordingSession>.Instance);
+        using RecordingSession session = new(
+            directory,
+            new DiskGuard(NullLogger<DiskGuard>.Instance),
+            NullLogger<RecordingSession>.Instance
+        );
 
         session.AddTrack("Mayor 180 degrees", new RecordingFormat
         {

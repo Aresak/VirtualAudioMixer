@@ -33,7 +33,11 @@ public sealed class ChainCommandHandler(VamEngine engine) :
             : Replies.DoneAsync(Replies.Refused("The engine is not running."));
 
     /// <inheritdoc />
-    public Task<CommandReply> Handle(RemoveModifierRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
+    public Task<CommandReply> Handle(
+        RemoveModifierRequest request,
+        IMediatorContext context,
+        CancellationToken cancellationToken
+    ) =>
         engine.Graph is { } graph
             ? Replies.DoneAsync(ChainCommands.Remove(graph, new RemoveModifier
             {
@@ -43,7 +47,11 @@ public sealed class ChainCommandHandler(VamEngine engine) :
             : Replies.DoneAsync(Replies.Refused("The engine is not running."));
 
     /// <inheritdoc />
-    public Task<CommandReply> Handle(MoveModifierRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
+    public Task<CommandReply> Handle(
+        MoveModifierRequest request,
+        IMediatorContext context,
+        CancellationToken cancellationToken
+    ) =>
         engine.Graph is { } graph
             ? Replies.DoneAsync(ChainCommands.Move(graph, new MoveModifier
             {
@@ -54,7 +62,11 @@ public sealed class ChainCommandHandler(VamEngine engine) :
             : Replies.DoneAsync(Replies.Refused("The engine is not running."));
 
     /// <inheritdoc />
-    public Task<CommandReply> Handle(SetModifierBypassRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
+    public Task<CommandReply> Handle(
+        SetModifierBypassRequest request,
+        IMediatorContext context,
+        CancellationToken cancellationToken
+    ) =>
         engine.Graph is { } graph
             ? Replies.DoneAsync(ChainCommands.SetBypass(graph, new SetModifierBypass
             {
@@ -65,7 +77,11 @@ public sealed class ChainCommandHandler(VamEngine engine) :
             : Replies.DoneAsync(Replies.Refused("The engine is not running."));
 
     /// <inheritdoc />
-    public Task<CommandReply> Handle(SetModifierParameterRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
+    public Task<CommandReply> Handle(
+        SetModifierParameterRequest request,
+        IMediatorContext context,
+        CancellationToken cancellationToken
+    ) =>
         engine.Graph is { } graph
             ? Replies.DoneAsync(ChainCommands.SetParameter(graph, new SetModifierParameter
             {

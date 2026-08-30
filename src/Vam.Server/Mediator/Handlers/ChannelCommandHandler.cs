@@ -68,19 +68,35 @@ public sealed class ChannelCommandHandler(VamEngine engine) :
     }
 
     /// <inheritdoc />
-    public Task<CommandReply> Handle(SetAutomixWeightRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
+    public Task<CommandReply> Handle(
+        SetAutomixWeightRequest request,
+        IMediatorContext context,
+        CancellationToken cancellationToken
+    ) =>
         RewriteAsync(request.ChannelIndex, channel => channel with { AutomixWeight = (float)request.Weight });
 
     /// <inheritdoc />
-    public Task<CommandReply> Handle(SetChannelNameRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
+    public Task<CommandReply> Handle(
+        SetChannelNameRequest request,
+        IMediatorContext context,
+        CancellationToken cancellationToken
+    ) =>
         RewriteAsync(request.ChannelIndex, channel => channel with { Name = request.Name });
 
     /// <inheritdoc />
-    public Task<CommandReply> Handle(SetChannelColourRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
+    public Task<CommandReply> Handle(
+        SetChannelColourRequest request,
+        IMediatorContext context,
+        CancellationToken cancellationToken
+    ) =>
         RewriteAsync(request.ChannelIndex, channel => channel with { Colour = request.Colour });
 
     /// <inheritdoc />
-    public Task<CommandReply> Handle(SetChannelDeviceRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
+    public Task<CommandReply> Handle(
+        SetChannelDeviceRequest request,
+        IMediatorContext context,
+        CancellationToken cancellationToken
+    ) =>
         engine.RetargetChannel(request.ChannelIndex, new AudioDeviceId(request.DeviceId))
             ? Replies.DoneAsync(Replies.Accepted())
             : Replies.DoneAsync(Replies.Refused($"There is no strip {request.ChannelIndex}."));
@@ -98,7 +114,11 @@ public sealed class ChannelCommandHandler(VamEngine engine) :
             : Replies.DoneAsync(Replies.Refused("The engine is not running."));
 
     /// <inheritdoc />
-    public Task<CommandReply> Handle(RemoveChannelRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
+    public Task<CommandReply> Handle(
+        RemoveChannelRequest request,
+        IMediatorContext context,
+        CancellationToken cancellationToken
+    ) =>
         engine.Graph is { } graph && graph.RemoveChannel(request.ChannelIndex)
             ? Replies.DoneAsync(Replies.Accepted())
             : Replies.DoneAsync(Replies.Refused($"There is no strip {request.ChannelIndex}."));

@@ -156,6 +156,12 @@ public sealed class DriftEstimator
         LastFillFrames = 0;
     }
 
+    /// <remarks>
+    /// Over the fourteen-statement limit, deliberately. This is one least-squares fit: six
+    /// accumulators filled by a single pass over the window, then the closed-form solve that uses
+    /// all six. Splitting it means handing six running totals across a call boundary, which makes
+    /// the code harder to check against the formula rather than easier.
+    /// </remarks>
     void UpdateSlope()
     {
         double cutoff = elapsedSeconds - windowSeconds;

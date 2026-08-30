@@ -95,7 +95,9 @@ public static class MixerDiagnostics
 
         if (engine.Backend is { } backend)
         {
-            foreach (DeviceDirection direction in (ReadOnlySpan<DeviceDirection>)[DeviceDirection.Render, DeviceDirection.Capture])
+            ReadOnlySpan<DeviceDirection> directions = [DeviceDirection.Render, DeviceDirection.Capture];
+
+            foreach (DeviceDirection direction in directions)
             {
                 foreach (AudioDeviceInfo device in backend.Enumerate(direction))
                 {

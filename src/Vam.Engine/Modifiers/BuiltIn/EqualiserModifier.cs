@@ -116,14 +116,28 @@ public sealed class EqualiserModifier : Modifier
         {
             string prefix = $"band{band + 1}";
 
-            descriptors.Add(new($"{prefix}.frequency", $"Band {band + 1} frequency", "Hz", 20f, 20000f, defaults[band], ParameterCurve.Logarithmic));
+            descriptors.Add(new(
+                $"{prefix}.frequency",
+                $"Band {band + 1} frequency",
+                "Hz",
+                20f,
+                20000f,
+                defaults[band],
+                ParameterCurve.Logarithmic));
             descriptors.Add(new($"{prefix}.gain", $"Band {band + 1} gain", "dB", -18f, 18f, 0f, ParameterCurve.Linear));
             descriptors.Add(new($"{prefix}.q", $"Band {band + 1} Q", "", 0.2f, 8f, 1f, ParameterCurve.Logarithmic));
         }
 
         descriptors.Add(new("lowshelf.frequency", "Low shelf frequency", "Hz", 20f, 500f, 120f, ParameterCurve.Logarithmic));
         descriptors.Add(new("lowshelf.gain", "Low shelf gain", "dB", -18f, 18f, 0f, ParameterCurve.Linear));
-        descriptors.Add(new("highshelf.frequency", "High shelf frequency", "Hz", 2000f, 20000f, 8000f, ParameterCurve.Logarithmic));
+        descriptors.Add(new(
+            "highshelf.frequency",
+            "High shelf frequency",
+            "Hz",
+            2000f,
+            20000f,
+            8000f,
+            ParameterCurve.Logarithmic));
         descriptors.Add(new("highshelf.gain", "High shelf gain", "dB", -18f, 18f, 0f, ParameterCurve.Linear));
 
         return [.. descriptors];

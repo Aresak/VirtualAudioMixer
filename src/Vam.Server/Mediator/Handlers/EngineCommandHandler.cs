@@ -91,7 +91,11 @@ public sealed class EngineCommandHandler(
     }
 
     /// <inheritdoc />
-    public Task<CommandReply> Handle(SetStartupOptionsRequest request, IMediatorContext context, CancellationToken cancellationToken)
+    public Task<CommandReply> Handle(
+        SetStartupOptionsRequest request,
+        IMediatorContext context,
+        CancellationToken cancellationToken
+    )
     {
         engine.SetStartup(request.LoadLastConsole, request.RecordAutomatically);
 
@@ -108,7 +112,11 @@ public sealed class EngineCommandHandler(
     }
 
     /// <inheritdoc />
-    public Task<CommandReply> Handle(SaveChainPresetRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
+    public Task<CommandReply> Handle(
+        SaveChainPresetRequest request,
+        IMediatorContext context,
+        CancellationToken cancellationToken
+    ) =>
         engine.Graph is { } graph
             ? Replies.DoneAsync(PresetCommands.Save(graph, engine.Presets, new SaveChainPreset
             {
@@ -118,7 +126,11 @@ public sealed class EngineCommandHandler(
             : Replies.DoneAsync(Replies.Refused("The engine is not running."));
 
     /// <inheritdoc />
-    public Task<CommandReply> Handle(ApplyChainPresetRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
+    public Task<CommandReply> Handle(
+        ApplyChainPresetRequest request,
+        IMediatorContext context,
+        CancellationToken cancellationToken
+    ) =>
         engine.Graph is { } graph
             ? Replies.DoneAsync(PresetCommands.Apply(graph, engine.Presets, new ApplyChainPreset
             {
@@ -128,6 +140,10 @@ public sealed class EngineCommandHandler(
             : Replies.DoneAsync(Replies.Refused("The engine is not running."));
 
     /// <inheritdoc />
-    public Task<CommandReply> Handle(DeleteChainPresetRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
+    public Task<CommandReply> Handle(
+        DeleteChainPresetRequest request,
+        IMediatorContext context,
+        CancellationToken cancellationToken
+    ) =>
         Replies.DoneAsync(PresetCommands.Delete(engine.Presets, new DeleteChainPreset { Name = request.Name }));
 }

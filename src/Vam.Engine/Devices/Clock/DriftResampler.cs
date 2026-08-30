@@ -105,6 +105,13 @@ public sealed class DriftResampler
     /// <param name="output">Where to write interleaved output frames.</param>
     /// <param name="consumed">Input frames used. The remainder should be offered again next call.</param>
     /// <param name="produced">Output frames written.</param>
+    /// <remarks>
+    /// Over the fourteen-statement limit, deliberately. This is one interpolation loop and its
+    /// bookkeeping: the phase accumulator, the history it reads behind itself and the two counts it
+    /// reports. Splitting it would put a call between the accumulator and the sample it selects,
+    /// once per output frame, in the one place on the audio thread that runs per sample rather than
+    /// per block.
+    /// </remarks>
     public void Process(ReadOnlySpan<float> input, Span<float> output, out int consumed, out int produced)
     {
         int inputFrames = input.Length / channelCount;

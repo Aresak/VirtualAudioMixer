@@ -86,7 +86,8 @@ public sealed class RnnoiseSuppressor : INoiseSuppressor, IDisposable
 
                 return true;
             }
-            catch (Exception failure) when (failure is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
+            catch (Exception failure)
+                when (failure is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
             {
                 return false;
             }

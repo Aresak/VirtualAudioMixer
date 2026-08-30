@@ -40,7 +40,11 @@ public sealed class BusCommandHandler(VamEngine engine) :
         RewriteAsync(request.BusIndex, bus => bus with { Name = request.Name });
 
     /// <inheritdoc />
-    public Task<CommandReply> Handle(SetBusColourRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
+    public Task<CommandReply> Handle(
+        SetBusColourRequest request,
+        IMediatorContext context,
+        CancellationToken cancellationToken
+    ) =>
         RewriteAsync(request.BusIndex, bus => bus with { Colour = request.Colour });
 
     /// <inheritdoc />
@@ -50,7 +54,11 @@ public sealed class BusCommandHandler(VamEngine engine) :
             : Replies.DoneAsync(Replies.Refused($"There is no bus role called '{request.Role}'."));
 
     /// <inheritdoc />
-    public Task<CommandReply> Handle(SetBusOutputDeviceRequest request, IMediatorContext context, CancellationToken cancellationToken)
+    public Task<CommandReply> Handle(
+        SetBusOutputDeviceRequest request,
+        IMediatorContext context,
+        CancellationToken cancellationToken
+    )
     {
         // Refused rather than accepted and quietly ignored. The main mix already goes out of that
         // device, through the clock; a second stream on it would be Windows mixing the two against

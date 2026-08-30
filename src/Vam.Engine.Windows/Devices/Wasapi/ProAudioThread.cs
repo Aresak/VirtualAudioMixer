@@ -59,7 +59,12 @@ public sealed partial class ProAudioThread : IDisposable
     // These two carry an explicit `private` against the house rule that omits it. A partial method
     // with a return type must state its accessibility - CS8796 - so this is the language talking
     // rather than a preference.
-    [LibraryImport("avrt.dll", EntryPoint = "AvSetMmThreadCharacteristicsW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+    [LibraryImport(
+        "avrt.dll",
+        EntryPoint = "AvSetMmThreadCharacteristicsW",
+        StringMarshalling = StringMarshalling.Utf16,
+        SetLastError = true
+    )]
     private static partial nint AvSetMmThreadCharacteristics(string taskName, ref int taskIndex);
 
     [LibraryImport("avrt.dll", SetLastError = true)]

@@ -77,7 +77,8 @@ public sealed class ChannelMap
             source,
             string.Create(
                 CultureInfo.InvariantCulture,
-                $"Strip {source.StripIndex} asks for {source.ChannelCount} channels from index {source.FirstChannel}, which is not a run of channels.")));
+                $"Strip {source.StripIndex} asks for {source.ChannelCount} channels from index "
+                + $"{source.FirstChannel}, which is not a run of channels.")));
     }
 
     static void CheckDevice(ChannelSource source, IReadOnlyList<AudioDeviceInfo> present, List<ChannelMapProblem> problems)

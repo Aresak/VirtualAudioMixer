@@ -142,6 +142,11 @@ public sealed class WaveWriter : IDisposable
         stream.Dispose();
     }
 
+    /// <remarks>
+    /// Over the fourteen-statement limit, deliberately. A RIFF header is a fixed sequence of fields
+    /// in a fixed order, and every statement here writes one of them. Grouping them into helpers
+    /// would hide the one thing a reader needs to check: that the order matches the specification.
+    /// </remarks>
     void WriteHeader()
     {
         Span<byte> header = stackalloc byte[HeaderBytes];

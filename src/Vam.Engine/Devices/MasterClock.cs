@@ -218,7 +218,11 @@ public sealed class MasterClock : IDisposable
         {
             if (primary.State is not (DeviceStreamState.Running or DeviceStreamState.Stopped))
             {
-                logger.LogWarning("Master clock {DeviceId} is {State}. Promoting another output.", primary.DeviceId, primary.State);
+                logger.LogWarning(
+                    "Master clock {DeviceId} is {State}. Promoting another output.",
+                    primary.DeviceId,
+                    primary.State
+                );
             }
 
             AudioDeviceId failed = primary.DeviceId;

@@ -36,7 +36,10 @@ public class VirtualEndpointTests
     {
         using NullAudioBackend backend = new();
 
-        backend.AddDevice(DeviceDirection.Capture, new NullDeviceOptions("CABLE Output (VB-Audio Virtual Cable)", IsVirtual: true));
+        backend.AddDevice(
+            DeviceDirection.Capture,
+            new NullDeviceOptions("CABLE Output (VB-Audio Virtual Cable)", IsVirtual: true)
+        );
         backend.AddDevice(DeviceDirection.Render, new NullDeviceOptions("CABLE Input (VB-Audio Virtual Cable)", IsVirtual: true));
 
         VirtualEndpointReport report = VirtualEndpointReport.From(backend);

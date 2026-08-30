@@ -80,6 +80,12 @@ public sealed class CompressorModifier : Modifier
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Over the fourteen-statement limit, deliberately. Detector, gain computer and make-up are one
+    /// per-sample loop with shared state, and the published block diagram they implement is a single
+    /// stage. Splitting it costs a call per sample and makes the code harder to check against the
+    /// diagram, not easier.
+    /// </remarks>
     public override void Process(ref ModifierContext context)
     {
         SetTimes(context.Parameters[AttackOrdinal], context.Parameters[ReleaseOrdinal]);

@@ -334,6 +334,23 @@ public sealed class MixerService(
             state.Channels.Add(BuildChannel(config, index));
         }
 
+        AddBuses(state, config, snapshot);
+        AddSends(state, snapshot);
+
+        state.Automix = BuildAutomix(config);
+        state.Recording = BuildRecording();
+        state.Health = BuildHealth();
+        state.Startup = new StartupOptions
+        {
+            LoadLastConsole = engine.Startup.LoadLastConsole,
+            RecordAutomatically = engine.Startup.RecordAutomatically
+        };
+
+        return state;
+    }
+
+    void AddBuses(ConsoleState state, GraphConfig config, GraphSnapshot snapshot)
+    {
         for (int index = 0; index < config.Buses.Count; index++)
         {
             BusConfig bus = config.Buses[index];
@@ -359,18 +376,30 @@ public sealed class MixerService(
             AddBusChain(wire, bus, snapshot, index);
             state.Buses.Add(wire);
 
-            // D4's exclusions, read off the compiled matrix rather than off the configuration. The
-            // engine works them out from the declared pairing; the console shows the answer, and
-            // there is deliberately no way for it to send a different one.
-            for (int channel = 0; channel < snapshot.Sends.ChannelCount; channel++)
+            AddExclusions(wire, snapshot, index);
+        }
+    }
+
+    /// <summary>
+    /// D4's exclusions, read off the compiled matrix rather than off the configuration.
+    /// </summary>
+    /// <remarks>
+    /// The engine works them out from the declared pairing; the console shows the answer, and there
+    /// is deliberately no way for it to send a different one.
+    /// </remarks>
+    static void AddExclusions(BusState wire, GraphSnapshot snapshot, int index)
+    {
+        for (int channel = 0; channel < snapshot.Sends.ChannelCount; channel++)
+        {
+            if (snapshot.Sends.StateOf(channel, index) == EngineSendState.ExcludedMixMinus)
             {
-                if (snapshot.Sends.StateOf(channel, index) == EngineSendState.ExcludedMixMinus)
-                {
-                    state.Buses[index].ExcludedChannels.Add(channel);
-                }
+                wire.ExcludedChannels.Add(channel);
             }
         }
+    }
 
+    static void AddSends(ConsoleState state, GraphSnapshot snapshot)
+    {
         for (int channel = 0; channel < snapshot.Sends.ChannelCount; channel++)
         {
             for (int bus = 0; bus < snapshot.Sends.BusCount; bus++)
@@ -384,17 +413,6 @@ public sealed class MixerService(
                 });
             }
         }
-
-        state.Automix = BuildAutomix(config);
-        state.Recording = BuildRecording();
-        state.Health = BuildHealth();
-        state.Startup = new StartupOptions
-        {
-            LoadLastConsole = engine.Startup.LoadLastConsole,
-            RecordAutomatically = engine.Startup.RecordAutomatically
-        };
-
-        return state;
     }
 
     /// <summary>Fills in a bus's chain, its limiter activity, and whether the engine added the limiter.</summary>

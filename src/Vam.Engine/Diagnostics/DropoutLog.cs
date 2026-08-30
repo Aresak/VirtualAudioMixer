@@ -1,3 +1,4 @@
+using System.Numerics;
 namespace Vam.Engine.Diagnostics;
 
 /// <summary>
@@ -18,7 +19,8 @@ namespace Vam.Engine.Diagnostics;
 /// </remarks>
 public sealed class DropoutLog(int capacity = 1024)
 {
-    readonly DropoutRecord[] records = new DropoutRecord[System.Numerics.BitOperations.RoundUpToPowerOf2((uint)Math.Max(capacity, 2))];
+    readonly DropoutRecord[] records =
+        new DropoutRecord[BitOperations.RoundUpToPowerOf2((uint)Math.Max(capacity, 2))];
 
     long written;
     long drained;

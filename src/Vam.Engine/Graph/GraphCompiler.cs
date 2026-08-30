@@ -176,9 +176,43 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
             nodes.Add(new FaderNode(layout, channel, smoothing));
         }
 
-        // Aligned, then shared, then mixed. The alignment has to be after the chains because that is
-        // where the latencies come from, and before the automixer because the automixer compares the
-        // strips against each other - unaligned it favours whichever finished first.
+        AddAlignAndAutomix(config, layout, chains, voiceActivity, nodes);
+        AddBusStage(config, layout, busChains, smoothing, nodes);
+
+        // E3's second half: the stream bus, finished, beside the raw inputs.
+        AddBusRecordingTap(config, layout, recording, nodes);
+
+        // After the buses are summed, so what a bus meter shows is what the bus is actually
+        // carrying rather than what went into it.
+        nodes.Add(new MeterNode(layout, new MeterCells(config.Channels.Count), new MeterCells(config.Buses.Count)));
+
+        if (config.Buses.Count > 0)
+        {
+            int primary = Math.Clamp(config.PrimaryBusIndex, 0, config.Buses.Count - 1);
+
+            nodes.Add(new PrimaryOutputNode(layout, primary, Math.Max(config.PrimaryOutputChannelCount, 1)));
+        }
+
+        AddSecondaryOutputs(config, layout, busOutputs, blockFrames, nodes);
+
+        return [.. nodes];
+    }
+
+    /// <summary>
+    /// Aligns the strips for the latency their chains added, then shares the gain between them.
+    /// </summary>
+    /// <remarks>
+    /// Aligned, then shared, then mixed. The alignment has to be after the chains because that is
+    /// where the latencies come from, and before the automixer because the automixer compares the
+    /// strips against each other - unaligned it favours whichever finished first.
+    /// </remarks>
+    void AddAlignAndAutomix(
+        GraphConfig config,
+        GraphLayout layout,
+        List<ModifierChain> chains,
+        VoiceActivityTapNode voiceActivity,
+        List<AudioNode> nodes)
+    {
         List<int> latencies = [];
 
         foreach (ModifierChain chain in chains)
@@ -200,15 +234,25 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
             // by being the loudest thing in the room.
             VoiceActivity = voiceActivity
         });
+    }
 
+    /// <summary>Sums each bus, then runs whatever chain that bus carries.</summary>
+    /// <remarks>
+    /// D6. After the sum, because limiting each microphone separately does not stop the sum of them
+    /// clipping - and before the meter, because a bus meter has to show what the bus is sending.
+    /// </remarks>
+    static void AddBusStage(
+        GraphConfig config,
+        GraphLayout layout,
+        List<ModifierChain> busChains,
+        float smoothing,
+        List<AudioNode> nodes)
+    {
         for (int bus = 0; bus < config.Buses.Count; bus++)
         {
             nodes.Add(new BusMixNode(layout, bus, config.Channels.Count, smoothing));
         }
 
-        // D6. After the sum, because limiting each microphone separately does not stop the sum of
-        // them clipping - and before the meter, because a bus meter has to show what the bus is
-        // actually sending.
         for (int bus = 0; bus < config.Buses.Count; bus++)
         {
             if (busChains[bus].Count > 0)
@@ -216,24 +260,6 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
                 nodes.Add(new BusChainNode(layout, bus, busChains[bus], smoothing));
             }
         }
-
-        // E3's second half: the stream bus, finished, beside the raw inputs.
-        AddBusRecordingTap(config, layout, recording, nodes);
-
-        // After the buses are summed, so what a bus meter shows is what the bus is actually
-        // carrying rather than what went into it.
-        nodes.Add(new MeterNode(layout, new MeterCells(config.Channels.Count), new MeterCells(config.Buses.Count)));
-
-        if (config.Buses.Count > 0)
-        {
-            int primary = Math.Clamp(config.PrimaryBusIndex, 0, config.Buses.Count - 1);
-
-            nodes.Add(new PrimaryOutputNode(layout, primary, Math.Max(config.PrimaryOutputChannelCount, 1)));
-        }
-
-        AddSecondaryOutputs(config, layout, busOutputs, blockFrames, nodes);
-
-        return [.. nodes];
     }
 
     static void AddSecondaryOutputs(
