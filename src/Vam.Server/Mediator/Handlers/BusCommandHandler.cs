@@ -52,6 +52,16 @@ public sealed class BusCommandHandler(VamEngine engine) :
     /// <inheritdoc />
     public Task<CommandReply> Handle(SetBusOutputDeviceRequest request, IMediatorContext context, CancellationToken cancellationToken)
     {
+        // Refused rather than accepted and quietly ignored. The main mix already goes out of that
+        // device, through the clock; a second stream on it would be Windows mixing the two against
+        // each other, and switching this bus off afterwards would change nothing anybody could hear.
+        if (IsWhereTheMainOutputGoes(request.BusIndex, request.DeviceId))
+        {
+            return Replies.DoneAsync(Replies.Refused(
+                "The main output already plays there. Pick a different device for this one, or listen "
+                + "to the main output instead."));
+        }
+
         Task<CommandReply> reply = RewriteAsync(
             request.BusIndex,
             bus => bus with { OutputDeviceId = new AudioDeviceId(request.DeviceId) });
@@ -70,6 +80,15 @@ public sealed class BusCommandHandler(VamEngine engine) :
         if (engine.Graph is not { } graph)
         {
             return Replies.DoneAsync(Replies.Refused("The engine is not running."));
+        }
+
+        // Checked here as well, because a bus can be given its device on the way in rather than
+        // afterwards, and the answer has to be the same either way.
+        if (IsWhereTheMainOutputGoes(graph.Config.Buses.Count, request.OutputDeviceId))
+        {
+            return Replies.DoneAsync(Replies.Refused(
+                "The main output already plays there. Pick a different device for this one, or listen "
+                + "to the main output instead."));
         }
 
         graph.AddBus(new BusConfig
@@ -127,6 +146,26 @@ public sealed class BusCommandHandler(VamEngine engine) :
         graph.Pump();
 
         return Replies.DoneAsync(Replies.Accepted());
+    }
+
+    /// <summary>Whether this bus is being aimed at the endpoint the primary bus already uses.</summary>
+    bool IsWhereTheMainOutputGoes(int busIndex, string deviceId)
+    {
+        if (deviceId.Length == 0 || engine.Graph is not { } graph)
+        {
+            return false;
+        }
+
+        GraphConfig config = graph.Config;
+
+        if (busIndex == config.PrimaryBusIndex || config.Buses.Count == 0)
+        {
+            return false;
+        }
+
+        int primary = Math.Clamp(config.PrimaryBusIndex, 0, config.Buses.Count - 1);
+
+        return config.Buses[primary].OutputDeviceId.Value == deviceId;
     }
 
     Task<CommandReply> RewriteAsync(int index, Func<BusConfig, BusConfig> change)
