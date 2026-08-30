@@ -77,7 +77,8 @@ public sealed class NullAudioBackend : IAudioBackend
             deviceOptions.ChannelCount,
             deviceOptions.NominalSampleRate,
             deviceOptions.SupportsExclusiveMode,
-            deviceOptions.IsVirtual);
+            deviceOptions.IsVirtual,
+            deviceOptions.ContainerId);
 
         devices[id] = info;
         options[id] = deviceOptions;

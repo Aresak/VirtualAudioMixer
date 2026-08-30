@@ -34,6 +34,8 @@ namespace Vam.Server.Tests;
 /// </remarks>
 public class ProtocolGateTests : IAsyncLifetime
 {
+    const string Speakerphone = "{11111111-2222-3333-4444-555555555555}";
+
     readonly NullAudioBackend devices = new();
     readonly string workspace = Path.Combine(Path.GetTempPath(), "vam-server-" + Guid.NewGuid().ToString("n"));
 
@@ -46,8 +48,12 @@ public class ProtocolGateTests : IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         devices.AddDevice(DeviceDirection.Capture, new NullDeviceOptions("Mayor 180 degrees", Signal: NullSignal.Tone));
-        devices.AddDevice(DeviceDirection.Capture, new NullDeviceOptions("Lectern", Signal: NullSignal.Tone));
+
+        // One piece of hardware with a microphone and a speaker, the way a speakerphone is. Sending
+        // its own microphone to its own speaker is the loop mix-minus exists to refuse.
+        devices.AddDevice(DeviceDirection.Capture, new NullDeviceOptions("Lectern", Signal: NullSignal.Tone, ContainerId: Speakerphone));
         devices.AddDevice(DeviceDirection.Render, new NullDeviceOptions("Monitor", ChannelCount: 2));
+        devices.AddDevice(DeviceDirection.Render, new NullDeviceOptions("Lectern", ChannelCount: 2, ContainerId: Speakerphone));
 
         int port = FreePort();
 
@@ -104,6 +110,52 @@ public class ProtocolGateTests : IAsyncLifetime
         // change and stayed frozen until the engine was restarted - while the audio itself carried on
         // perfectly, which is the worst way for this to fail.
         Assert.True(await SawALevelAsync(live), "The meters stopped when the graph was rebuilt.");
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public async Task ASpeakerphoneIsNotSentItsOwnMicrophone()
+    {
+        Mixer.MixerClient live = client!;
+
+        ConsoleState before = await live.GetConsoleAsync(new Empty(), cancellationToken: TestContext.Current.CancellationToken);
+        DeviceList inventory = await live.ListDevicesAsync(new Empty(), cancellationToken: TestContext.Current.CancellationToken);
+
+        int lectern = IndexOfChannel(before, "Lectern");
+        string speaker = inventory.Devices.Single(device => device.Name == "Lectern" && device.Direction == "Render").Id;
+
+        await live.ApplyAsync(
+            new Command
+            {
+                AddBus = new AddBus { Name = "Lectern monitor", Role = "Monitor", ChannelCount = 2, OutputDeviceId = speaker }
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        ConsoleState after = await live.GetConsoleAsync(new Empty(), cancellationToken: TestContext.Current.CancellationToken);
+        BusState monitor = after.Buses[^1];
+
+        // The engine has to work out for itself that these two endpoints are one object. Nothing
+        // else can: they have different identities and their names agree only by luck. Without it
+        // the pair list stays empty and mix-minus, which the whole monitoring design leans on, never
+        // once fires.
+        Assert.Contains(lectern, monitor.ExcludedChannels);
+
+        // And the other microphone still gets through, or this would be proving that monitors are
+        // simply broken rather than that one send is refused.
+        Assert.DoesNotContain(IndexOfChannel(after, "Mayor 180 degrees"), monitor.ExcludedChannels);
+    }
+
+    static int IndexOfChannel(ConsoleState console, string name)
+    {
+        for (int index = 0; index < console.Channels.Count; index++)
+        {
+            if (console.Channels[index].Name == name)
+            {
+                return index;
+            }
+        }
+
+        return -1;
     }
 
     /// <summary>Reads meter frames until one shows a channel above silence, or gives up.</summary>

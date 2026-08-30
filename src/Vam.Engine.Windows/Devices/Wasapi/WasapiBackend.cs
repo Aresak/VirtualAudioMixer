@@ -231,7 +231,8 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
                 // exclusively would lock Teams or OBS out of the device VAM exists to share with them.
                 SupportsExclusiveMode: !IsVirtual(device.FriendlyName)
                     && client.IsFormatSupported(AudioClientShareMode.Exclusive, format),
-                IsVirtual: IsVirtual(device.FriendlyName));
+                IsVirtual: IsVirtual(device.FriendlyName),
+                ContainerId: ContainerOf(device));
         }
         catch (Exception error)
         {
@@ -252,6 +253,41 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
     /// available, and the moment engine code asks "is this virtual" the abstraction has leaked.
     /// </remarks>
     static bool IsVirtual(string friendlyName) => VirtualDriver.Recognise(friendlyName) is not null;
+
+    /// <summary>
+    /// Which physical device an endpoint belongs to.
+    /// </summary>
+    /// <remarks>
+    /// Windows groups the endpoints of one piece of hardware under a container. It is how a
+    /// speakerphone's microphone and its speaker can be recognised as the same object, which is what
+    /// mix-minus needs and what no amount of comparing friendly names reliably gives.
+    /// </remarks>
+    static string ContainerOf(MMDevice device)
+    {
+        // Written out because NAudio does not name this one. It is PKEY_Device_ContainerId from
+        // devpkey.h, and it is the documented way Windows says "these endpoints are one object".
+        PropertyKey key = new()
+        {
+            formatId = new Guid("8c7ed206-3f8a-4827-b3ab-ae9e1faefc6c"),
+            propertyId = 2
+        };
+
+        try
+        {
+            if (!device.Properties.Contains(key))
+            {
+                return string.Empty;
+            }
+
+            return device.Properties[key].Value?.ToString() ?? string.Empty;
+        }
+        catch (Exception failure) when (failure is COMException or InvalidOperationException or NotSupportedException)
+        {
+            // A driver that does not publish one. Pairing simply cannot be derived for it, which is
+            // the same position as before asking.
+            return string.Empty;
+        }
+    }
 
     static DataFlow Flow(DeviceDirection direction) => direction switch
     {

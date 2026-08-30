@@ -16,6 +16,14 @@ namespace Vam.Engine.Devices.Abstractions;
 /// Whether this endpoint comes from a virtual audio driver rather than hardware. Used to derive
 /// mix-minus exclusion when the graph is built; nothing in the audio path ever branches on it.
 /// </param>
+/// <param name="ContainerId">
+/// Which physical device this endpoint belongs to, or empty when the backend cannot say.
+/// <para>
+/// A headset or a speakerphone is one piece of hardware presenting two endpoints, and feeding its
+/// microphone to its own speaker is the feedback loop mix-minus exists to prevent. Nothing else can
+/// work that out: the two endpoints have different identities, and their names agree only by luck.
+/// </para>
+/// </param>
 public sealed record AudioDeviceInfo(
     AudioDeviceId Id,
     string FriendlyName,
@@ -23,4 +31,5 @@ public sealed record AudioDeviceInfo(
     int ChannelCount,
     int NominalSampleRate,
     bool SupportsExclusiveMode = true,
-    bool IsVirtual = false);
+    bool IsVirtual = false,
+    string ContainerId = "");

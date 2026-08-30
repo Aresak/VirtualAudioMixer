@@ -23,4 +23,5 @@ public readonly record struct NullDeviceOptions(
     NullSignal Signal = NullSignal.Silence,
     double ToneFrequencyHz = 1000.0,
     bool SupportsExclusiveMode = true,
-    bool IsVirtual = false);
+    bool IsVirtual = false,
+    string ContainerId = "");

@@ -194,6 +194,10 @@ public sealed class VamEngine : IDisposable
 
         GraphConfig config = LoadOrDiscover(backend);
 
+        // Before the graph is compiled, because the compiler reads these to decide which sends it
+        // refuses. Done on every start rather than saved once: the hardware in the room changes.
+        PairEndpoints(config, backend);
+
         Graph = new GraphController(config, options.BlockFrames, options.SampleRate, Modifiers);
         Graph.Overran += OnOverran;
 
@@ -438,6 +442,66 @@ public sealed class VamEngine : IDisposable
         }
 
         return config;
+    }
+
+    /// <summary>
+    /// Works out which capture and render endpoints are the same piece of hardware.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Mix-minus refuses to send a microphone to a bus that plays out of the device that microphone
+    /// belongs to. It has always been able to; nothing ever told it which endpoints those were, so
+    /// the list was empty unless somebody had written pairs into a console file by hand, and the
+    /// feature the design leans on never once fired.
+    /// </para>
+    /// <para>
+    /// What that costs is audible: a speakerphone chosen as a monitor output gets its own microphone
+    /// back through its own speaker. Either it howls, or - on a device like a Jabra, which has its
+    /// own echo canceller - the device quietly strangles the microphone to stop it howling, and the
+    /// person wonders why nobody can hear them.
+    /// </para>
+    /// <para>
+    /// Pairs found this way are added to whatever the console file already declared rather than
+    /// replacing them. A headset on two separate analogue jacks is one object that Windows has no
+    /// way to know is one, and somebody who wrote that down should keep it.
+    /// </para>
+    /// </remarks>
+    /// <param name="config">The console to add them to.</param>
+    /// <param name="devices">Where to look.</param>
+    void PairEndpoints(GraphConfig config, IAudioBackend devices)
+    {
+        IReadOnlyList<AudioDeviceInfo> captures = devices.Enumerate(DeviceDirection.Capture);
+        IReadOnlyList<AudioDeviceInfo> renders = devices.Enumerate(DeviceDirection.Render);
+
+        foreach (AudioDeviceInfo capture in captures)
+        {
+            foreach (AudioDeviceInfo render in renders)
+            {
+                if (capture.ContainerId.Length == 0 || capture.ContainerId != render.ContainerId)
+                {
+                    continue;
+                }
+
+                Remember(config, capture, render);
+            }
+        }
+    }
+
+    void Remember(GraphConfig config, AudioDeviceInfo capture, AudioDeviceInfo render)
+    {
+        EndpointPair pair = new(capture.Id, render.Id);
+
+        if (config.EndpointPairs.Contains(pair))
+        {
+            return;
+        }
+
+        config.EndpointPairs.Add(pair);
+
+        logger.LogInformation(
+            "{Capture} and {Render} are one device, so that microphone is kept out of that output.",
+            capture.FriendlyName,
+            render.FriendlyName);
     }
 
     /// <summary>
