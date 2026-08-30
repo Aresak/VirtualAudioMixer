@@ -35,6 +35,25 @@ Work is tracked as tasks with stable IDs — `VAM-001`, `VAM-002`. Each has a sc
 7. The pull request gets reviewed before it merges. Always.
 ```
 
+### Write the reasoning down, in the vault
+
+Code and commits record what changed. They are a poor place for **why a decision went the way it did**,
+because the next person asking is not reading a diff — they are asking whether to reverse it.
+
+That belongs in the Obsidian vault, under `Projects/Virtual Audio Mixer/`:
+
+| Folder | What goes there |
+|---|---|
+| `Decisions/` | One note per decision that reverses something written down, or that a future session would otherwise re-litigate. Add a row to `Decisions/_Decisions.md`. |
+| `_AI/` | Build logs, working notes and context a long session needs to survive its own summarisation. |
+
+**Write it as it happens, not at the end.** A session's context gets summarised when it grows, and a
+decision made an hour ago is exactly what the summary drops. A working note in `_AI/` is where a long
+run keeps what it must not lose.
+
+Until this section existed the rule lived only in the vault, which is the one place a session that
+reads the repository never looks — so it was followed by whoever remembered and nobody else.
+
 ### The fence
 
 A task's **Not in scope** section is binding. If you find a real problem outside it — and you will — open an
