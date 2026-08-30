@@ -83,15 +83,13 @@ the engine over exactly the same protocol.
 **Nothing else is required to start.** The engine opens whatever capture devices
 are present, builds a console from them and begins.
 
-### Two optional pieces, and what you lose without each
+### One thing you may need to install
 
-| | Without it | Where to get it |
-|---|---|---|
-| **A virtual audio driver** (VB-Cable, Voicemeeter, VAC) | The stream bus has nowhere to go, so OBS cannot capture it. Everything else works | The engine names what is missing and where at startup |
-| **`rnnoise.dll`** | The denoise is a managed spectral suppressor instead — audibly the lesser of the two | [`docs/denoise.md`](docs/denoise.md), which explains why there is no download link |
+**A virtual audio driver** — VB-Cable, Voicemeeter or VAC. Without one the stream
+bus has nowhere to go, so OBS cannot capture it; everything else works. The engine
+names what is missing and where to get it, at startup, in one line.
 
-The engine says which of these it found, every start, in one line each. It never
-refuses to run because something optional is absent — a meeting has to start.
+Nothing else. The denoise, the automixer and the recording all work out of the box.
 
 ## Platforms
 

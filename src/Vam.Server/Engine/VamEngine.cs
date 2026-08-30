@@ -620,14 +620,17 @@ public sealed class VamEngine : IDisposable
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Asked once, at startup, and never on the audio thread. RNNoise is BSD-licensed and freely
-    /// available but is not shipped with VAM, so a first-time user has the managed spectral
-    /// suppressor — which works, and sounds like what it is.
+    /// Asked once, at startup, and never on the audio thread.
     /// </para>
     /// <para>
-    /// Said out loud either way. An operator wondering why the denoise sounds different from the one
-    /// they read about needs to be able to find out which one is running, and a silent fallback is
-    /// how that question goes unanswered for a year.
+    /// <b>This is a packaging question, not a question for whoever is running the meeting.</b> A
+    /// release is supposed to ship the library — BSD-3-Clause permits it and
+    /// <c>THIRD-PARTY-NOTICES.md</c> carries the notice that makes it clean. If it is absent, this
+    /// build was packaged without it, and the line below is addressed to whoever packaged it.
+    /// </para>
+    /// <para>
+    /// The operator is never asked to do anything about it. They have a denoise with a strength
+    /// control; which implementation is behind it is ours to get right, not theirs to install.
     /// </para>
     /// </remarks>
     void ChooseNoiseSuppressor()
@@ -635,11 +638,10 @@ public sealed class VamEngine : IDisposable
         if (!RnnoiseSuppressor.IsAvailable)
         {
             logger.LogInformation(
-                "RNNoise is not installed, so the denoise is the managed spectral suppressor. "
-                + "That works and it is the lesser of the two. RNNoise is BSD-licensed and is not "
-                + "shipped with VAM; putting a 64-bit rnnoise.dll beside this executable is the whole "
-                + "installation. See docs/denoise.md, which explains where to get one and why there "
-                + "is no download link.");
+                "Denoise is the managed spectral suppressor. It works; RNNoise is better, and this "
+                + "build was packaged without it. A release should ship a 64-bit rnnoise.dll beside "
+                + "this executable - see the packaging steps in CONTRIBUTING. Nothing is required of "
+                + "whoever is running the meeting.");
 
             return;
         }

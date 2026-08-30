@@ -35,6 +35,45 @@ API — see the exception at the top of [LICENSE](LICENSE).
 If you would like a modifier bundled with VAM, that is welcome too, and then it
 follows the licensing below.
 
+## Packaging a release
+
+Two things a release must carry that a `dotnet build` does not produce.
+
+### `rnnoise.dll`
+
+The denoise. **VAM runs without it** — there is a managed spectral suppressor that
+takes over — but RNNoise is the better of the two and a release that omits it is a
+release that quietly ships the lesser one.
+
+Building it is a maintainer's job and never a user's. Somebody who downloaded an
+`.exe` should not be installing a C toolchain, and if they end up doing that, this
+step was skipped.
+
+Under MSYS2, with the MinGW-w64 toolchain and autotools:
+
+```bash
+git clone https://github.com/xiph/rnnoise && cd rnnoise && ./autogen.sh && ./configure --enable-shared && make
+```
+
+`autogen.sh` fetches the trained model, so it needs a network connection. Copy the
+resulting 64-bit DLL beside `Vam.Server.exe` as `rnnoise.dll`.
+
+Check the log on the next start. It says which suppressor it picked, every time,
+and it is the only way to be sure the DLL loaded rather than being silently the
+wrong architecture.
+
+Three things a fork could change that would make it load and misbehave rather than
+fail cleanly: it wants **480-sample frames at 48 kHz**, samples at **sixteen-bit
+scale rather than ±1**, and the entry points `rnnoise_create`, `rnnoise_destroy`
+and `rnnoise_process_frame`.
+
+### `THIRD-PARTY-NOTICES.md`
+
+Ships beside the binary. RNNoise is BSD-3-Clause, which permits binary
+redistribution **provided the copyright notice and disclaimer accompany it** —
+that file is where they accompany it, so leaving it out is the one packaging
+mistake here with a legal consequence rather than an audible one.
+
 ## Certificate of origin
 
 Contributions are accepted under the licence of the file you are changing — see
