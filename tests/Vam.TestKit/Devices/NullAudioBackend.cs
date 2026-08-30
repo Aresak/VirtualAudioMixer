@@ -51,6 +51,24 @@ public sealed class NullAudioBackend : IAudioBackend
         // share a friendly name - which is the case that breaks name-based identity in real rooms.
         AudioDeviceId id = new($"null:{direction}:{nextDeviceNumber++}");
 
+        return AddDevice(id, direction, deviceOptions);
+    }
+
+    /// <summary>
+    /// Adds a device with an identity chosen by the caller.
+    /// </summary>
+    /// <remarks>
+    /// For the case a generated identity cannot express: a device that was unplugged and plugged
+    /// back in. It is the <i>same</i> device, so it comes back under the same identity, and every
+    /// re-attachment test depends on being able to say that. Adding it under a fresh identity would
+    /// be a different microphone, which is a different scenario entirely.
+    /// </remarks>
+    /// <param name="id">The identity to restore it under.</param>
+    /// <param name="direction">Capture or render.</param>
+    /// <param name="deviceOptions">How it behaves.</param>
+    /// <returns>The device, as <see cref="Enumerate"/> will report it.</returns>
+    public AudioDeviceInfo AddDevice(AudioDeviceId id, DeviceDirection direction, NullDeviceOptions deviceOptions)
+    {
         AudioDeviceInfo info = new(
             id,
             deviceOptions.FriendlyName,
