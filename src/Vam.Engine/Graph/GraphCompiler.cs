@@ -4,6 +4,7 @@ using Vam.Engine.Devices.Abstractions;
 using Vam.Engine.Graph.Extensions;
 using Vam.Engine.Graph.Nodes;
 using Vam.Engine.Modifiers;
+using Vam.Engine.Recording;
 using Vam.Modifiers.Abstractions;
 
 namespace Vam.Engine.Graph;
@@ -47,7 +48,8 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
     public GraphSnapshot Compile(
         GraphConfig config,
         IReadOnlyList<BusOutputChannel?>? busOutputs = null,
-        GraphPlan? previous = null)
+        GraphPlan? previous = null,
+        RecordingSession? recording = null)
     {
         ArgumentNullException.ThrowIfNull(config);
 
@@ -56,7 +58,9 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
 
         arena.Clear();
 
-        GraphPlan plan = new(arena, BuildNodes(config, layout, SmoothingCoefficient(), busOutputs, previous));
+        GraphPlan plan = new(
+            arena,
+            BuildNodes(config, layout, SmoothingCoefficient(), busOutputs, previous, recording));
 
         return new GraphSnapshot(
             plan,
@@ -126,7 +130,8 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
         GraphLayout layout,
         float smoothing,
         IReadOnlyList<BusOutputChannel?>? busOutputs,
-        GraphPlan? previous)
+        GraphPlan? previous,
+        RecordingSession? recording)
     {
         List<AudioNode> nodes = [];
         List<ModifierChain> chains = BuildModifierChains(config, layout, previous);
@@ -139,6 +144,11 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
         {
             nodes.Add(new InputNode(layout, channel, DeviceIndexOf(config, channel)));
         }
+
+        // Straight after the head stage, before anything decided something was silence or noise. The
+        // multitrack is the raw material a session gets rebuilt from, and it is only worth having if
+        // the processing has not already happened to it.
+        AddRecordingTaps(config, layout, recording, nodes);
 
         // Between the head stage and the fader, and that position is the contract. Everything before
         // is the fixed head, everything after is the fixed tail, and the operator composes what
@@ -315,6 +325,27 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
         }
 
         return new ChainParams(targets, bypass);
+    }
+
+    void AddRecordingTaps(
+        GraphConfig config,
+        GraphLayout layout,
+        RecordingSession? recording,
+        List<AudioNode> nodes)
+    {
+        if (recording is null)
+        {
+            return;
+        }
+
+        for (int channel = 0; channel < config.Channels.Count && channel < recording.Tracks.Count; channel++)
+        {
+            nodes.Add(new RecordingTapNode(
+                recording.Tracks[channel],
+                layout.PreFaderPlane(channel),
+                layout.ChannelWidth(channel),
+                blockFrames));
+        }
     }
 
     static AutomixParams BuildAutomix(GraphConfig config)

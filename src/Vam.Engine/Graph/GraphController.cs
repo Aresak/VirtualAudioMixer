@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Vam.Engine.Devices;
 using Vam.Engine.Graph.Nodes;
 using Vam.Engine.Modifiers;
+using Vam.Engine.Recording;
 
 namespace Vam.Engine.Graph;
 
@@ -30,6 +31,8 @@ public sealed class GraphController
     readonly GraphConfig config;
     readonly List<BusOutputChannel?> busOutputs = [];
 
+    RecordingSession? recording;
+
     /// <summary>Compiles the configuration and publishes the first snapshot.</summary>
     /// <param name="config">The console. Owned by this controller from here on.</param>
     /// <param name="blockFrames">Frames per block.</param>
@@ -47,7 +50,7 @@ public sealed class GraphController
         BlockTicks = (long)(Stopwatch.Frequency * (double)blockFrames / sampleRate);
 
         compiler = new GraphCompiler(blockFrames, sampleRate, registry);
-        Publisher = new SnapshotPublisher(compiler.Compile(config, busOutputs));
+        Publisher = new SnapshotPublisher(compiler.Compile(config, busOutputs, previous: null, recording: null));
     }
 
     /// <summary>Timer ticks one block of audio lasts. What the cost guard measures against.</summary>
@@ -138,7 +141,22 @@ public sealed class GraphController
     /// methods rather than one that decides.
     /// </remarks>
     public void Recompile() =>
-        Publisher.Publish(compiler.Compile(config, busOutputs, Publisher.Current.Plan));
+        Publisher.Publish(compiler.Compile(config, busOutputs, Publisher.Current.Plan, recording));
+
+    /// <summary>
+    /// Attaches a recording session, so every strip is tapped on its way past. E3 and E4.
+    /// </summary>
+    /// <remarks>
+    /// Takes effect on the next <see cref="Recompile"/>, because it adds nodes. Recording starting
+    /// with the session rather than when somebody remembers is the whole of E4, and this is where
+    /// that is arranged.
+    /// </remarks>
+    /// <param name="session">The session, or null to stop tapping.</param>
+    public void BindRecording(RecordingSession? session)
+    {
+        recording = session;
+        Recompile();
+    }
 
     /// <summary>
     /// Sends a bus to a device other than the one keeping time. D7.
