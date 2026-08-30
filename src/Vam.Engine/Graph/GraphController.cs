@@ -25,6 +25,7 @@ public sealed class GraphController
     readonly ConcurrentQueue<GraphCommand> commands = new();
     readonly GraphCompiler compiler;
     readonly GraphConfig config;
+    readonly List<BusOutputChannel?> busOutputs = [];
 
     /// <summary>Compiles the configuration and publishes the first snapshot.</summary>
     /// <param name="config">The console. Owned by this controller from here on.</param>
@@ -37,7 +38,7 @@ public sealed class GraphController
         this.config = config;
 
         compiler = new GraphCompiler(blockFrames, sampleRate);
-        Publisher = new SnapshotPublisher(compiler.Compile(config));
+        Publisher = new SnapshotPublisher(compiler.Compile(config, busOutputs));
     }
 
     /// <summary>Where the audio thread takes its snapshot from.</summary>
@@ -87,7 +88,98 @@ public sealed class GraphController
     /// Adding a strip or a bus is worth that; moving a fader is not, which is why they are different
     /// methods rather than one that decides.
     /// </remarks>
-    public void Recompile() => Publisher.Publish(compiler.Compile(config));
+    public void Recompile() => Publisher.Publish(compiler.Compile(config, busOutputs));
+
+    /// <summary>
+    /// Sends a bus to a device other than the one keeping time. D7.
+    /// </summary>
+    /// <remarks>
+    /// Takes effect on the next <see cref="Recompile"/>, because it adds a node rather than
+    /// changing a number. The primary output is not bound here — it is the clock, and its audio
+    /// goes straight into the render callback's own buffer with nothing in between.
+    /// </remarks>
+    /// <param name="busIndex">Which bus.</param>
+    /// <param name="destination">The device's rate-adapting channel, or null to unbind.</param>
+    public void BindBusOutput(int busIndex, BusOutputChannel? destination)
+    {
+        while (busOutputs.Count <= busIndex)
+        {
+            busOutputs.Add(null);
+        }
+
+        busOutputs[busIndex] = destination;
+    }
+
+    /// <summary>Adds a strip. D1's counterpart for inputs; recompiles the plan.</summary>
+    /// <param name="channel">The strip.</param>
+    /// <returns>Its index.</returns>
+    public int AddChannel(ChannelConfig channel)
+    {
+        config.Channels.Add(channel);
+        Recompile();
+
+        return config.Channels.Count - 1;
+    }
+
+    /// <summary>
+    /// Adds a bus at runtime. D1.
+    /// </summary>
+    /// <remarks>
+    /// A monitor is one of these with a different role. That is the whole reason "add a bus" and
+    /// "add a monitor" are one method rather than two.
+    /// </remarks>
+    /// <param name="bus">The bus.</param>
+    /// <returns>Its index.</returns>
+    public int AddBus(BusConfig bus)
+    {
+        config.Buses.Add(bus);
+        Recompile();
+
+        return config.Buses.Count - 1;
+    }
+
+    /// <summary>
+    /// Removes a bus at runtime, and every send that pointed at it. D1.
+    /// </summary>
+    /// <param name="busIndex">Which bus.</param>
+    /// <returns>Whether it was there.</returns>
+    public bool RemoveBus(int busIndex)
+    {
+        if (busIndex < 0 || busIndex >= config.Buses.Count)
+        {
+            return false;
+        }
+
+        config.Buses.RemoveAt(busIndex);
+
+        // Sends past the removed bus shuffle down with it. Leaving them pointing at their old index
+        // would silently re-aim every one of them at the wrong destination.
+        config.Sends.RemoveAll(send => send.BusIndex == busIndex);
+
+        for (int index = 0; index < config.Sends.Count; index++)
+        {
+            SendConfig send = config.Sends[index];
+
+            if (send.BusIndex > busIndex)
+            {
+                config.Sends[index] = send with { BusIndex = send.BusIndex - 1 };
+            }
+        }
+
+        if (busIndex < busOutputs.Count)
+        {
+            busOutputs.RemoveAt(busIndex);
+        }
+
+        if (config.PrimaryBusIndex >= config.Buses.Count)
+        {
+            config.PrimaryBusIndex = Math.Max(config.Buses.Count - 1, 0);
+        }
+
+        Recompile();
+
+        return true;
+    }
 
     /// <summary>
     /// Renders one block. This is the master clock's consumer.

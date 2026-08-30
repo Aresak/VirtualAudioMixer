@@ -1,3 +1,4 @@
+using Vam.Engine.Devices;
 using Vam.Engine.Devices.Abstractions;
 using Vam.Engine.Graph.Extensions;
 using Vam.Engine.Graph.Nodes;
@@ -35,8 +36,12 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate)
     /// Compiles a configuration.
     /// </summary>
     /// <param name="config">What the operator set up.</param>
+    /// <param name="busOutputs">
+    /// Index-aligned with the buses. A non-null entry sends that bus to a device other than the one
+    /// keeping time; null means the bus either feeds the primary output or nothing at all.
+    /// </param>
     /// <returns>A snapshot ready to publish, over a freshly allocated plan.</returns>
-    public GraphSnapshot Compile(GraphConfig config)
+    public GraphSnapshot Compile(GraphConfig config, IReadOnlyList<BusOutputChannel?>? busOutputs = null)
     {
         ArgumentNullException.ThrowIfNull(config);
 
@@ -45,7 +50,7 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate)
 
         arena.Clear();
 
-        GraphPlan plan = new(arena, BuildNodes(config, layout, SmoothingCoefficient()));
+        GraphPlan plan = new(arena, BuildNodes(config, layout, SmoothingCoefficient(), busOutputs, blockFrames));
 
         return new GraphSnapshot(plan, BuildChannels(config), BuildBuses(config), BuildSends(config));
     }
@@ -102,7 +107,12 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate)
         return (float)(1.0 - Math.Exp(-blockSeconds / SmoothingTimeSeconds));
     }
 
-    static AudioNode[] BuildNodes(GraphConfig config, GraphLayout layout, float smoothing)
+    static AudioNode[] BuildNodes(
+        GraphConfig config,
+        GraphLayout layout,
+        float smoothing,
+        IReadOnlyList<BusOutputChannel?>? busOutputs,
+        int blockFrames)
     {
         List<AudioNode> nodes = [];
 
@@ -132,7 +142,30 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate)
             nodes.Add(new PrimaryOutputNode(layout, primary, Math.Max(config.PrimaryOutputChannelCount, 1)));
         }
 
+        AddSecondaryOutputs(config, layout, busOutputs, blockFrames, nodes);
+
         return [.. nodes];
+    }
+
+    static void AddSecondaryOutputs(
+        GraphConfig config,
+        GraphLayout layout,
+        IReadOnlyList<BusOutputChannel?>? busOutputs,
+        int blockFrames,
+        List<AudioNode> nodes)
+    {
+        if (busOutputs is null)
+        {
+            return;
+        }
+
+        for (int bus = 0; bus < config.Buses.Count && bus < busOutputs.Count; bus++)
+        {
+            if (busOutputs[bus] is BusOutputChannel destination)
+            {
+                nodes.Add(new BusOutputNode(layout, bus, destination, blockFrames));
+            }
+        }
     }
 
     static int DeviceIndexOf(GraphConfig config, int channelIndex)
