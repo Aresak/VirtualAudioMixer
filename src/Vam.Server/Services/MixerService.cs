@@ -656,7 +656,12 @@ public sealed class MixerService(
 
         foreach (Vam.Engine.Recording.RecordingTrack track in recording.Tracks)
         {
-            state.FramesWritten += track.FramesWritten;
+            // The longest track, not the sum of them. Every consumer reads this as how long the
+            // recording has been running, and summing made a three-track session count three
+            // seconds per second - a clock beside the session clock, disagreeing with it.
+            state.FramesWritten = Math.Max(state.FramesWritten, track.FramesWritten);
+
+            // Summed, because this one really is a total: a frame lost on any track is a frame lost.
             state.DroppedFrames += track.DroppedFrames;
         }
 

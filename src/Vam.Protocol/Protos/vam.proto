@@ -194,7 +194,12 @@ message AutomixState {
 message RecordingState {
   bool is_recording = 1;
   string directory = 2;
+  // How long the recording has been running, in frames. The longest track rather than the sum of
+  // them: every track is written from the same clock, so they agree, and summing would make a
+  // three-track session appear to run three times faster than the session it is part of.
   int64 frames_written = 3;
+
+  // A total, unlike the above. A frame lost on any track is a frame lost.
   int64 dropped_frames = 4;
   int64 free_bytes = 5;
   // E4. Whether the engine starts recording on its own.
