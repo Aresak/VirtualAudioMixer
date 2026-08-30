@@ -6,7 +6,10 @@
     is about rate, not about canvas.
 *@
 
-<svg viewBox="0 0 320 90" style="width:100%;height:90px" role="img" aria-label="Callback times">
+<svg viewBox="0 0 320 90"
+     style="width:100%;height:90px"
+     role="img"
+     aria-label="Callback times">
     @for (int index = 0; index < Buckets.Count; index++)
     {
         double height = Peak <= 0 ? 0 : Buckets[index] / (double)Peak * 74;
@@ -21,45 +24,22 @@
         The block boundary, drawn where it actually is. A histogram of callback times without the
         budget on it is a picture of some numbers.
     *@
-    <line x1="@F(Boundary)" y1="0" x2="@F(Boundary)" y2="78" stroke="var(--bad)" stroke-width="1" stroke-dasharray="3 3" />
-    <text x="@F(Math.Min(Boundary + 4, 280))" y="10" fill="var(--bad)" font-size="9" font-family="monospace">1 block</text>
-    <line x1="0" y1="78" x2="320" y2="78" stroke="var(--line)" stroke-width="1" />
+    <line x1="@F(Boundary)"
+          y1="0"
+          x2="@F(Boundary)"
+          y2="78"
+          stroke="var(--bad)"
+          stroke-width="1"
+          stroke-dasharray="3 3" />
+    <text x="@F(Math.Min(Boundary + 4, 280))"
+          y="10"
+          fill="var(--bad)"
+          font-size="9"
+          font-family="monospace">1 block</text>
+    <line x1="0"
+          y1="78"
+          x2="320"
+          y2="78"
+          stroke="var(--line)"
+          stroke-width="1" />
 </svg>
-
-@code {
-    /// <summary>The counts, lowest bucket first.</summary>
-    [Parameter]
-    public IReadOnlyList<long> Buckets { get; set; } = [];
-
-    /// <summary>How wide each bucket is, as a fraction of a block.</summary>
-    [Parameter]
-    public double BucketWidth { get; set; } = 0.05;
-
-    long Peak
-    {
-        get
-        {
-            long peak = 0;
-
-            foreach (long count in Buckets)
-            {
-                if (count > peak)
-                {
-                    peak = count;
-                }
-            }
-
-            return peak;
-        }
-    }
-
-    double Boundary => BucketWidth <= 0 || Buckets.Count == 0
-        ? 320
-        : Math.Min(1.0 / BucketWidth * (320.0 / Buckets.Count), 320);
-
-    string Fill(int index) =>
-        BucketWidth > 0 && index * BucketWidth >= 1.0 ? "var(--bad)" : "var(--brass-dim)";
-
-    static string F(double value) =>
-        value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
-}

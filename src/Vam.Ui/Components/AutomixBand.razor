@@ -13,7 +13,11 @@
     second history on the wire would be the same numbers arriving twice.
 *@
 
-<svg class="band" viewBox="0 0 @Width 96" preserveAspectRatio="none" role="img" aria-label="@L["automix.band"]">
+<svg class="band"
+     viewBox="0 0 @Width 96"
+     preserveAspectRatio="none"
+     role="img"
+     aria-label="@L["automix.band"]">
     @for (int column = 0; column < history.Count; column++)
     {
         double[] shares = history[column];
@@ -41,91 +45,16 @@
 
 @if (Channels.Count > 0)
 {
-    <div class="row" style="margin-top:8px;gap:12px">
+    <div class="row"
+         style="margin-top:8px;gap:12px">
         @foreach (ChannelState channel in Channels)
         {
-            <span class="row" style="gap:5px">
-                <span class="swatch" style="background:@StripPalette.For(channel.Index);width:9px;height:9px"></span>
+            <span class="row"
+                  style="gap:5px">
+                <span class="swatch"
+                      style="background:@StripPalette.For(channel.Index);width:9px;height:9px"></span>
                 <span style="font-size:11px;color:var(--ink-mute)">@channel.Name</span>
             </span>
         }
     </div>
-}
-
-@code {
-    /// <summary>Columns kept. Thirty seconds at two a second.</summary>
-    const int Capacity = 60;
-
-    const int Width = 1100;
-
-    static readonly TimeSpan Interval = TimeSpan.FromMilliseconds(500);
-
-    readonly List<double[]> history = [];
-
-    PeriodicTimer? timer;
-    CancellationTokenSource? sampling;
-
-    IReadOnlyList<ChannelState> Channels =>
-        Session.Console?.Channels.Where(channel => channel.ParticipatesInAutomix).ToList() ?? [];
-
-    /// <inheritdoc />
-    protected override void OnInitialized()
-    {
-        base.OnInitialized();
-
-        sampling = new CancellationTokenSource();
-        timer = new PeriodicTimer(Interval);
-
-        _ = SampleAsync(sampling.Token);
-    }
-
-    /// <inheritdoc />
-    protected override void Dispose(bool disposing)
-    {
-        sampling?.Cancel();
-        sampling?.Dispose();
-        timer?.Dispose();
-    }
-
-    async Task SampleAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            while (timer is not null && await timer.WaitForNextTickAsync(cancellationToken))
-            {
-                Sample();
-
-                await InvokeAsync(StateHasChanged);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // The view closed. The only way this loop ends.
-        }
-    }
-
-    void Sample()
-    {
-        if (Session.Console?.Automix is not { } automix)
-        {
-            return;
-        }
-
-        double[] column = new double[automix.Shares.Count];
-
-        for (int index = 0; index < column.Length; index++)
-        {
-            column[index] = automix.Shares[index];
-        }
-
-        history.Add(column);
-
-        if (history.Count > Capacity)
-        {
-            history.RemoveRange(0, history.Count - Capacity);
-        }
-    }
-
-    static string F(double value) =>
-        value.ToString("0.##", CultureInfo.InvariantCulture);
 }

@@ -21,22 +21,10 @@
 
     @if (isOpen)
     {
-        <span class="hlpbody" role="note">
+        <span class="hlpbody"
+              role="note">
             <b>@Title</b>
             @Body
         </span>
     }
 </span>
-
-@code {
-    bool isOpen;
-
-    /// <summary>What is being explained.</summary>
-    [Parameter]
-    [EditorRequired]
-    public required string Title { get; set; }
-
-    /// <summary>How to set it well.</summary>
-    [Parameter]
-    public string Body { get; set; } = string.Empty;
-}

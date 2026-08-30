@@ -8,10 +8,14 @@
     live, and which is otherwise sixteen clicks and a good memory.
 *@
 
-<aside class="ovl wide" role="dialog" aria-label="@L["mixer.matrix"]">
+<aside class="ovl wide"
+       role="dialog"
+       aria-label="@L["mixer.matrix"]">
     <div class="ohd">
         <span class="nm">@L["mixer.matrix"]</span>
-        <button type="button" class="btn sm" @onclick="Shell.CloseOverlay">@L["common.close"]</button>
+        <button type="button"
+                class="btn sm"
+                @onclick="Shell.CloseOverlay">@L["common.close"]</button>
     </div>
 
     <div class="obody">
@@ -37,14 +41,17 @@
                         {
                             <tr>
                                 <td>
-                                    <span class="swatch" style="display:inline-block;background:@Colour(channel);margin-right:7px"></span>
+                                    <span class="swatch"
+                                          style="display:inline-block;background:@Colour(channel);margin-right:7px"></span>
                                     @channel.Name
                                 </td>
 
                                 @foreach (BusState bus in console.Buses)
                                 {
                                     <td style="text-align:center">
-                                        <MatrixCell Channel="channel" Bus="bus" />
+                                        <MatrixCell Channel="channel"
+                                                    Bus="bus"
+                                                    @key="(channel.Index, bus.Index)" />
                                     </td>
                                 }
                             </tr>
@@ -57,8 +64,3 @@
         }
     </div>
 </aside>
-
-@code {
-    static string Colour(ChannelState channel) =>
-        string.IsNullOrWhiteSpace(channel.Colour) ? StripPalette.For(channel.Index) : channel.Colour;
-}

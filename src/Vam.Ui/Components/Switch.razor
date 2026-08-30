@@ -7,33 +7,15 @@
 *@
 
 <label class="sw @(Checked ? "on" : null)">
-    <input type="checkbox" checked="@Checked" @onchange="OnChanged" />
+    <input type="checkbox"
+           checked="@Checked"
+           @onchange="OnChangedAsync" />
     <i aria-hidden="true"></i>
     <span>@Label</span>
 
     @if (Help.Length > 0)
     {
-        <InlineHelp Title="@Label" Body="@Help" />
+        <InlineHelp Title="@Label"
+                    Body="@Help" />
     }
 </label>
-
-@code {
-    /// <summary>What it switches.</summary>
-    [Parameter]
-    [EditorRequired]
-    public required string Label { get; set; }
-
-    /// <summary>How to set it well. U14.</summary>
-    [Parameter]
-    public string Help { get; set; } = string.Empty;
-
-    /// <summary>Whether it is on.</summary>
-    [Parameter]
-    public bool Checked { get; set; }
-
-    /// <summary>Raised when somebody changed it.</summary>
-    [Parameter]
-    public EventCallback<bool> Changed { get; set; }
-
-    Task OnChanged(ChangeEventArgs arguments) => Changed.InvokeAsync(arguments.Value is true);
-}

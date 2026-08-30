@@ -12,10 +12,14 @@
 
 <div class="monbar @(Shell.IsMonitorBarOpen ? null : "collapsed")">
     <div class="mhead">
-        <b class="lbl" style="font-size:12px;color:var(--ink-dim)">@L["mixer.monitors"]</b>
-        <span class="sub" style="margin:0">@L["monitors.sub"]</span>
+        <b class="lbl"
+           style="font-size:12px;color:var(--ink-dim)">@L["mixer.monitors"]</b>
+        <span class="sub"
+              style="margin:0">@L["monitors.sub"]</span>
         <span style="flex:1"></span>
-        <button type="button" class="btn sm" @onclick="() => Shell.IsMonitorBarOpen = !Shell.IsMonitorBarOpen">
+        <button type="button"
+                class="btn sm"
+                @onclick="() => Shell.IsMonitorBarOpen = !Shell.IsMonitorBarOpen">
             @(Shell.IsMonitorBarOpen ? L["common.collapse"] : L["common.expand"])
         </button>
     </div>
@@ -33,7 +37,7 @@
                             class="mchip @(IsOn(channel, monitor) ? "on" : null)"
                             disabled="@IsExcluded(channel, monitor)"
                             title="@(IsExcluded(channel, monitor) ? L["send.lockedWhy"] : channel.Name)"
-                            @onclick="() => Toggle(channel, monitor)">
+                            @onclick="() => ToggleAsync(channel, monitor)">
                         @channel.Name
                     </button>
                 }
@@ -49,7 +53,8 @@
             </span>
 
             <span style="flex:1"></span>
-            <span class="mono" style="font-size:11.5px;color:var(--ink-mute)">
+            <span class="mono"
+                  style="font-size:11.5px;color:var(--ink-mute)">
                 @FaderScale.Format(monitor.GainDb) dB
             </span>
         </div>
@@ -58,45 +63,8 @@
     @if (Monitors.Count == 0)
     {
         <div class="monrow">
-            <span class="sub" style="margin:0">@L["monitors.none"]</span>
+            <span class="sub"
+                  style="margin:0">@L["monitors.none"]</span>
         </div>
     }
 </div>
-
-@code {
-    IReadOnlyList<BusState> Monitors =>
-        Session.Console?.Buses
-            .Where(bus => bus.Role.Equals("Monitor", StringComparison.OrdinalIgnoreCase))
-            .ToList()
-        ?? [];
-
-    IReadOnlyList<ChannelState> Channels => Session.Console?.Channels ?? [];
-
-    bool IsExcluded(ChannelState channel, BusState monitor) => monitor.ExcludedChannels.Contains(channel.Index);
-
-    bool IsOn(ChannelState channel, BusState monitor) =>
-        Session.Console?.Sends
-            .FirstOrDefault(send => send.ChannelIndex == channel.Index && send.BusIndex == monitor.Index)?.State == "On";
-
-    async Task Toggle(ChannelState channel, BusState monitor)
-    {
-        if (IsExcluded(channel, monitor))
-        {
-            return;
-        }
-
-        // The same command a send button sends, because a monitor source is a send. Nothing about
-        // this row is a second mechanism — it is a different view of the matrix, and if it were its
-        // own mechanism the two would disagree the first time somebody used both.
-        await Session.ApplyAsync(new Command
-        {
-            SetSend = new SetSend
-            {
-                ChannelIndex = channel.Index,
-                BusIndex = monitor.Index,
-                On = !IsOn(channel, monitor),
-                Decibels = 0
-            }
-        });
-    }
-}

@@ -16,65 +16,23 @@
             <h2>@L["close.title"]</h2>
             <p class="sub">@L["close.sub"]</p>
 
-            <button class="closer-btn primary" @onclick="StopAndClose">
+            <button class="closer-btn primary"
+                    @onclick="StopAndCloseAsync">
                 <b>@L["close.stopEngine"]</b>
                 <span>@L["close.stopEngine.sub"]</span>
             </button>
 
-            <button class="closer-btn" @onclick="LeaveAndClose">
+            <button class="closer-btn"
+                    @onclick="LeaveAndClose">
                 <b>@L["close.leaveRunning"]</b>
                 <span>@L["close.leaveRunning.sub"]</span>
             </button>
 
-            <div class="row" style="margin-top:14px">
-                <button class="btn" @onclick="Prompt.Dismiss">@L["common.cancel"]</button>
+            <div class="row"
+                 style="margin-top:14px">
+                <button class="btn"
+                        @onclick="Prompt.Dismiss">@L["common.cancel"]</button>
             </div>
         </div>
     </div>
-}
-
-@code {
-    /// <summary>The handshake with the window.</summary>
-    [Inject]
-    public required ShutdownPrompt Prompt { get; set; }
-
-    /// <summary>What can stop the engine.</summary>
-    [Inject]
-    public required EngineConnector Connector { get; set; }
-
-    /// <inheritdoc />
-    protected override void OnInitialized()
-    {
-        base.OnInitialized();
-
-        Prompt.Asked += OnAsked;
-    }
-
-    void OnAsked() => InvokeAsync(async () =>
-    {
-        // Nothing to ask about when the engine is somebody else's: closing this window does not end
-        // that meeting, and offering to would be offering to end it by accident.
-        if (Prompt.IsAsking && !Connector.CanStopEngine)
-        {
-            Prompt.Release();
-
-            return;
-        }
-
-        await Task.CompletedTask;
-
-        StateHasChanged();
-    });
-
-    async Task StopAndClose()
-    {
-        await Connector.StopEngineAsync("The console was closed.");
-
-        Prompt.Release();
-    }
-
-    void LeaveAndClose() => Prompt.Release();
-
-    /// <inheritdoc />
-    protected override void Dispose(bool disposing) => Prompt.Asked -= OnAsked;
 }

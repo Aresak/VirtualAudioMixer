@@ -2,11 +2,15 @@
 
 @if (Bus is { } bus)
 {
-    <aside class="ovl" role="dialog" aria-label="@bus.Name">
+    <aside class="ovl"
+           role="dialog"
+           aria-label="@bus.Name">
         <div class="ohd">
             <span class="nm">@bus.Name</span>
             <span class="pill idle">@L["bus.role." + bus.Role.ToLowerInvariant()]</span>
-            <button type="button" class="btn sm" @onclick="Shell.CloseOverlay">@L["common.close"]</button>
+            <button type="button"
+                    class="btn sm"
+                    @onclick="Shell.CloseOverlay">@L["common.close"]</button>
         </div>
 
         <div class="obody">
@@ -15,7 +19,7 @@
             <input type="text"
                    value="@bus.Name"
                    aria-label="@L["strip.name"]"
-                   @onchange="argument => Rename(bus, argument)" />
+                   @onchange="argument => RenameAsync(bus, argument)" />
 
             <h2>@L["bus.output"]</h2>
 
@@ -23,7 +27,8 @@
                 <div class="kv">
                     <span class="k">@L["bus.role"]</span>
                     <span class="v">
-                        <select value="@bus.Role" @onchange="argument => SetRole(bus, argument)" aria-label="@L["bus.role"]">
+                        <select value="@bus.Role"
+                                @onchange="argument => SetRoleAsync(bus, argument)" aria-label="@L["bus.role"]">
                             <option value="Output">@L["bus.role.output"]</option>
                             <option value="Monitor">@L["bus.role.monitor"]</option>
                             <option value="Stream">@L["bus.role.stream"]</option>
@@ -34,7 +39,7 @@
                     <span class="v">
                         <select value="@bus.OutputDeviceId"
                                 aria-label="@L["bus.output"]"
-                                @onchange="argument => SetOutput(bus, argument)">
+                                @onchange="argument => SetOutputAsync(bus, argument)">
                             <option value="">@L["bus.none"]</option>
                             @foreach (DeviceInfo device in Renders)
                             {
@@ -44,14 +49,15 @@
                     </span>
 
                     <span class="k">@L["channel.colour"]</span>
-                    <span class="v row" style="gap:4px">
+                    <span class="v row"
+                          style="gap:4px">
                         @foreach (string colour in StripPalette.All)
                         {
                             <button type="button"
                                     class="swatch"
                                     style="background:@colour;width:18px;height:18px;border:1px solid @(colour == bus.Colour ? "var(--ink)" : "var(--line)")"
                                     aria-label="@colour"
-                                    @onclick="() => SetColour(bus, colour)"></button>
+                                    @onclick="() => SetColourAsync(bus, colour)"></button>
                         }
                     </span>
 
@@ -106,75 +112,12 @@
             <h2>@L["common.remove"]</h2>
 
             @*
-                U8. Named, not "Remove". A destructive control that does not say what it will
+                U8. Named, not "RemoveAsync". A destructive control that does not say what it will
                 destroy is one an operator confirms without reading, which is the same as not asking.
             *@
             <ConfirmButton Label="@L.Format("bus.remove", bus.Name)"
                            Question="@L.Format("bus.removeWhy", bus.Name)"
-                           Confirmed="() => Remove(bus)" />
+                           Confirmed="() => RemoveAsync(bus)" />
         </div>
     </aside>
-}
-
-@code {
-    BusState? Bus =>
-        Session.Console is { } console && Shell.SelectedBus >= 0 && Shell.SelectedBus < console.Buses.Count
-            ? console.Buses[Shell.SelectedBus]
-            : null;
-
-    string NameOf(int channelIndex) =>
-        Session.Console is { } console && channelIndex < console.Channels.Count
-            ? console.Channels[channelIndex].Name
-            : $"#{channelIndex}";
-
-    string OutputName(BusState bus)
-    {
-        foreach (DeviceInfo device in Session.Devices)
-        {
-            if (device.Id == bus.OutputDeviceId)
-            {
-                return device.Name;
-            }
-        }
-
-        return bus.OutputDeviceId.Length == 0 ? L["bus.none"] : bus.OutputDeviceId;
-    }
-
-    IEnumerable<DeviceInfo> Renders =>
-        Session.Devices.Where(device => device.Direction.Equals("Render", StringComparison.OrdinalIgnoreCase));
-
-    async Task SetOutput(BusState bus, ChangeEventArgs arguments) =>
-        await Session.ApplyAsync(new Command
-        {
-            SetBusOutputDevice = new SetBusOutputDevice
-            {
-                BusIndex = bus.Index,
-                DeviceId = arguments.Value?.ToString() ?? string.Empty
-            }
-        });
-
-    async Task SetColour(BusState bus, string colour) =>
-        await Session.ApplyAsync(new Command
-        {
-            SetBusColour = new SetBusColour { BusIndex = bus.Index, Colour = colour }
-        });
-
-    async Task SetRole(BusState bus, ChangeEventArgs arguments) =>
-        await Session.ApplyAsync(new Command
-        {
-            SetBusRole = new SetBusRole { BusIndex = bus.Index, Role = arguments.Value?.ToString() ?? bus.Role }
-        });
-
-    async Task Rename(BusState bus, ChangeEventArgs arguments) =>
-        await Session.ApplyAsync(new Command
-        {
-            SetBusName = new SetBusName { BusIndex = bus.Index, Name = arguments.Value?.ToString() ?? bus.Name }
-        });
-
-    async Task Remove(BusState bus)
-    {
-        await Session.ApplyAsync(new Command { RemoveBus = new RemoveBus { BusIndex = bus.Index } });
-
-        Shell.CloseOverlay();
-    }
 }

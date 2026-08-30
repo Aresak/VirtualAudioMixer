@@ -30,15 +30,18 @@
                         *@
                         <ConfirmButton Label="@L["recording.stop"]"
                                        Question="@L["recording.stopWhy"]"
-                                       Confirmed="Stop" />
+                                       Confirmed="StopAsync" />
                     }
                     else
                     {
-                        <button type="button" class="btn pri" @onclick="Start">@L["recording.start"]</button>
+                        <button type="button"
+                                class="btn pri"
+                                @onclick="StartAsync">@L["recording.start"]</button>
                     }
                 </div>
 
-                <div class="kv" style="margin-top:14px">
+                <div class="kv"
+                     style="margin-top:14px">
                     <span class="k">@L["recording.folder"]</span>
                     <span class="v">@(recording.Directory.Length > 0 ? recording.Directory : directory)</span>
                     <span class="k">@L["recording.written"]</span>
@@ -67,13 +70,15 @@
                     <div class="kv">
                         <span class="k">
                             @L.Format("recording.allInputs", Channels)
-                            <InlineHelp Title="@L["recording.captured"]" Body="@L["help.rawInputs"]" />
+                            <InlineHelp Title="@L["recording.captured"]"
+                                        Body="@L["help.rawInputs"]" />
                         </span>
                         <span class="v"><span class="pill ok">@L["common.on"]</span></span>
 
                         <span class="k">
                             @L["recording.startWithEngine"]
-                            <InlineHelp Title="@L["recording.startWithEngine"]" Body="@L["help.autoStart"]" />
+                            <InlineHelp Title="@L["recording.startWithEngine"]"
+                                        Body="@L["help.autoStart"]" />
                         </span>
                         <span class="v"><span class="pill ok">@L["common.on"]</span></span>
                     </div>
@@ -83,9 +88,11 @@
 
                 <div class="card">
                     @* E5. *@
-                    <b class="lbl" style="font-size:13px">@L["recording.diskGuard"]</b>
+                    <b class="lbl"
+                       style="font-size:13px">@L["recording.diskGuard"]</b>
 
-                    <div class="knob" style="margin-top:12px">
+                    <div class="knob"
+                         style="margin-top:12px">
                         <div class="between">
                             <span>@L["recording.free"]</span>
                             <span class="mono">@Gigabytes(recording.FreeBytes)</span>
@@ -93,9 +100,11 @@
                         <div class="slider"><i style="width:@(DiskBar(recording))%"></i></div>
                     </div>
 
-                    <p class="sub" style="margin:10px 0 0">@L["recording.guardWhy"]</p>
+                    <p class="sub"
+                       style="margin:10px 0 0">@L["recording.guardWhy"]</p>
 
-                    <div class="row" style="margin-top:12px">
+                    <div class="row"
+                         style="margin-top:12px">
                         <span class="pill @(HoursLeft(recording) > 4 ? "ok" : "warn")">
                             @L.Format("recording.roomFor", HoursLeft(recording).ToString("0.0", CultureInfo.InvariantCulture))
                         </span>
@@ -106,11 +115,16 @@
             <h2>@L["recording.folder"]</h2>
 
             <div class="row">
-                <input type="text" @bind="directory" aria-label="@L["recording.folder"]" style="min-width:340px" />
+                <input type="text"
+                       @bind="directory"
+                       aria-label="@L["recording.folder"]"
+                       style="min-width:340px" />
 
                 @if (Platform.CanPickFolders)
                 {
-                    <button type="button" class="btn" @onclick="Pick">…</button>
+                    <button type="button"
+                            class="btn"
+                            @onclick="PickAsync">…</button>
                 }
             </div>
 
@@ -125,78 +139,9 @@
 
             @if (refusal.Length > 0)
             {
-                <p class="note" style="border-color:var(--bad);color:var(--bad)">@refusal</p>
+                <p class="note"
+                   style="border-color:var(--bad);color:var(--bad)">@refusal</p>
             }
         }
     </div>
 </div>
-
-@code {
-    string directory = string.Empty;
-    string refusal = string.Empty;
-
-    RecordingState? Recording => Session.Console?.Recording;
-
-    string Duration(RecordingState recording)
-    {
-        if (Session.SampleRate <= 0)
-        {
-            return "—";
-        }
-
-        TimeSpan elapsed = TimeSpan.FromSeconds(recording.FramesWritten / (double)Session.SampleRate);
-
-        return elapsed.ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture);
-    }
-
-    int Channels => Session.Console?.Channels.Count ?? 0;
-
-    static string Gigabytes(long bytes) =>
-        (bytes / (1024.0 * 1024 * 1024)).ToString("0.0", CultureInfo.InvariantCulture) + " GB";
-
-    /// <summary>Bytes a second, for every track being written.</summary>
-    /// <remarks>
-    /// Twenty-four bit at the session rate, one file per strip. The projection an operator is shown
-    /// before they start has to be the real number, because the whole point of the guard is that it
-    /// refuses before a meeting rather than during one.
-    /// </remarks>
-    long BytesPerSecond => (long)Math.Max(Session.SampleRate, 1) * 3 * Math.Max(Channels, 1);
-
-    double HoursLeft(RecordingState recording) =>
-        BytesPerSecond <= 0 ? 0 : recording.FreeBytes / (double)BytesPerSecond / 3600.0;
-
-    // A full bar is a full disk, so it fills as the space goes. A bar that emptied would read as
-    // "everything is fine" at exactly the moment it is not.
-    static double DiskBar(RecordingState recording) =>
-        recording.FreeBytes <= 0 ? 100 : Math.Clamp(100 - (recording.FreeBytes / (1024.0 * 1024 * 1024) / 10.0), 0, 100);
-
-    async Task Pick()
-    {
-        if (await Platform.PickFolderAsync(L["recording.folder"]) is { } chosen)
-        {
-            directory = chosen;
-        }
-    }
-
-    async Task Start()
-    {
-        CommandReply reply = await Session.ApplyAsync(new Command
-        {
-            SetRecording = new SetRecording { Recording = true, Directory = directory }
-        });
-
-        // The disk's answer in the disk's own words. "There is room for forty minutes" is something
-        // an operator can act on before a meeting; "recording failed" is not.
-        refusal = reply.Accepted ? string.Empty : reply.Reason;
-    }
-
-    async Task Stop()
-    {
-        CommandReply reply = await Session.ApplyAsync(new Command
-        {
-            SetRecording = new SetRecording { Recording = false, Directory = string.Empty }
-        });
-
-        refusal = reply.Accepted ? string.Empty : reply.Reason;
-    }
-}

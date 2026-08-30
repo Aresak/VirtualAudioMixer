@@ -6,105 +6,48 @@
     job and a device that will empty its ring somewhere in the second hour.
 *@
 
-<svg viewBox="0 0 320 110" style="width:100%;height:110px" role="img" aria-label="Drift">
-    <line x1="0" y1="55" x2="320" y2="55" stroke="var(--line)" stroke-width="1" />
-    <text x="2" y="9" fill="var(--ink-mute)" font-size="8" font-family="monospace">+@F(Scale) ppm</text>
-    <text x="2" y="107" fill="var(--ink-mute)" font-size="8" font-family="monospace">−@F(Scale) ppm</text>
+<svg viewBox="0 0 320 110"
+     style="width:100%;height:110px"
+     role="img"
+     aria-label="Drift">
+    <line x1="0"
+          y1="55"
+          x2="320"
+          y2="55"
+          stroke="var(--line)"
+          stroke-width="1" />
+    <text x="2"
+          y="9"
+          fill="var(--ink-mute)"
+          font-size="8"
+          font-family="monospace">+@F(Scale) ppm</text>
+    <text x="2"
+          y="107"
+          fill="var(--ink-mute)"
+          font-size="8"
+          font-family="monospace">−@F(Scale) ppm</text>
 
     @foreach ((int channel, string path) in Paths)
     {
-        <path d="@path" fill="none" stroke="@Colour(channel)" stroke-width="1.2" />
+        <path d="@path"
+              fill="none"
+              stroke="@Colour(channel)"
+              stroke-width="1.2" />
     }
 </svg>
 
 @if (Series.Count > 0)
 {
-    <div class="row" style="margin-top:6px;gap:12px">
+    <div class="row"
+         style="margin-top:6px;gap:12px">
         @foreach (int channel in Series.Keys)
         {
-            <span class="row" style="gap:5px">
-                <span class="swatch" style="background:@Colour(channel);width:9px;height:9px"></span>
+            <span class="row"
+                  style="gap:5px">
+                <span class="swatch"
+                      style="background:@Colour(channel);width:9px;height:9px"></span>
                 <span style="font-size:11px;color:var(--ink-mute)">@NameOf(channel)</span>
             </span>
         }
     </div>
-}
-
-@code {
-    /// <summary>The samples, oldest first.</summary>
-    [Parameter]
-    public IReadOnlyList<DriftPoint> Points { get; set; } = [];
-
-    /// <summary>What the channels are called.</summary>
-    [Parameter]
-    public IReadOnlyList<string> Names { get; set; } = [];
-
-    /// <summary>
-    /// What the top and bottom of the chart mean, in parts per million.
-    /// </summary>
-    /// <remarks>
-    /// Fixed rather than fitted to the data. An auto-scaled chart makes a perfectly healthy device
-    /// wandering by two parts per million look exactly like one wandering by two hundred, which is
-    /// the one distinction anybody opens this panel to make.
-    ///
-    /// Five hundred because that is FillServo.MaxCorrectionPpm — the edge of what the servo can do
-    /// anything about. A device drawn at the top of this chart is a device the correction has run out
-    /// of authority for, which is a boundary worth being able to see rather than a round number.
-    /// </remarks>
-    [Parameter]
-    public double Scale { get; set; } = 500.0;
-
-    Dictionary<int, List<DriftPoint>> Series
-    {
-        get
-        {
-            Dictionary<int, List<DriftPoint>> series = [];
-
-            foreach (DriftPoint point in Points)
-            {
-                if (!series.TryGetValue(point.ChannelIndex, out List<DriftPoint>? line))
-                {
-                    line = [];
-                    series[point.ChannelIndex] = line;
-                }
-
-                line.Add(point);
-            }
-
-            return series;
-        }
-    }
-
-    IEnumerable<(int Channel, string Path)> Paths
-    {
-        get
-        {
-            foreach ((int channel, List<DriftPoint> line) in Series)
-            {
-                yield return (channel, Build(line));
-            }
-        }
-    }
-
-    string Build(List<DriftPoint> line)
-    {
-        System.Text.StringBuilder path = new();
-
-        for (int index = 0; index < line.Count; index++)
-        {
-            double x = line.Count <= 1 ? 0 : index * 320.0 / (line.Count - 1);
-            double y = 55 - (Math.Clamp(line[index].DriftPpm / Scale, -1, 1) * 50);
-
-            path.Append(index == 0 ? 'M' : 'L').Append(F(x)).Append(' ').Append(F(y)).Append(' ');
-        }
-
-        return path.ToString();
-    }
-
-    string NameOf(int channel) => channel < Names.Count ? Names[channel] : $"#{channel}";
-
-    static string Colour(int channel) => StripPalette.For(channel);
-
-    static string F(double value) =>
-        value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 }

@@ -19,7 +19,8 @@
             {
                 <div class="card">
                     <div class="between">
-                        <b class="lbl" style="font-size:14px">@monitor.Name</b>
+                        <b class="lbl"
+                           style="font-size:14px">@monitor.Name</b>
 
                         @*
                             Amber until an output device is assigned. A monitor bus with nowhere to
@@ -31,12 +32,13 @@
                         </span>
                     </div>
 
-                    <div class="kv" style="margin-top:9px">
+                    <div class="kv"
+                         style="margin-top:9px">
                         <span class="k">@L["bus.output"]</span>
                         <span class="v">
                             <select value="@monitor.OutputDeviceId"
                                     aria-label="@L["bus.output"]"
-                                    @onchange="argument => SetOutput(monitor, argument)">
+                                    @onchange="argument => SetOutputAsync(monitor, argument)">
                                 <option value="">@L["bus.none"]</option>
                                 @foreach (DeviceInfo device in Renders)
                                 {
@@ -58,12 +60,14 @@
                                 <b class="@(IsOn(channel, monitor) ? "on" : null)"
                                    role="button" tabindex="0"
                                    title="@(IsExcluded(channel, monitor) ? L["send.lockedWhy"] : channel.Name)"
-                                   @onclick="() => Toggle(channel, monitor)">
-                                    <span class="swatch" style="background:@Colour(channel)"></span>
+                                   @onclick="() => ToggleAsync(channel, monitor)">
+                                    <span class="swatch"
+                                          style="background:@Colour(channel)"></span>
                                     @channel.Name
                                     @if (IsExcluded(channel, monitor))
                                     {
-                                        <span class="pill bad" style="margin-left:auto">N−1</span>
+                                        <span class="pill bad"
+                                              style="margin-left:auto">N−1</span>
                                     }
                                 </b>
                             }
@@ -76,98 +80,26 @@
                     *@
                     <div class="srcgroup">
                         <span class="gl">@L["monitors.buses"]</span>
-                        <p class="sub" style="margin:0">@L["monitors.busesLater"]</p>
+                        <p class="sub"
+                           style="margin:0">@L["monitors.busesLater"]</p>
                     </div>
 
-                    <div class="row" style="margin-top:11px">
-                        <span class="sub" style="margin:0;flex:1">@L["monitors.soloWins"]</span>
+                    <div class="row"
+                         style="margin-top:11px">
+                        <span class="sub"
+                              style="margin:0;flex:1">@L["monitors.soloWins"]</span>
                         <ConfirmButton Label="@L.Format("bus.remove", monitor.Name)"
                                        Question="@L.Format("monitors.removeWhy", monitor.Name)"
-                                       Confirmed="() => Remove(monitor)" />
+                                       Confirmed="() => RemoveAsync(monitor)" />
                     </div>
                 </div>
             }
 
             <button type="button" class="card" style="border-style:dashed;color:var(--ink-mute);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:150px"
-                    @onclick="Add">
+                    @onclick="AddAsync">
                 <span style="font-size:28px;font-family:var(--f-cond);line-height:1">＋</span>
                 <span class="lbl">@L["monitors.add"]</span>
             </button>
         </div>
     </div>
 </div>
-
-@code {
-    IReadOnlyList<BusState> Monitors =>
-        Session.Console?.Buses
-            .Where(bus => bus.Role.Equals("Monitor", StringComparison.OrdinalIgnoreCase))
-            .ToList()
-        ?? [];
-
-    IReadOnlyList<ChannelState> Channels => Session.Console?.Channels ?? [];
-
-    static string Colour(ChannelState channel) =>
-        string.IsNullOrWhiteSpace(channel.Colour) ? StripPalette.For(channel.Index) : channel.Colour;
-
-    static bool HasOutput(BusState monitor) => monitor.OutputDeviceId.Length > 0;
-
-    string OutputName(BusState monitor) =>
-        monitor.OutputDeviceName.Length > 0
-            ? monitor.OutputDeviceName
-            : monitor.OutputDeviceId.Length > 0 ? monitor.OutputDeviceId : L["bus.none"];
-
-    bool IsExcluded(ChannelState channel, BusState monitor) => monitor.ExcludedChannels.Contains(channel.Index);
-
-    bool IsOn(ChannelState channel, BusState monitor) =>
-        Session.Console?.Sends
-            .FirstOrDefault(send => send.ChannelIndex == channel.Index && send.BusIndex == monitor.Index)?.State == "On";
-
-    async Task Toggle(ChannelState channel, BusState monitor)
-    {
-        if (IsExcluded(channel, monitor))
-        {
-            return;
-        }
-
-        // The same command the strip's send button sends. A monitor source is a send, and if this
-        // were its own mechanism the two would disagree the first time somebody used both.
-        await Session.ApplyAsync(new Command
-        {
-            SetSend = new SetSend
-            {
-                ChannelIndex = channel.Index,
-                BusIndex = monitor.Index,
-                On = !IsOn(channel, monitor),
-                Decibels = 0
-            }
-        });
-    }
-
-    IEnumerable<DeviceInfo> Renders =>
-        Session.Devices.Where(device => device.Direction.Equals("Render", StringComparison.OrdinalIgnoreCase));
-
-    async Task SetOutput(BusState monitor, ChangeEventArgs arguments) =>
-        await Session.ApplyAsync(new Command
-        {
-            SetBusOutputDevice = new SetBusOutputDevice
-            {
-                BusIndex = monitor.Index,
-                DeviceId = arguments.Value?.ToString() ?? string.Empty
-            }
-        });
-
-    async Task Add() =>
-        await Session.ApplyAsync(new Command
-        {
-            AddBus = new AddBus
-            {
-                Name = L.Format("monitors.newName", Monitors.Count + 1),
-                Role = "Monitor",
-                ChannelCount = 2,
-                OutputDeviceId = string.Empty
-            }
-        });
-
-    async Task Remove(BusState monitor) =>
-        await Session.ApplyAsync(new Command { RemoveBus = new RemoveBus { BusIndex = monitor.Index } });
-}

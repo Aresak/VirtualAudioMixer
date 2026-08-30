@@ -49,11 +49,12 @@
                            spellcheck="false"
                            autocomplete="off"
                            @onchange="OnTyped"
-                           @onkeydown="OnKey" />
+                           @onkeydown="OnKeyAsync" />
                 </label>
 
                 <div class="row">
-                    <button class="btn" @onclick="Switch">@L["settings.reconnect"]</button>
+                    <button class="btn"
+                            @onclick="SwitchAsync">@L["settings.reconnect"]</button>
                     <span class="note">@L["settings.addressWhy"]</span>
                 </div>
 
@@ -64,15 +65,17 @@
                 *@
                 @if (Connector.CanStopEngine)
                 {
-                    <div class="row" style="margin-top:12px">
+                    <div class="row"
+                         style="margin-top:12px">
                         @if (Connector.CanRestartEngine)
                         {
-                            <button class="btn" @onclick="Restart">@L["settings.restartEngine"]</button>
+                            <button class="btn"
+                                    @onclick="RestartAsync">@L["settings.restartEngine"]</button>
                         }
 
                         <ConfirmButton Label="@L["settings.stopEngine"]"
                                        Question="@L["settings.stopEngineConfirm"]"
-                                       Confirmed="Stop" />
+                                       Confirmed="StopAsync" />
                     </div>
 
                     <p class="note">@L["settings.engineLifeWhy"]</p>
@@ -106,13 +109,19 @@
                 <div class="kv">
                     <span class="k">
                         @L["settings.density"]
-                        <InlineHelp Title="@L["settings.density"]" Body="@L["help.density"]" />
+                        <InlineHelp Title="@L["settings.density"]"
+                                    Body="@L["help.density"]" />
                     </span>
-                    <span class="v row" style="gap:5px">
-                        <button type="button" class="chip @(Shell.IsCompact ? null : "on")" @onclick="() => Shell.IsCompact = false">
+                    <span class="v row"
+                          style="gap:5px">
+                        <button type="button"
+                                class="chip @(Shell.IsCompact ? null : "on")"
+                                @onclick="() => Shell.IsCompact = false">
                             @L["mixer.full"]
                         </button>
-                        <button type="button" class="chip @(Shell.IsCompact ? "on" : null)" @onclick="() => Shell.IsCompact = true">
+                        <button type="button"
+                                class="chip @(Shell.IsCompact ? "on" : null)"
+                                @onclick="() => Shell.IsCompact = true">
                             @L["mixer.compact"]
                         </button>
                     </span>
@@ -123,13 +132,15 @@
                     *@
                     <span class="k">
                         @L["settings.theme"]
-                        <InlineHelp Title="@L["settings.theme"]" Body="@L["help.theme"]" />
+                        <InlineHelp Title="@L["settings.theme"]"
+                                    Body="@L["help.theme"]" />
                     </span>
                     <span class="v">@L["settings.themeFixed"]</span>
 
                     <span class="k">
                         @L["settings.ballistics"]
-                        <InlineHelp Title="@L["settings.ballistics"]" Body="@L["help.ballistics"]" />
+                        <InlineHelp Title="@L["settings.ballistics"]"
+                                    Body="@L["help.ballistics"]" />
                     </span>
                     <span class="v">@L["settings.ballisticsValue"]</span>
 
@@ -148,14 +159,14 @@
                 <Switch Label="@L["settings.loadLast"]"
                         Help="@L["help.loadLast"]"
                         Checked="Startup?.LoadLastConsole ?? true"
-                        Changed="value => SetStartup(value, Startup?.RecordAutomatically ?? true)" />
+                        Changed="value => SetStartupAsync(value, Startup?.RecordAutomatically ?? true)" />
 
                 <div style="height:8px"></div>
 
                 <Switch Label="@L["settings.autoRecord"]"
                         Help="@L["help.autoRecord"]"
                         Checked="Startup?.RecordAutomatically ?? true"
-                        Changed="value => SetStartup(Startup?.LoadLastConsole ?? true, value)" />
+                        Changed="value => SetStartupAsync(Startup?.LoadLastConsole ?? true, value)" />
 
                 <p class="note">@L["settings.startupWhy"]</p>
             </div>
@@ -163,7 +174,8 @@
             <div class="card">
                 <h2>@L["settings.about"]</h2>
 
-                <p class="sub" style="margin-bottom:10px">
+                <p class="sub"
+                   style="margin-bottom:10px">
                     VAM. A mixing console for a room where a meeting is being recorded and streamed.
                 </p>
 
@@ -192,56 +204,3 @@
         </div>
     </div>
 </div>
-
-@code {
-    string typed = string.Empty;
-
-    /// <summary>Where the console is pointed, and what points it somewhere else.</summary>
-    [Inject]
-    public required EngineConnector Connector { get; set; }
-
-    StartupOptions? Startup => Session.Console?.Startup;
-
-    /// <inheritdoc />
-    protected override void OnInitialized()
-    {
-        base.OnInitialized();
-
-        typed = Options.Address;
-
-        Connector.Changed += OnConnectorChanged;
-    }
-
-    void OnConnectorChanged() => InvokeAsync(StateHasChanged);
-
-    void OnTyped(ChangeEventArgs args) => typed = args.Value?.ToString() ?? string.Empty;
-
-    Task OnKey(KeyboardEventArgs args) => args.Key == "Enter" ? Switch() : Task.CompletedTask;
-
-    async Task Restart() => await Connector.RestartEngineAsync();
-
-    async Task Stop() => await Connector.StopEngineAsync("Stopped from the console.");
-
-    async Task Switch()
-    {
-        if (await Connector.SwitchToAsync(typed))
-        {
-            // Shown back completed, so somebody who typed a bare host can see the port that was
-            // added rather than wondering whether it took.
-            typed = Options.Address;
-        }
-    }
-
-    /// <inheritdoc />
-    protected override void Dispose(bool disposing) => Connector.Changed -= OnConnectorChanged;
-
-    async Task SetStartup(bool loadLast, bool autoRecord) =>
-        await Session.ApplyAsync(new Command
-        {
-            SetStartupOptions = new SetStartupOptions
-            {
-                LoadLastConsole = loadLast,
-                RecordAutomatically = autoRecord
-            }
-        });
-}

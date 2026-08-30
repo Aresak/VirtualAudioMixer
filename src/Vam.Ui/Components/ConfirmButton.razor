@@ -10,46 +10,22 @@
 
 @if (isAsking)
 {
-    <div class="card" style="border-color:rgba(224,80,60,.4)">
+    <div class="card"
+         style="border-color:rgba(224,80,60,.4)">
         <p style="margin:0 0 10px">@Question</p>
         <div class="row">
-            <button type="button" class="btn danger" @onclick="Yes">@L["common.confirm"]</button>
-            <button type="button" class="btn" @onclick="() => isAsking = false">@L["common.cancel"]</button>
+            <button type="button"
+                    class="btn danger"
+                    @onclick="YesAsync">@L["common.confirm"]</button>
+            <button type="button"
+                    class="btn"
+                    @onclick="() => isAsking = false">@L["common.cancel"]</button>
         </div>
     </div>
 }
 else
 {
-    <button type="button" class="btn danger" @onclick="() => isAsking = true">@Label</button>
-}
-
-@code {
-    bool isAsking;
-
-    /// <summary>What the button says before it is pressed.</summary>
-    [Parameter]
-    [EditorRequired]
-    public required string Label { get; set; }
-
-    /// <summary>
-    /// What is being asked.
-    /// </summary>
-    /// <remarks>
-    /// A sentence naming what will happen, not "are you sure". An operator who has read "are you
-    /// sure" fifty times has stopped reading it, which is how a confirmation stops being one.
-    /// </remarks>
-    [Parameter]
-    [EditorRequired]
-    public required string Question { get; set; }
-
-    /// <summary>Raised when it was confirmed.</summary>
-    [Parameter]
-    public EventCallback Confirmed { get; set; }
-
-    async Task Yes()
-    {
-        isAsking = false;
-
-        await Confirmed.InvokeAsync();
-    }
+    <button type="button"
+            class="btn danger"
+            @onclick="() => isAsking = true">@Label</button>
 }

@@ -9,7 +9,8 @@
 *@
 
 <div class="bstrip @StateClass">
-    <div class="hd" @onclick="Open">
+    <div class="hd"
+         @onclick="Open">
         <div style="font-family:var(--f-cond);text-transform:uppercase;font-size:14px;letter-spacing:.05em;color:@NameColour">
             @Bus.Name
         </div>
@@ -20,116 +21,36 @@
         D6. Not a meter — an activity light. The only question a bus strip asks about the limiter is
         whether it is working, and a number would invite an operator to watch it instead of listening.
     *@
-    <div class="lim" title="@L["help.limiter"]">
+    <div class="lim"
+         title="@L["help.limiter"]">
         <i class="@(IsLimiting ? "on" : null)"></i>
         @L["bus.limiter"]
     </div>
 
     <div class="mf">
-        <canvas class="meter" data-vam-bus="@Bus.Index" aria-hidden="true"></canvas>
+        <canvas class="meter"
+                data-vam-bus="@Bus.Index"
+                aria-hidden="true"></canvas>
 
         <div class="fader">
-            <div class="unity" aria-hidden="true"></div>
+            <div class="unity"
+                 aria-hidden="true"></div>
             <input type="range"
                    min="0" max="1000" step="1"
                    value="@Position"
                    aria-label="@(Bus.Name + " " + L["bus.gain"])"
-                   @oninput="OnGain" />
+                   @oninput="OnGainAsync" />
         </div>
     </div>
 
     <div class="val">@FaderScale.Format(Bus.GainDb) dB</div>
 
     <div class="msm">
-        <b class="m @(Bus.IsMuted ? "on" : null)" role="button" tabindex="0" @onclick="ToggleMute">
+        <b class="m @(Bus.IsMuted ? "on" : null)"
+           role="button"
+           tabindex="0"
+           @onclick="ToggleMuteAsync">
             @L["bus.mute"]
         </b>
     </div>
 </div>
-
-@code {
-    /// <summary>The bus to draw.</summary>
-    [Parameter]
-    [EditorRequired]
-    public required BusState Bus { get; set; }
-
-    /// <summary>Whether this is the bus the primary output takes. D3.</summary>
-    [Parameter]
-    public bool IsMaster { get; set; }
-
-    // Anything at all counts as working. A limiter taking a tenth of a decibel off is a limiter that
-    // caught something, and that is exactly what the light is for.
-    bool IsLimiting => Bus.LimiterReductionDb < -0.05;
-
-    string StateClass
-    {
-        get
-        {
-            List<string> classes = [];
-
-            if (IsMaster)
-            {
-                classes.Add("master");
-            }
-
-            if (Bus.IsMuted)
-            {
-                classes.Add("muted");
-            }
-
-            if (Shell.Overlay == OverlayId.Bus && Shell.SelectedBus == Bus.Index)
-            {
-                classes.Add("sel");
-            }
-
-            return string.Join(' ', classes);
-        }
-    }
-
-    // The roles are coloured apart because confusing them is the expensive mistake: a stream bus
-    // goes out of the building and a monitor bus goes into somebody's ear.
-    string NameColour
-    {
-        get
-        {
-            if (!string.IsNullOrWhiteSpace(Bus.Colour))
-            {
-                return Bus.Colour;
-            }
-
-            return Bus.Role.ToLowerInvariant() switch
-            {
-                "stream" => "var(--brass)",
-                "monitor" => "var(--teal)",
-                _ => "var(--ink)"
-            };
-        }
-    }
-
-    string OutputLine => Bus.OutputDeviceName.Length > 0
-        ? Bus.OutputDeviceName
-        : Bus.OutputDeviceId.Length > 0 ? Bus.OutputDeviceId : "— " + L["bus.none"];
-
-    int Position => (int)Math.Round(FaderScale.ToPosition(Bus.GainDb) * 1000);
-
-    void Open() => Shell.OpenBus(Bus.Index);
-
-    async Task OnGain(ChangeEventArgs arguments)
-    {
-        if (!double.TryParse(arguments.Value?.ToString(), CultureInfo.InvariantCulture, out double raw))
-        {
-            return;
-        }
-
-        await Session.ApplyAsync(new Command
-        {
-            SetBusGain = new SetBusGain { BusIndex = Bus.Index, Decibels = FaderScale.ToDecibels(raw / 1000.0) }
-        });
-    }
-
-    async Task ToggleMute() =>
-        await Session.ApplyAsync(new Command
-        {
-            SetBusMuted = new SetBusMuted { BusIndex = Bus.Index, Muted = !Bus.IsMuted }
-        });
-}
