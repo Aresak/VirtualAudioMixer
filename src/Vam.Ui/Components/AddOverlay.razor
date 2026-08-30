@@ -1,0 +1,148 @@
+@inherits VamComponent
+
+@*
+    U17. Adding a strip or a bus while the session is running.
+
+    Both lists come from the engine, because the engine is the machine with the sound cards in it. A
+    console that offered its own device list would be offering an operator a choice they cannot make.
+*@
+
+<aside class="ovl" role="dialog" aria-label="@L["mixer.add"]">
+    <div class="ohd">
+        <span class="nm">@L["mixer.add"]</span>
+        <button type="button" class="btn sm" @onclick="Shell.CloseOverlay">@L["common.close"]</button>
+    </div>
+
+    <div class="obody">
+        <h2>@L["common.channel"]</h2>
+
+        <div class="knob">
+            <div class="between"><span>@L["strip.device"]</span></div>
+            <select @bind="captureId" aria-label="@L["strip.device"]">
+                <option value="">—</option>
+                @foreach (DeviceInfo device in Captures)
+                {
+                    <option value="@device.Id">@device.Name @(device.IsInUse ? "·" : string.Empty)</option>
+                }
+            </select>
+        </div>
+
+        <div class="knob">
+            <div class="between"><span>@L["strip.name"]</span></div>
+            <input type="text" @bind="channelName" aria-label="@L["strip.name"]" />
+        </div>
+
+        <label class="row">
+            <input type="checkbox" @bind="participates" />
+            <span>@L["strip.automixOn"]</span>
+        </label>
+
+        <div class="row" style="margin-top:10px">
+            <button type="button" class="btn pri" disabled="@(captureId.Length == 0)" @onclick="AddChannel">
+                @L["mixer.add"]
+            </button>
+        </div>
+
+        <h2>@L["common.bus"]</h2>
+
+        <div class="knob">
+            <div class="between"><span>@L["strip.name"]</span></div>
+            <input type="text" @bind="busName" aria-label="@L["strip.name"]" />
+        </div>
+
+        <div class="knob">
+            <div class="between"><span>Role</span></div>
+            <select @bind="busRole" aria-label="Role">
+                <option value="Output">@L["bus.role.output"]</option>
+                <option value="Monitor">@L["bus.role.monitor"]</option>
+                <option value="Stream">@L["bus.role.stream"]</option>
+            </select>
+        </div>
+
+        <div class="knob">
+            <div class="between"><span>@L["bus.output"]</span></div>
+            <select @bind="renderId" aria-label="@L["bus.output"]">
+                <option value="">@L["bus.none"]</option>
+                @foreach (DeviceInfo device in Renders)
+                {
+                    <option value="@device.Id">@device.Name</option>
+                }
+            </select>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+            <button type="button" class="btn pri" disabled="@(busName.Length == 0)" @onclick="AddBus">
+                @L["mixer.add"]
+            </button>
+        </div>
+
+        @if (refusal.Length > 0)
+        {
+            <p class="note" style="border-color:var(--bad);color:var(--bad)">@refusal</p>
+        }
+    </div>
+</aside>
+
+@code {
+    string captureId = string.Empty;
+    string renderId = string.Empty;
+    string channelName = string.Empty;
+    string busName = string.Empty;
+    string busRole = "Output";
+    string refusal = string.Empty;
+    bool participates = true;
+
+    IEnumerable<DeviceInfo> Captures =>
+        Session.Devices.Where(device => device.Direction.Equals("Capture", StringComparison.OrdinalIgnoreCase));
+
+    IEnumerable<DeviceInfo> Renders =>
+        Session.Devices.Where(device => device.Direction.Equals("Render", StringComparison.OrdinalIgnoreCase));
+
+    async Task AddChannel()
+    {
+        string name = channelName.Length > 0
+            ? channelName
+            : Captures.FirstOrDefault(device => device.Id == captureId)?.Name ?? captureId;
+
+        CommandReply reply = await Session.ApplyAsync(new Command
+        {
+            AddChannel = new AddChannel
+            {
+                Name = name,
+                DeviceId = captureId,
+                ChannelCount = 1,
+                ParticipatesInAutomix = participates
+            }
+        });
+
+        Settle(reply);
+    }
+
+    async Task AddBus()
+    {
+        CommandReply reply = await Session.ApplyAsync(new Command
+        {
+            AddBus = new AddBus
+            {
+                Name = busName,
+                Role = busRole,
+                ChannelCount = 2,
+                OutputDeviceId = renderId
+            }
+        });
+
+        Settle(reply);
+    }
+
+    void Settle(CommandReply reply)
+    {
+        // A refusal is shown here rather than swallowed. The engine writes these for a person, and
+        // the whole point of that is that the person gets to read them.
+        refusal = reply.Accepted ? string.Empty : reply.Reason;
+
+        if (reply.Accepted)
+        {
+            Shell.CloseOverlay();
+        }
+    }
+}

@@ -1,0 +1,98 @@
+@inherits VamComponent
+
+@if (Bus is { } bus)
+{
+    <aside class="ovl" role="dialog" aria-label="@bus.Name">
+        <div class="ohd">
+            <span class="nm">@bus.Name</span>
+            <span class="pill idle">@L["bus.role." + bus.Role.ToLowerInvariant()]</span>
+            <button type="button" class="btn sm" @onclick="Shell.CloseOverlay">@L["common.close"]</button>
+        </div>
+
+        <div class="obody">
+            <h2>@L["strip.name"]</h2>
+
+            <input type="text"
+                   value="@bus.Name"
+                   aria-label="@L["strip.name"]"
+                   @onchange="argument => Rename(bus, argument)" />
+
+            <h2>@L["bus.output"]</h2>
+
+            <div class="kv">
+                <span class="k">@L["bus.output"]</span>
+                <span class="v">@OutputName(bus)</span>
+                <span class="k">@L["common.channel"]</span>
+                <span class="v">@bus.ChannelCount</span>
+            </div>
+
+            <h2>@L["send.locked"]</h2>
+
+            @if (bus.ExcludedChannels.Count == 0)
+            {
+                <p class="sub">Nothing is excluded from this bus.</p>
+            }
+            else
+            {
+                @*
+                    D4. Shown, never offered. The engine works the exclusions out from the declared
+                    pairing of a capture endpoint and a render endpoint, and there is deliberately no
+                    control here that could change one: a mix-minus somebody can switch off is a
+                    mix-minus that will be switched off, once, during a live meeting.
+                *@
+                <ul style="margin:0;padding-left:18px">
+                    @foreach (int index in bus.ExcludedChannels)
+                    {
+                        <li>@NameOf(index)</li>
+                    }
+                </ul>
+
+                <p class="note">@L["send.lockedWhy"]</p>
+            }
+
+            <h2>@L["common.remove"]</h2>
+
+            <ConfirmButton Label="@L["common.remove"]"
+                           Question="@($"Remove {bus.Name}? Every send pointing at it goes too.")"
+                           Confirmed="() => Remove(bus)" />
+        </div>
+    </aside>
+}
+
+@code {
+    BusState? Bus =>
+        Session.Console is { } console && Shell.SelectedBus >= 0 && Shell.SelectedBus < console.Buses.Count
+            ? console.Buses[Shell.SelectedBus]
+            : null;
+
+    string NameOf(int channelIndex) =>
+        Session.Console is { } console && channelIndex < console.Channels.Count
+            ? console.Channels[channelIndex].Name
+            : $"#{channelIndex}";
+
+    string OutputName(BusState bus)
+    {
+        foreach (DeviceInfo device in Session.Devices)
+        {
+            if (device.Id == bus.OutputDeviceId)
+            {
+                return device.Name;
+            }
+        }
+
+        return bus.OutputDeviceId.Length == 0 ? L["bus.none"] : bus.OutputDeviceId;
+    }
+
+    async Task Rename(BusState bus, ChangeEventArgs arguments) =>
+        await Session.ApplyAsync(new Command
+        {
+            SetBusName = new SetBusName { BusIndex = bus.Index, Name = arguments.Value?.ToString() ?? bus.Name }
+        });
+
+    async Task Remove(BusState bus)
+    {
+        await Session.ApplyAsync(new Command { RemoveBus = new RemoveBus { BusIndex = bus.Index } });
+
+        Shell.CloseOverlay();
+    }
+}

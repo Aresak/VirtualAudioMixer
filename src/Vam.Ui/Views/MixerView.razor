@@ -1,0 +1,226 @@
+@inherits VamComponent
+@implements IAsyncDisposable
+@inject IJSRuntime Js
+
+@*
+    The view a meeting is run from.
+
+    It owns the meter surface: it binds the canvases after a render that changes their number, and it
+    forwards every meter frame straight to JavaScript. Nothing on the meter path touches the render
+    tree, which is what keeps sixteen strips at twenty-five frames a second from becoming four
+    hundred component diffs a second.
+*@
+
+<div class="view mixer">
+    <div class="mixtool">
+        <button type="button" class="btn" @onclick="() => Shell.Overlay = OverlayId.Matrix">
+            @L["mixer.matrix"]
+        </button>
+
+        <button type="button"
+                class="chip @(Shell.IsReorderArmed ? "on" : null)"
+                @onclick="() => Shell.IsReorderArmed = !Shell.IsReorderArmed">
+            @L["mixer.reorder"]
+        </button>
+
+        <button type="button" class="chip @(Shell.IsCompact ? "on" : null)" @onclick="ToggleDensity">
+            @L["mixer.density"]: @(Shell.IsCompact ? L["mixer.compact"] : L["mixer.full"])
+        </button>
+
+        <span style="flex:1"></span>
+
+        <button type="button" class="btn" @onclick="() => Shell.Overlay = OverlayId.Add">
+            @L["mixer.add"]
+        </button>
+    </div>
+
+    @if (Session.Console is null)
+    {
+        <div class="pad">
+            <p class="sub">@L["mixer.notConnected"]</p>
+        </div>
+    }
+    else if (Session.Console.Channels.Count == 0)
+    {
+        <div class="pad">
+            <p class="sub">@L["mixer.noChannels"]</p>
+        </div>
+    }
+    else
+    {
+        <div class="mixer">
+            <div class="strips">
+                @foreach (ChannelState channel in Session.Console.Channels)
+                {
+                    <ChannelStrip @key="channel.Index"
+                                  Channel="channel"
+                                  Buses="Session.Console.Buses"
+                                  Reordered="OnReordered" />
+                }
+            </div>
+
+            <div class="buses">
+                @foreach (BusState bus in Session.Console.Buses)
+                {
+                    <BusStrip @key="bus.Index" Bus="bus" />
+                }
+            </div>
+        </div>
+    }
+
+    @switch (Shell.Overlay)
+    {
+        case OverlayId.Channel:
+            <ChannelOverlay />
+            break;
+
+        case OverlayId.Bus:
+            <BusOverlay />
+            break;
+
+        case OverlayId.Matrix:
+            <MatrixOverlay />
+            break;
+
+        case OverlayId.Add:
+            <AddOverlay />
+            break;
+    }
+</div>
+
+@code {
+    IJSObjectReference? meters;
+    byte[] scratch = [];
+    int shape = -1;
+    int pending;
+    int frameChannels;
+    int frameBuses;
+
+    /// <inheritdoc />
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+
+        Session.MeterFrame = OnMeterFrame;
+    }
+
+    /// <inheritdoc />
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        meters ??= await Js.InvokeAsync<IJSObjectReference>("import", "./_content/Vam.Ui/js/vam-meters.js");
+
+        int current = Fingerprint();
+
+        if (current == shape)
+        {
+            return;
+        }
+
+        // Only when the number of strips changed. Rebinding per frame would put a DOM query on the
+        // meter path, which is precisely the cost this whole arrangement exists to avoid.
+        shape = current;
+
+        await meters.InvokeVoidAsync("bind");
+    }
+
+    /// <summary>Stops drawing and lets go of the module.</summary>
+    public async ValueTask DisposeAsync()
+    {
+        Session.MeterFrame = null;
+
+        Dispose();
+
+        if (meters is not null)
+        {
+            try
+            {
+                await meters.InvokeVoidAsync("unbind");
+                await meters.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // The browser is already gone. Nothing to unbind, and nothing to report.
+            }
+        }
+    }
+
+    int Fingerprint()
+    {
+        ConsoleState? console = Session.Console;
+
+        return console is null
+            ? 0
+            : HashCode.Combine(console.Channels.Count, console.Buses.Count, Shell.IsCompact, Shell.Overlay);
+    }
+
+    /// <summary>
+    /// One meter frame, from the gRPC pump thread.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Copied and handed to JavaScript, and never to Blazor. The copy is into a buffer sized when the
+    /// console's shape changed, so a frame costs one memcpy of a couple of hundred bytes.
+    /// </para>
+    /// <para>
+    /// <b>It drops frames rather than queueing them.</b> If the previous push has not finished — which
+    /// on a slow link is the normal case — this one is thrown away. A meter that is a quarter of a
+    /// second behind is worse than useless; a backlog of them is how a console stops answering a
+    /// fader at all.
+    /// </para>
+    /// </remarks>
+    void OnMeterFrame(ReadOnlySpan<byte> payload, int channelCount, int busCount)
+    {
+        if (meters is null || Interlocked.CompareExchange(ref pending, 1, 0) != 0)
+        {
+            return;
+        }
+
+        if (scratch.Length != payload.Length)
+        {
+            scratch = new byte[payload.Length];
+        }
+
+        payload.CopyTo(scratch);
+
+        frameChannels = channelCount;
+        frameBuses = busCount;
+
+        _ = PushAsync();
+    }
+
+    async Task PushAsync()
+    {
+        try
+        {
+            if (meters is not null)
+            {
+                await meters.InvokeVoidAsync("frame", scratch, frameChannels, frameBuses);
+            }
+        }
+        catch (JSException)
+        {
+            // A meter that failed to draw is not worth interrupting a meeting over. The next frame
+            // is forty milliseconds away.
+        }
+        catch (JSDisconnectedException)
+        {
+            // The browser went away mid-frame.
+        }
+        catch (ObjectDisposedException)
+        {
+            // The view was closed between the copy and the call.
+        }
+        finally
+        {
+            Volatile.Write(ref pending, 0);
+        }
+    }
+
+    void ToggleDensity() => Shell.IsCompact = !Shell.IsCompact;
+
+    async Task OnReordered((int From, int To) move) =>
+        await Session.ApplyAsync(new Command
+        {
+            MoveChannel = new MoveChannel { FromIndex = move.From, ToIndex = move.To }
+        });
+}

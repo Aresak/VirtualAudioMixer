@@ -1,0 +1,53 @@
+@inherits VamComponent
+
+@*
+    The whole console. One status bar, one rail, one stage, and whichever view the rail is on.
+
+    U6: one fixed dark scheme, applied here rather than left to the host. A room where somebody is
+    cutting cameras in low light does not want a console that follows a system theme it never chose.
+*@
+
+<div class="app @(Shell.IsCompact ? "compact" : null)">
+    <StatusBar />
+    <NavRail />
+
+    <main class="stage">
+        @switch (Shell.View)
+        {
+            case ViewId.Mixer:
+                <MixerView />
+                break;
+
+            case ViewId.Automix:
+                <AutomixView />
+                break;
+
+            case ViewId.Monitors:
+                <MonitorsView />
+                break;
+
+            case ViewId.Recording:
+                <RecordingView />
+                break;
+
+            case ViewId.Diagnostics:
+                <DiagnosticsView />
+                break;
+
+            case ViewId.Settings:
+                <SettingsView />
+                break;
+        }
+    </main>
+</div>
+
+@code {
+    /// <inheritdoc />
+    protected override async Task OnInitializedAsync()
+    {
+        // Started here rather than in each host's startup, so every host connects the same way and a
+        // bug in one of them cannot be a bug in only one of them. The session's own lifetime belongs
+        // to the container that built it, which is why nothing is disposed here.
+        await Session.ConnectAsync();
+    }
+}

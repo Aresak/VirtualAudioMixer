@@ -1,0 +1,64 @@
+@inherits VamComponent
+
+@*
+    U20. Every strip against every bus, in one grid.
+
+    The per-strip send rows answer "where does this microphone go". This answers the question they
+    cannot: "who is feeding the stream", which is the one somebody asks thirty seconds before going
+    live, and which is otherwise sixteen clicks and a good memory.
+*@
+
+<aside class="ovl wide" role="dialog" aria-label="@L["mixer.matrix"]">
+    <div class="ohd">
+        <span class="nm">@L["mixer.matrix"]</span>
+        <button type="button" class="btn sm" @onclick="Shell.CloseOverlay">@L["common.close"]</button>
+    </div>
+
+    <div class="obody">
+        @if (Session.Console is not { } console || console.Channels.Count == 0)
+        {
+            <p class="sub">@L["mixer.noChannels"]</p>
+        }
+        else
+        {
+            <div class="tw">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>@L["common.channel"]</th>
+                            @foreach (BusState bus in console.Buses)
+                            {
+                                <th style="text-align:center">@bus.Name</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (ChannelState channel in console.Channels)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="swatch" style="display:inline-block;background:@Colour(channel);margin-right:7px"></span>
+                                    @channel.Name
+                                </td>
+
+                                @foreach (BusState bus in console.Buses)
+                                {
+                                    <td style="text-align:center">
+                                        <MatrixCell Channel="channel" Bus="bus" />
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <p class="note">@L["send.lockedWhy"]</p>
+        }
+    </div>
+</aside>
+
+@code {
+    static string Colour(ChannelState channel) =>
+        string.IsNullOrWhiteSpace(channel.Colour) ? StripPalette.For(channel.Index) : channel.Colour;
+}

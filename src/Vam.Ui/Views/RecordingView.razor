@@ -1,0 +1,137 @@
+@inherits VamComponent
+@inject IPlatformServices Platform
+
+<div class="view">
+    <div class="pad">
+        <h1>@L["recording.title"]</h1>
+        <p class="sub">
+            Every strip records to its own file, before the fader and before the automixer. What was
+            said in the room is recoverable whatever the mix did with it on the day.
+        </p>
+
+        @if (Recording is not { } recording)
+        {
+            <p class="sub">@L["mixer.notConnected"]</p>
+        }
+        else
+        {
+            <div class="card">
+                <div class="between">
+                    <span class="row">
+                        @if (recording.IsRecording)
+                        {
+                            <span class="dot rec"></span>
+                        }
+                        <span class="lbl">@(recording.IsRecording ? L["status.recording"] : L["status.idle"])</span>
+                    </span>
+
+                    @if (recording.IsRecording)
+                    {
+                        @*
+                            U8. Stopping ends a file that cannot be resumed, so it asks first and
+                            says what will happen rather than "are you sure".
+                        *@
+                        <ConfirmButton Label="@L["recording.stop"]"
+                                       Question="Stop recording? The files are closed and a new recording starts a new folder."
+                                       Confirmed="Stop" />
+                    }
+                    else
+                    {
+                        <button type="button" class="btn pri" @onclick="Start">@L["recording.start"]</button>
+                    }
+                </div>
+
+                <div class="kv" style="margin-top:14px">
+                    <span class="k">@L["recording.folder"]</span>
+                    <span class="v">@(recording.Directory.Length > 0 ? recording.Directory : directory)</span>
+                    <span class="k">@L["recording.written"]</span>
+                    <span class="v">@Duration(recording)</span>
+                    <span class="k">@L["recording.dropped"]</span>
+                    <span class="v @(recording.DroppedFrames == 0 ? "zero" : null)">@recording.DroppedFrames</span>
+                    <span class="k">@L["recording.free"]</span>
+                    <span class="v">@Gigabytes(recording.FreeBytes)</span>
+                </div>
+            </div>
+
+            <h2>@L["recording.folder"]</h2>
+
+            <div class="row">
+                <input type="text" @bind="directory" aria-label="@L["recording.folder"]" style="min-width:340px" />
+
+                @if (Platform.CanPickFolders)
+                {
+                    <button type="button" class="btn" @onclick="Pick">…</button>
+                }
+            </div>
+
+            @if (!Platform.CanPickFolders)
+            {
+                @*
+                    A browser cannot put up a native folder dialog, and the engine's disk is not the
+                    browser's disk anyway. Saying so beats a button that would do nothing.
+                *@
+                <p class="note">
+                    This console cannot open a folder picker, and the path belongs to the engine's
+                    machine rather than to this one. Type it as the engine would see it.
+                </p>
+            }
+
+            @if (refusal.Length > 0)
+            {
+                <p class="note" style="border-color:var(--bad);color:var(--bad)">@refusal</p>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    string directory = string.Empty;
+    string refusal = string.Empty;
+
+    RecordingState? Recording => Session.Console?.Recording;
+
+    string Duration(RecordingState recording)
+    {
+        if (Session.SampleRate <= 0)
+        {
+            return "—";
+        }
+
+        TimeSpan elapsed = TimeSpan.FromSeconds(recording.FramesWritten / (double)Session.SampleRate);
+
+        return elapsed.ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture);
+    }
+
+    static string Gigabytes(long bytes) =>
+        (bytes / (1024.0 * 1024 * 1024)).ToString("0.0", CultureInfo.InvariantCulture) + " GB";
+
+    async Task Pick()
+    {
+        if (await Platform.PickFolderAsync(L["recording.folder"]) is { } chosen)
+        {
+            directory = chosen;
+        }
+    }
+
+    async Task Start()
+    {
+        CommandReply reply = await Session.ApplyAsync(new Command
+        {
+            SetRecording = new SetRecording { Recording = true, Directory = directory }
+        });
+
+        // The disk's answer in the disk's own words. "There is room for forty minutes" is something
+        // an operator can act on before a meeting; "recording failed" is not.
+        refusal = reply.Accepted ? string.Empty : reply.Reason;
+    }
+
+    async Task Stop()
+    {
+        CommandReply reply = await Session.ApplyAsync(new Command
+        {
+            SetRecording = new SetRecording { Recording = false, Directory = string.Empty }
+        });
+
+        refusal = reply.Accepted ? string.Empty : reply.Reason;
+    }
+}

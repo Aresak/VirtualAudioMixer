@@ -1,0 +1,95 @@
+@inherits VamComponent
+@inject VamSessionOptions Options
+
+<div class="view">
+    <div class="pad">
+        <h1>@L["settings.title"]</h1>
+
+        <div class="grid2">
+            <div class="card">
+                <h2>@L["settings.language"]</h2>
+
+                <div class="row">
+                    @foreach (Language language in VamLocalizer.Available)
+                    {
+                        <button type="button"
+                                class="chip @(L.Current.Code == language.Code ? "on" : null)"
+                                @onclick="() => L.Use(language.Code)">
+                            @language.Name
+                        </button>
+                    }
+                </div>
+
+                @*
+                    U7. The engine stays in English: its log lines and its refusal messages are read
+                    by whoever ends up with a diagnostic bundle, and translating those would make a
+                    bug report harder to act on. The console is what an operator uses.
+                *@
+                <p class="note">
+                    This changes the console only. The engine's log stays in English so a diagnostic
+                    bundle reads the same wherever it is sent.
+                </p>
+            </div>
+
+            <div class="card">
+                <h2>@L["settings.engine"]</h2>
+
+                <div class="kv">
+                    <span class="k">Address</span>
+                    <span class="v">@Options.Address</span>
+                    <span class="k">@L["status.engine"]</span>
+                    <span class="v">@Session.ServerName</span>
+                    <span class="k">Protocol</span>
+                    <span class="v">@Options.ProtocolVersion</span>
+                    <span class="k">@L["status.rate"]</span>
+                    <span class="v">@Session.SampleRate Hz</span>
+                    <span class="k">@L["status.block"]</span>
+                    <span class="v">@Session.BlockFrames</span>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>@L["settings.density"]</h2>
+
+                <div class="row">
+                    <button type="button" class="chip @(Shell.IsCompact ? null : "on")" @onclick="() => Shell.IsCompact = false">
+                        @L["mixer.full"]
+                    </button>
+                    <button type="button" class="chip @(Shell.IsCompact ? "on" : null)" @onclick="() => Shell.IsCompact = true">
+                        @L["mixer.compact"]
+                    </button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>@L["settings.about"]</h2>
+
+                <p class="sub" style="margin-bottom:10px">
+                    VAM. A mixing console for a room where a meeting is being recorded and streamed.
+                </p>
+
+                <div class="kv">
+                    <span class="k">Engine</span>
+                    <span class="v">AGPL-3.0 with a linking exception</span>
+                    <span class="k">Console</span>
+                    <span class="v">MPL-2.0</span>
+                    <span class="k">Protocol</span>
+                    <span class="v">Apache-2.0</span>
+                    <span class="k">Modifier API</span>
+                    <span class="v">Apache-2.0</span>
+                </div>
+
+                @*
+                    The exception is the point of the arrangement and is worth stating where somebody
+                    might look: a modifier written against the API is the author's own, and the
+                    console can be shipped through an app store without the licence fighting the
+                    terms.
+                *@
+                <p class="note">
+                    A modifier written against the modifier API belongs to whoever wrote it. The
+                    exception exists so that stays true.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>

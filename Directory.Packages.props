@@ -26,6 +26,10 @@
     <PackageVersion Include="Grpc.AspNetCore" Version="2.83.0" />
   </ItemGroup>
 
+  <ItemGroup Label="Client">
+    <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.0" />
+  </ItemGroup>
+
   <ItemGroup Label="Testing">
     <PackageVersion Include="xunit.v3" Version="4.0.0" />
   </ItemGroup>

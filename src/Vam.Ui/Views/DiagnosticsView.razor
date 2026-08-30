@@ -1,0 +1,259 @@
+@inherits VamComponent
+@implements IDisposable
+
+@*
+    EPIC-11. K1 to K7, and nothing else.
+
+    Every panel here answers a question somebody asks after a meeting has gone wrong: what was
+    clocking the graph, whether a device was drifting, when the dropouts happened, whether the
+    callback was near its budget, whether the audio thread allocated, which modifier was expensive,
+    and what the log said. A panel that does not answer one of those does not belong on this page.
+*@
+
+<div class="view">
+    <div class="pad">
+        <h1>@L["diag.title"]</h1>
+        <p class="sub">
+            Polled while this view is open and not otherwise. An operator running a meeting is not
+            paying for a drift chart nobody is looking at.
+        </p>
+
+        @if (report is not { } state)
+        {
+            <p class="sub">@L["mixer.notConnected"]</p>
+        }
+        else
+        {
+            <div class="grid2">
+                @* K1 *@
+                <div class="card">
+                    <h2>@L["diag.clock"]</h2>
+                    <div class="kv">
+                        <span class="k">Source</span>
+                        <span class="v">@(state.Clock.IsTimerFallback ? "fallback timer" : state.Clock.SourceName)</span>
+                        <span class="k">Nominal</span>
+                        <span class="v">@state.Clock.NominalRate.ToString("0", CultureInfo.InvariantCulture) Hz</span>
+                        <span class="k">Measured</span>
+                        <span class="v">@state.Clock.MeasuredRate.ToString("0.000", CultureInfo.InvariantCulture) Hz</span>
+                        <span class="k">@L["status.block"]</span>
+                        <span class="v">@state.Clock.BlockFrames</span>
+                    </div>
+
+                    @if (state.Clock.IsTimerFallback)
+                    {
+                        <p class="note">
+                            No output device is left, so a timer is keeping the graph running. The
+                            session survives; nothing that plays sound is clocking it.
+                        </p>
+                    }
+                </div>
+
+                @* K5. The row that has to read zero. *@
+                <div class="card">
+                    <h2>@L["diag.gc"]</h2>
+                    <div class="kv">
+                        <span class="k">@L["diag.audioThread"]</span>
+                        <span class="v @(state.Allocations.AudioThreadBytes == 0 ? "zero" : null)">
+                            @state.Allocations.AudioThreadBytes B
+                        </span>
+                        <span class="k">Gen 0 / 1 / 2</span>
+                        <span class="v">
+                            @state.Allocations.Gen0Collections / @state.Allocations.Gen1Collections / @state.Allocations.Gen2Collections
+                        </span>
+                        <span class="k">Managed</span>
+                        <span class="v">@Megabytes(state.Allocations.TotalManagedBytes)</span>
+                        <span class="k">Pause</span>
+                        <span class="v">@state.Allocations.LongestPauseMs.ToString("0.0", CultureInfo.InvariantCulture) ms</span>
+                    </div>
+
+                    <p class="note">
+                        The first row is the one that matters. Rule 1 says nothing in the audio path
+                        allocates; a test asserts it on a quiet machine and this asserts it on a real
+                        one. If it is ever not zero, that is the bug.
+                    </p>
+                </div>
+
+                @* K4 *@
+                <div class="card">
+                    <h2>@L["diag.callbacks"]</h2>
+                    <Histogram Buckets="state.Callbacks.Buckets" BucketWidth="state.Callbacks.BucketWidthFraction" />
+                    <div class="kv" style="margin-top:10px">
+                        <span class="k">Worst</span>
+                        <span class="v">@Percent(state.Callbacks.WorstFraction)</span>
+                        <span class="k">Over budget</span>
+                        <span class="v @(state.Callbacks.Overruns == 0 ? "zero" : null)">@state.Callbacks.Overruns</span>
+                    </div>
+                </div>
+
+                @* K2 *@
+                <div class="card">
+                    <h2>@L["diag.drift"]</h2>
+                    <DriftChart Points="state.Drift" Names="ChannelNames" />
+                </div>
+            </div>
+
+            @* K3 *@
+            <h2>@L["diag.dropouts"]</h2>
+
+            @if (state.Dropouts.Count == 0)
+            {
+                <p class="sub">@L["diag.noDropouts"]</p>
+            }
+            else
+            {
+                <div class="tw">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>When</th>
+                                <th>Endpoint</th>
+                                <th>Kind</th>
+                                <th>Frames</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (DropoutEntry entry in state.Dropouts.AsEnumerable().Reverse())
+                            {
+                                <tr>
+                                    <td class="mono">@When(entry.TimestampTicks)</td>
+                                    <td>@entry.Endpoint</td>
+                                    <td><span class="pill warn">@entry.Kind</span></td>
+                                    <td class="mono">@entry.Frames</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @* K6 *@
+            <h2>@L["diag.cost"]</h2>
+
+            <div class="tw">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>@L["common.channel"]</th>
+                            <th>Modifier</th>
+                            <th>Average</th>
+                            <th>Worst</th>
+                            <th>Over budget</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (ModifierCostState cost in state.Costs)
+                        {
+                            <tr>
+                                <td>@NameOf(cost.ChannelIndex)</td>
+                                <td>
+                                    @cost.ModifierId
+                                    @if (cost.IsSwitchedOut)
+                                    {
+                                        <span class="pill idle">@L["strip.bypassed"]</span>
+                                    }
+                                </td>
+                                <td class="mono">@Percent(cost.AverageFraction)</td>
+                                <td class="mono">@Percent(cost.WorstFraction)</td>
+                                <td class="mono @(cost.Overruns == 0 ? "zero" : null)">@cost.Overruns</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @* K7 *@
+            <h2>@L["diag.log"]</h2>
+
+            <div class="row">
+                <input type="text" @bind="filter" @bind:event="oninput" placeholder="filter" aria-label="@L["diag.log"]" />
+                <span class="chip">@Filtered(state).Count</span>
+            </div>
+
+            <div class="card mono" style="margin-top:10px;max-height:340px;overflow:auto;font-size:11.5px">
+                @foreach (LogLine line in Filtered(state))
+                {
+                    <div>
+                        <span style="color:var(--ink-mute)">@When(line.TimestampTicks)</span>
+                        <span style="color:@LevelColour(line.Level)"> @line.Level </span>
+                        <span>@line.Message</span>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(1);
+
+    DiagnosticsState? report;
+    PeriodicTimer? timer;
+    CancellationTokenSource? polling;
+    string filter = string.Empty;
+
+    /// <inheritdoc />
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+
+        polling = new CancellationTokenSource();
+        timer = new PeriodicTimer(PollInterval);
+
+        _ = PollAsync(polling.Token);
+    }
+
+    /// <inheritdoc />
+    protected override void Dispose(bool disposing)
+    {
+        polling?.Cancel();
+        polling?.Dispose();
+        timer?.Dispose();
+    }
+
+    async Task PollAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            do
+            {
+                report = await Session.GetDiagnosticsAsync(cancellationToken);
+
+                await InvokeAsync(StateHasChanged);
+            }
+            while (timer is not null && await timer.WaitForNextTickAsync(cancellationToken));
+        }
+        catch (OperationCanceledException)
+        {
+            // The view was closed. That is the only way this loop ends.
+        }
+    }
+
+    IReadOnlyList<string> ChannelNames =>
+        Session.Console?.Channels.Select(channel => channel.Name).ToList() ?? [];
+
+    string NameOf(int index) =>
+        Session.Console is { } console && index < console.Channels.Count
+            ? console.Channels[index].Name
+            : $"#{index}";
+
+    IReadOnlyList<LogLine> Filtered(DiagnosticsState state) =>
+        filter.Length == 0
+            ? state.Log
+            : [.. state.Log.Where(line => line.Message.Contains(filter, StringComparison.OrdinalIgnoreCase))];
+
+    static string When(long ticks) =>
+        new DateTime(ticks, DateTimeKind.Utc).ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+
+    static string Percent(double fraction) =>
+        (fraction * 100).ToString("0.0", CultureInfo.InvariantCulture) + "%";
+
+    static string Megabytes(long bytes) =>
+        (bytes / (1024.0 * 1024)).ToString("0.0", CultureInfo.InvariantCulture) + " MB";
+
+    static string LevelColour(string level) => level switch
+    {
+        "Error" or "Fatal" => "var(--bad)",
+        "Warn" => "var(--warn)",
+        _ => "var(--ink-mute)"
+    };
+}

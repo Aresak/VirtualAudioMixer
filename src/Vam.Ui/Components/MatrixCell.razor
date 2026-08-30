@@ -1,0 +1,44 @@
+@inherits VamComponent
+
+<button type="button"
+        class="chip @(IsExcluded ? "bad" : IsOn ? "on" : null)"
+        title="@(IsExcluded ? L["send.lockedWhy"] : Bus.Name)"
+        @onclick="Toggle">
+    @(IsExcluded ? "N−1" : IsOn ? "●" : "○")
+</button>
+
+@code {
+    /// <summary>The strip this cell is on.</summary>
+    [Parameter]
+    [EditorRequired]
+    public required ChannelState Channel { get; set; }
+
+    /// <summary>The bus this cell is under.</summary>
+    [Parameter]
+    [EditorRequired]
+    public required BusState Bus { get; set; }
+
+    bool IsExcluded => Bus.ExcludedChannels.Contains(Channel.Index);
+
+    bool IsOn => Session.Console?.Sends
+        .FirstOrDefault(send => send.ChannelIndex == Channel.Index && send.BusIndex == Bus.Index)?.State == "On";
+
+    async Task Toggle()
+    {
+        if (IsExcluded)
+        {
+            return;
+        }
+
+        await Session.ApplyAsync(new Command
+        {
+            SetSend = new SetSend
+            {
+                ChannelIndex = Channel.Index,
+                BusIndex = Bus.Index,
+                On = !IsOn,
+                Decibels = 0
+            }
+        });
+    }
+}

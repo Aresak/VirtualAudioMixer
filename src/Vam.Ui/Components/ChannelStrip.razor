@@ -1,0 +1,219 @@
+@inherits VamComponent
+
+@*
+    One input strip. The thing an operator actually uses, so everything on it is either something
+    they change during a meeting or something they need to see without asking for it.
+
+    The meter, the gain-reduction bar, the automix share and the speaking dot are all written by
+    wwwroot/js/vam-meters.js from the packed frame. None of them is in this markup, and none of them
+    causes a render.
+*@
+
+<div class="strip @StateClass"
+     draggable="@(Shell.IsReorderArmed ? "true" : "false")"
+     @ondragstart="OnDragStart"
+     @ondragover:preventDefault="true"
+     @ondrop="OnDrop">
+
+    <div class="top" style="background:@Colour"></div>
+
+    <div class="hd" @onclick="Open" title="@Channel.DeviceName">
+        @if (Shell.IsReorderArmed)
+        {
+            <span class="grip" aria-hidden="true">⠿</span>
+        }
+        <span style="min-width:0">
+            <span class="nm">@Channel.Name</span>
+            <span class="dev">@DeviceLine</span>
+        </span>
+    </div>
+
+    @*
+        U19. The measured rate beside the nominal one, and the drift in parts per million. An
+        operator does not need to know what a servo is; they need to be able to say "that microphone
+        is the one that is wrong" when a recording goes out of sync.
+    *@
+    <div class="rate">
+        <span>@RateText</span>
+        <span>@DriftText</span>
+    </div>
+
+    @if (Channel.ParticipatesInAutomix)
+    {
+        <div class="ax">
+            <div class="axtop">
+                <span class="spk" data-vam-speaking="@Channel.Index" aria-hidden="true"></span>
+                <div class="axbar" title="@L["automix.share"]">
+                    <i data-vam-share="@Channel.Index"></i>
+                </div>
+            </div>
+            <div class="axscale">
+                <span>@DepthText</span>
+                <b>0</b>
+            </div>
+        </div>
+    }
+
+    <div class="chainbar" @onclick="Open" title="@ChainTitle">
+        @if (Channel.Chain.Count == 0)
+        {
+            <span class="seg byp"></span>
+        }
+        else
+        {
+            @foreach (ModifierState link in Channel.Chain)
+            {
+                <span class="seg @(link.IsBypassed ? "byp" : null)"></span>
+            }
+        }
+        <span class="n">@Channel.Chain.Count</span>
+    </div>
+
+    <div class="mf">
+        <canvas class="meter" data-vam-meter="@Channel.Index" aria-hidden="true"></canvas>
+
+        <div class="fader">
+            <div class="unity" aria-hidden="true"></div>
+            <input type="range"
+                   min="0" max="1000" step="1"
+                   value="@Position"
+                   aria-label="@(Channel.Name + " " + L["strip.fader"])"
+                   @oninput="OnFader" />
+        </div>
+
+        <canvas class="gr" data-vam-gr="@Channel.Index" aria-hidden="true"></canvas>
+    </div>
+
+    <div class="val">@FaderScale.Format(Channel.FaderDb)</div>
+
+    @if (!Shell.IsCompact)
+    {
+        <div class="sends">
+            @foreach (BusState bus in Buses)
+            {
+                <SendButton Channel="Channel" Bus="bus" />
+            }
+        </div>
+    }
+
+    <div class="msm">
+        <b class="m @(Channel.IsMuted ? "on" : null)"
+           role="button" tabindex="0"
+           title="@L["strip.mute"]"
+           @onclick="ToggleMute">@L["strip.mute"]</b>
+
+        <b class="s @(Channel.IsSoloed ? "on" : null)"
+           role="button" tabindex="0"
+           title="@L["strip.solo"]"
+           @onclick="ToggleSolo">@L["strip.solo"]</b>
+
+        <b class="o" role="button" tabindex="0" @onclick="Open">@L["strip.options"]</b>
+    </div>
+</div>
+
+@code {
+    /// <summary>The strip to draw.</summary>
+    [Parameter]
+    [EditorRequired]
+    public required ChannelState Channel { get; set; }
+
+    /// <summary>The buses it can send to.</summary>
+    [Parameter]
+    public IReadOnlyList<BusState> Buses { get; set; } = [];
+
+    /// <summary>Raised when a drag ends on this strip. U13.</summary>
+    [Parameter]
+    public EventCallback<(int From, int To)> Reordered { get; set; }
+
+    string StateClass
+    {
+        get
+        {
+            List<string> classes = [];
+
+            if (Shell.SelectedChannel == Channel.Index && Shell.Overlay == OverlayId.Channel)
+            {
+                classes.Add("sel");
+            }
+
+            // U16. A muted strip desaturates whole rather than growing a small badge, so it reads as
+            // off from the other side of a room.
+            if (Channel.IsMuted)
+            {
+                classes.Add("muted");
+            }
+
+            if (Channel.DeviceState is "Absent" or "Faulted")
+            {
+                classes.Add("absent");
+            }
+
+            return string.Join(' ', classes);
+        }
+    }
+
+    // U5. Falls back to a stable colour derived from the index rather than to grey, so a console
+    // nobody has coloured is still one where the strips are told apart at a glance.
+    string Colour => string.IsNullOrWhiteSpace(Channel.Colour) ? StripPalette.For(Channel.Index) : Channel.Colour;
+
+    string DeviceLine => Channel.DeviceState switch
+    {
+        "Absent" => L["strip.absent"],
+        "Faulted" => L["strip.faulted"],
+        _ => Channel.DeviceName
+    };
+
+    string RateText => Channel.MeasuredSampleRate > 0
+        ? (Channel.MeasuredSampleRate / 1000.0).ToString("0.000", CultureInfo.InvariantCulture)
+        : "—";
+
+    string DriftText => Channel.MeasuredSampleRate > 0
+        ? Channel.DriftPpm.ToString("+0;-0;0", CultureInfo.InvariantCulture) + "p"
+        : string.Empty;
+
+    string DepthText => Session.Console?.Automix is { } automix
+        ? automix.DepthDb.ToString("0", CultureInfo.InvariantCulture)
+        : "-15";
+
+    string ChainTitle =>
+        $"{L["strip.chain"]}: {Channel.Chain.Count(link => !link.IsBypassed)}/{Channel.Chain.Count}";
+
+    int Position => (int)Math.Round(FaderScale.ToPosition(Channel.FaderDb) * 1000);
+
+    void Open() => Shell.OpenChannel(Channel.Index);
+
+    async Task OnFader(ChangeEventArgs arguments)
+    {
+        if (!double.TryParse(arguments.Value?.ToString(), CultureInfo.InvariantCulture, out double raw))
+        {
+            return;
+        }
+
+        double decibels = FaderScale.ToDecibels(raw / 1000.0);
+
+        await Session.ApplyAsync(new Command
+        {
+            SetFader = new SetFader { ChannelIndex = Channel.Index, Decibels = decibels }
+        });
+    }
+
+    Task ToggleMute() => SetFlag("Muted", !Channel.IsMuted);
+
+    Task ToggleSolo() => SetFlag("Soloed", !Channel.IsSoloed);
+
+    async Task SetFlag(string flag, bool enabled) =>
+        await Session.ApplyAsync(new Command
+        {
+            SetFlag = new SetFlag { ChannelIndex = Channel.Index, Flag = flag, Enabled = enabled }
+        });
+
+    void OnDragStart() => Shell.SelectedChannel = Channel.Index;
+
+    async Task OnDrop()
+    {
+        if (Shell.IsReorderArmed && Shell.SelectedChannel >= 0 && Shell.SelectedChannel != Channel.Index)
+        {
+            await Reordered.InvokeAsync((Shell.SelectedChannel, Channel.Index));
+        }
+    }
+}

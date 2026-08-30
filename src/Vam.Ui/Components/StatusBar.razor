@@ -1,0 +1,100 @@
+@inherits VamComponent
+
+@*
+    U1. The five things an operator glances at without stopping what they are doing: whether the
+    console is talking to an engine, what the clock is doing, how many dropouts there have been, and
+    whether it is recording. Everything else is a click away; these are never more than a look away.
+*@
+
+<header class="statusbar">
+    <div class="brand"><b>@L["app.name"]</b></div>
+
+    <div class="stat">
+        <span class="dot @ConnectionDotClass"></span>
+        <span class="k">@L["status.engine"]</span>
+        <span class="v">@ConnectionText</span>
+    </div>
+
+    <div class="stat">
+        <span class="k">@L["status.rate"]</span>
+        <span class="v">@RateText</span>
+    </div>
+
+    <div class="stat">
+        <span class="k">@L["status.block"]</span>
+        <span class="v">@BlockText</span>
+    </div>
+
+    @*
+        Zero is drawn green rather than grey. A dropout count is the one number on this bar that is
+        good news when it is nothing, and an operator should be able to confirm that from a distance.
+    *@
+    <div class="stat">
+        <span class="k">@L["status.dropouts"]</span>
+        <span class="v @(Dropouts == 0 ? "zero" : "")">@Dropouts</span>
+    </div>
+
+    @if (Recording is { IsRecording: true })
+    {
+        <div class="stat">
+            <span class="dot rec"></span>
+            <span class="k">@L["status.recording"]</span>
+            <span class="v">@RecordedText</span>
+        </div>
+    }
+
+    <div class="stat grow">
+        @if (Session.StatusMessage.Length > 0)
+        {
+            <span class="chip bad">@Session.StatusMessage</span>
+        }
+        <span class="chip">@Session.ServerName</span>
+    </div>
+</header>
+
+@code {
+    RecordingState? Recording => Session.Console?.Recording;
+
+    string ConnectionDotClass => Session.Connection switch
+    {
+        ConnectionState.Connected => string.Empty,
+        ConnectionState.Refused => "bad",
+        _ => "rec"
+    };
+
+    string ConnectionText => Session.Connection switch
+    {
+        ConnectionState.Connected => L["status.connected"],
+        ConnectionState.Connecting => L["status.connecting"],
+        ConnectionState.Reconnecting => L["status.reconnecting"],
+        ConnectionState.Refused => L["status.refused"],
+        _ => L["status.offline"]
+    };
+
+    string RateText => Session.SampleRate > 0
+        ? (Session.SampleRate / 1000.0).ToString("0.#", CultureInfo.InvariantCulture) + " kHz"
+        : "—";
+
+    string BlockText => Session.BlockFrames > 0 && Session.SampleRate > 0
+        ? Session.BlockFrames + " · " + (Session.BlockFrames * 1000.0 / Session.SampleRate).ToString("0.0", CultureInfo.InvariantCulture) + " ms"
+        : "—";
+
+    // Counted from the engine's own event stream rather than kept by the console, so a console that
+    // reconnects halfway through a meeting shows what the engine has seen and not what it has.
+    int Dropouts => Session.Events.Count(engineEvent => engineEvent.Kind == "dropout");
+
+    string RecordedText
+    {
+        get
+        {
+            if (Recording is null || Session.SampleRate <= 0)
+            {
+                return "—";
+            }
+
+            TimeSpan elapsed = TimeSpan.FromSeconds(Recording.FramesWritten / (double)Session.SampleRate);
+
+            return elapsed.ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture);
+        }
+    }
+}

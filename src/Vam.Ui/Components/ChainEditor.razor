@@ -1,0 +1,167 @@
+@inherits VamComponent
+
+@*
+    B0's chain, in the order it runs.
+
+    Order is the configuration, not an incidental list order: a gate before a denoise and a gate
+    after one are different microphones. That is why this is a reorderable list rather than a fixed
+    row of five letters with tick boxes.
+*@
+
+<div class="sends" style="padding:0">
+    @for (int index = 0; index < Channel.Chain.Count; index++)
+    {
+        int position = index;
+        ModifierState link = Channel.Chain[index];
+
+        <div class="card" style="padding:8px 10px;margin-bottom:6px"
+             draggable="true"
+             @ondragstart="() => dragging = position"
+             @ondragover:preventDefault="true"
+             @ondrop="() => Move(position)">
+
+            <div class="between">
+                <span class="lbl">@link.Name</span>
+
+                <span class="row" style="gap:6px">
+                    <span class="mono" style="font-size:10.5px;color:var(--ink-mute)"
+                          title="@L["diag.cost"]">@Cost(link)</span>
+
+                    <button type="button"
+                            class="chip @(link.IsBypassed ? null : "on")"
+                            @onclick="() => ToggleBypass(position, link)">
+                        @(link.IsBypassed ? L["strip.bypassed"] : L["common.on"])
+                    </button>
+
+                    <button type="button" class="btn sm danger" @onclick="() => Remove(position)">×</button>
+                </span>
+            </div>
+
+            @foreach (ParameterState parameter in link.Parameters)
+            {
+                <div class="knob">
+                    <div class="between">
+                        <span>@parameter.Name</span>
+                        <span class="mono">@Format(parameter)</span>
+                    </div>
+                    <input type="range"
+                           min="@parameter.Minimum" max="@parameter.Maximum" step="@Step(parameter)"
+                           value="@parameter.Value"
+                           aria-label="@(link.Name + " " + parameter.Name)"
+                           @oninput="argument => SetParameter(position, parameter, argument)" />
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<div class="row">
+    <select @bind="adding" aria-label="@L["mixer.add"]">
+        <option value="">—</option>
+        @foreach (ModifierDescriptorState descriptor in Session.Modifiers)
+        {
+            <option value="@descriptor.Id">@descriptor.Name</option>
+        }
+    </select>
+
+    <button type="button" class="btn" disabled="@(adding.Length == 0)" @onclick="Add">@L["mixer.add"]</button>
+</div>
+
+@code {
+    string adding = string.Empty;
+    int dragging = -1;
+
+    /// <summary>The strip whose chain this is.</summary>
+    [Parameter]
+    [EditorRequired]
+    public required ChannelState Channel { get; set; }
+
+    static string Format(ParameterState parameter) =>
+        parameter.Value.ToString("0.##", CultureInfo.InvariantCulture)
+        + (parameter.Unit.Length > 0 ? " " + parameter.Unit : string.Empty);
+
+    static string Step(ParameterState parameter)
+    {
+        double span = parameter.Maximum - parameter.Minimum;
+
+        // A thousand steps across whatever the range happens to be. A fixed step of 0.1 is far too
+        // coarse for a ratio and far too fine for a frequency that runs to twenty thousand.
+        return (span <= 0 ? 0.01 : span / 1000.0).ToString("0.#####", CultureInfo.InvariantCulture);
+    }
+
+    static string Cost(ModifierState link) =>
+        (link.CostFraction * 100).ToString("0.0", CultureInfo.InvariantCulture) + "%";
+
+    async Task ToggleBypass(int index, ModifierState link) =>
+        await Session.ApplyAsync(new Command
+        {
+            SetModifierBypass = new SetModifierBypass
+            {
+                ChannelIndex = Channel.Index,
+                LinkIndex = index,
+                Bypassed = !link.IsBypassed
+            }
+        });
+
+    async Task SetParameter(int index, ParameterState parameter, ChangeEventArgs arguments)
+    {
+        if (!double.TryParse(arguments.Value?.ToString(), CultureInfo.InvariantCulture, out double value))
+        {
+            return;
+        }
+
+        await Session.ApplyAsync(new Command
+        {
+            SetModifierParameter = new SetModifierParameter
+            {
+                ChannelIndex = Channel.Index,
+                LinkIndex = index,
+                ParameterId = parameter.Id,
+                Value = value
+            }
+        });
+    }
+
+    async Task Remove(int index) =>
+        await Session.ApplyAsync(new Command
+        {
+            RemoveModifier = new RemoveModifier { ChannelIndex = Channel.Index, LinkIndex = index }
+        });
+
+    async Task Move(int to)
+    {
+        if (dragging < 0 || dragging == to)
+        {
+            return;
+        }
+
+        int from = dragging;
+
+        dragging = -1;
+
+        await Session.ApplyAsync(new Command
+        {
+            MoveModifier = new MoveModifier { ChannelIndex = Channel.Index, FromIndex = from, ToIndex = to }
+        });
+    }
+
+    async Task Add()
+    {
+        if (adding.Length == 0)
+        {
+            return;
+        }
+
+        await Session.ApplyAsync(new Command
+        {
+            AddModifier = new AddModifier
+            {
+                ChannelIndex = Channel.Index,
+                ModifierId = adding,
+                AtIndex = Channel.Chain.Count
+            }
+        });
+
+        adding = string.Empty;
+    }
+}

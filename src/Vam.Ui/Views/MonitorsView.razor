@@ -1,0 +1,85 @@
+@inherits VamComponent
+
+@*
+    D5. A monitor bus is an output bus with a different role, and the console says so rather than
+    pretending it is a separate kind of thing. What makes it a monitor is where it goes and what it
+    is allowed to hear, and both of those are visible here.
+*@
+
+<div class="view">
+    <div class="pad">
+        <h1>@L["view.monitors"]</h1>
+        <p class="sub">
+            A monitor is a bus whose audio goes to somebody in the room rather than out of it. It
+            obeys solo, and mix-minus keeps it from feeding a voice back to the person making it.
+        </p>
+
+        @if (Monitors.Count == 0)
+        {
+            <p class="sub">No monitor buses. Add one from the mixer.</p>
+        }
+        else
+        {
+            <div class="grid2">
+                @foreach (BusState bus in Monitors)
+                {
+                    <div class="card">
+                        <div class="between">
+                            <h2 style="margin:0;border:none;padding:0">@bus.Name</h2>
+                            <span class="pill @(bus.IsMuted ? "bad" : "ok")">
+                                @(bus.IsMuted ? L["common.off"] : L["common.on"])
+                            </span>
+                        </div>
+
+                        <div class="kv" style="margin-top:10px">
+                            <span class="k">@L["bus.output"]</span>
+                            <span class="v">@OutputName(bus)</span>
+                            <span class="k">@L["bus.gain"]</span>
+                            <span class="v">@FaderScale.Format(bus.GainDb) dB</span>
+                            <span class="k">@L["send.locked"]</span>
+                            <span class="v">@bus.ExcludedChannels.Count</span>
+                        </div>
+
+                        <div class="row" style="margin-top:12px">
+                            <button type="button" class="btn" @onclick="() => Open(bus)">@L["strip.options"]</button>
+                            <button type="button" class="btn" @onclick="() => ToggleMute(bus)">@L["strip.mute"]</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    IReadOnlyList<BusState> Monitors =>
+        Session.Console?.Buses
+            .Where(bus => bus.Role.Equals("Monitor", StringComparison.OrdinalIgnoreCase))
+            .ToList()
+        ?? [];
+
+    string OutputName(BusState bus)
+    {
+        foreach (DeviceInfo device in Session.Devices)
+        {
+            if (device.Id == bus.OutputDeviceId)
+            {
+                return device.Name;
+            }
+        }
+
+        return bus.OutputDeviceId.Length == 0 ? L["bus.none"] : bus.OutputDeviceId;
+    }
+
+    void Open(BusState bus)
+    {
+        Shell.View = ViewId.Mixer;
+        Shell.OpenBus(bus.Index);
+    }
+
+    async Task ToggleMute(BusState bus) =>
+        await Session.ApplyAsync(new Command
+        {
+            SetBusMuted = new SetBusMuted { BusIndex = bus.Index, Muted = !bus.IsMuted }
+        });
+}

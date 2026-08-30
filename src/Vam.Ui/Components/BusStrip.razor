@@ -1,0 +1,82 @@
+@inherits VamComponent
+
+@*
+    A bus. Narrower than an input strip and deliberately so: a bus is something an operator sets up
+    once and then watches, not something they ride during a meeting.
+*@
+
+<div class="strip @(Bus.IsMuted ? "muted" : null) @(IsSelected ? "sel" : null)" style="width:96px;flex-basis:96px">
+    <div class="top" style="background:@Colour"></div>
+
+    <div class="hd" @onclick="Open">
+        <span style="min-width:0">
+            <span class="nm">@Bus.Name</span>
+            <span class="dev">@RoleText · @Bus.ChannelCount ch</span>
+        </span>
+    </div>
+
+    <div class="mf">
+        <canvas class="meter" data-vam-bus="@Bus.Index" aria-hidden="true"></canvas>
+
+        <div class="fader">
+            <div class="unity" aria-hidden="true"></div>
+            <input type="range"
+                   min="0" max="1000" step="1"
+                   value="@Position"
+                   aria-label="@(Bus.Name + " " + L["bus.gain"])"
+                   @oninput="OnGain" />
+        </div>
+    </div>
+
+    <div class="val">@FaderScale.Format(Bus.GainDb)</div>
+
+    <div class="msm" style="grid-template-columns:1fr 1fr">
+        <b class="m @(Bus.IsMuted ? "on" : null)" role="button" tabindex="0" @onclick="ToggleMute">@L["strip.mute"]</b>
+        <b class="o" role="button" tabindex="0" @onclick="Open">@L["strip.options"]</b>
+    </div>
+</div>
+
+@code {
+    /// <summary>The bus to draw.</summary>
+    [Parameter]
+    [EditorRequired]
+    public required BusState Bus { get; set; }
+
+    bool IsSelected => Shell.Overlay == OverlayId.Bus && Shell.SelectedBus == Bus.Index;
+
+    string RoleText => L["bus.role." + Bus.Role.ToLowerInvariant()];
+
+    string Colour => string.IsNullOrWhiteSpace(Bus.Colour)
+        ? Bus.Role.ToLowerInvariant() switch
+        {
+            // The roles are coloured apart because confusing them is the expensive mistake: a stream
+            // bus goes out of the building and a monitor bus goes into somebody's ear.
+            "monitor" => "#d6a64a",
+            "stream" => "#9b8cd9",
+            _ => "#39b9ae"
+        }
+        : Bus.Colour;
+
+    int Position => (int)Math.Round(FaderScale.ToPosition(Bus.GainDb) * 1000);
+
+    void Open() => Shell.OpenBus(Bus.Index);
+
+    async Task OnGain(ChangeEventArgs arguments)
+    {
+        if (!double.TryParse(arguments.Value?.ToString(), CultureInfo.InvariantCulture, out double raw))
+        {
+            return;
+        }
+
+        await Session.ApplyAsync(new Command
+        {
+            SetBusGain = new SetBusGain { BusIndex = Bus.Index, Decibels = FaderScale.ToDecibels(raw / 1000.0) }
+        });
+    }
+
+    async Task ToggleMute() =>
+        await Session.ApplyAsync(new Command
+        {
+            SetBusMuted = new SetBusMuted { BusIndex = Bus.Index, Muted = !Bus.IsMuted }
+        });
+}
