@@ -4,10 +4,7 @@
 <div class="view">
     <div class="pad">
         <h1>@L["recording.title"]</h1>
-        <p class="sub">
-            Every strip records to its own file, before the fader and before the automixer. What was
-            said in the room is recoverable whatever the mix did with it on the day.
-        </p>
+        <p class="sub">@L["recording.sub"]</p>
 
         @if (Recording is not { } recording)
         {
@@ -32,7 +29,7 @@
                             says what will happen rather than "are you sure".
                         *@
                         <ConfirmButton Label="@L["recording.stop"]"
-                                       Question="Stop recording? The files are closed and a new recording starts a new folder."
+                                       Question="@L["recording.stopWhy"]"
                                        Confirmed="Stop" />
                     }
                     else
@@ -53,6 +50,59 @@
                 </div>
             </div>
 
+            <h2>@L["recording.captured"]</h2>
+
+            <div class="grid2">
+                <div class="card">
+                    @*
+                        E3. What is captured, stated rather than assumed. The raw inputs are the
+                        record: if the automixer misbehaves during a session, the session is still
+                        recoverable afterwards, and for a public body the multitrack is the record.
+                    *@
+                    @*
+                        Stated, not offered. Both are true and neither is a switch yet, and drawing
+                        them as switches that cannot be moved would be a control that teaches an
+                        operator the console is broken.
+                    *@
+                    <div class="kv">
+                        <span class="k">
+                            @L.Format("recording.allInputs", Channels)
+                            <InlineHelp Title="@L["recording.captured"]" Body="@L["help.rawInputs"]" />
+                        </span>
+                        <span class="v"><span class="pill ok">@L["common.on"]</span></span>
+
+                        <span class="k">
+                            @L["recording.startWithEngine"]
+                            <InlineHelp Title="@L["recording.startWithEngine"]" Body="@L["help.autoStart"]" />
+                        </span>
+                        <span class="v"><span class="pill ok">@L["common.on"]</span></span>
+                    </div>
+
+                    <p class="note">@L["recording.fixedWhy"]</p>
+                </div>
+
+                <div class="card">
+                    @* E5. *@
+                    <b class="lbl" style="font-size:13px">@L["recording.diskGuard"]</b>
+
+                    <div class="knob" style="margin-top:12px">
+                        <div class="between">
+                            <span>@L["recording.free"]</span>
+                            <span class="mono">@Gigabytes(recording.FreeBytes)</span>
+                        </div>
+                        <div class="slider"><i style="width:@(DiskBar(recording))%"></i></div>
+                    </div>
+
+                    <p class="sub" style="margin:10px 0 0">@L["recording.guardWhy"]</p>
+
+                    <div class="row" style="margin-top:12px">
+                        <span class="pill @(HoursLeft(recording) > 4 ? "ok" : "warn")">
+                            @L.Format("recording.roomFor", HoursLeft(recording).ToString("0.0", CultureInfo.InvariantCulture))
+                        </span>
+                    </div>
+                </div>
+            </div>
+
             <h2>@L["recording.folder"]</h2>
 
             <div class="row">
@@ -70,10 +120,7 @@
                     A browser cannot put up a native folder dialog, and the engine's disk is not the
                     browser's disk anyway. Saying so beats a button that would do nothing.
                 *@
-                <p class="note">
-                    This console cannot open a folder picker, and the path belongs to the engine's
-                    machine rather than to this one. Type it as the engine would see it.
-                </p>
+                <p class="note">@L["recording.noPicker"]</p>
             }
 
             @if (refusal.Length > 0)
@@ -102,8 +149,26 @@
         return elapsed.ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture);
     }
 
+    int Channels => Session.Console?.Channels.Count ?? 0;
+
     static string Gigabytes(long bytes) =>
         (bytes / (1024.0 * 1024 * 1024)).ToString("0.0", CultureInfo.InvariantCulture) + " GB";
+
+    /// <summary>Bytes a second, for every track being written.</summary>
+    /// <remarks>
+    /// Twenty-four bit at the session rate, one file per strip. The projection an operator is shown
+    /// before they start has to be the real number, because the whole point of the guard is that it
+    /// refuses before a meeting rather than during one.
+    /// </remarks>
+    long BytesPerSecond => (long)Math.Max(Session.SampleRate, 1) * 3 * Math.Max(Channels, 1);
+
+    double HoursLeft(RecordingState recording) =>
+        BytesPerSecond <= 0 ? 0 : recording.FreeBytes / (double)BytesPerSecond / 3600.0;
+
+    // A full bar is a full disk, so it fills as the space goes. A bar that emptied would read as
+    // "everything is fine" at exactly the moment it is not.
+    static double DiskBar(RecordingState recording) =>
+        recording.FreeBytes <= 0 ? 100 : Math.Clamp(100 - (recording.FreeBytes / (1024.0 * 1024 * 1024) / 10.0), 0, 100);
 
     async Task Pick()
     {

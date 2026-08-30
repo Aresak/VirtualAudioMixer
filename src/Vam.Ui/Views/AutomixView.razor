@@ -5,24 +5,32 @@
         <h1>@L["automix.title"]</h1>
         <p class="sub">@L["automix.sub"]</p>
 
+        @*
+            C10. The global switch is in the status bar rather than here, where it is one click from
+            any view if the automixer misbehaves mid-session. This view says where it is, so an
+            operator who came looking for it finds it rather than concluding there is not one.
+        *@
+        <p class="note">@L["automix.switchLives"]</p>
+
         @if (Automix is not { } automix)
         {
             <p class="sub">@L["mixer.notConnected"]</p>
         }
         else
         {
+            <h2>@L["automix.band"]</h2>
+
+            <AutomixBand />
+
+            <p class="sub" style="margin-top:8px">@L["automix.bandWhy"]</p>
+
             <div class="grid2">
                 <div class="card">
-                    <h2>@L["automix.title"]</h2>
-
-                    <label class="row">
-                        <input type="checkbox" checked="@automix.IsBypassed" @onchange="ToggleBypass" />
-                        <span>@L["automix.bypass"]</span>
-                    </label>
+                    <h2>@L["automix.parameters"]</h2>
 
                     <div class="knob">
                         <div class="between">
-                            <span>@L["automix.depth"]</span>
+                            <span>@L["automix.depth"] <InlineHelp Title="@L["automix.depth"]" Body="@L["help.depth"]" /></span>
                             <span class="mono">@automix.DepthDb.ToString("0.0", CultureInfo.InvariantCulture) dB</span>
                         </div>
                         <input type="range" min="-40" max="0" step="0.5"
@@ -38,7 +46,7 @@
                     *@
                     <div class="knob">
                         <div class="between">
-                            <span>@L["automix.response"]</span>
+                            <span>@L["automix.response"] <InlineHelp Title="@L["automix.response"]" Body="@L["help.response"]" /></span>
                             <span class="mono">@automix.ResponseMs.ToString("0", CultureInfo.InvariantCulture) ms</span>
                         </div>
                         <input type="range" min="20" max="500" step="5"
@@ -61,10 +69,7 @@
                         above a threshold. Two people half-sharing the gain is not the same room as
                         one person holding it, and a whole number cannot tell them apart.
                     *@
-                    <p class="note">
-                        Derived from how the gain is actually shared, not from counting microphones
-                        over a threshold. Two people each holding half of it reads as two.
-                    </p>
+                    <p class="note">@L["automix.openWhy"]</p>
                 </div>
             </div>
 
@@ -115,9 +120,6 @@
         index < automix.GainsDb.Count
             ? automix.GainsDb[index].ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) + " dB"
             : "—";
-
-    Task ToggleBypass(ChangeEventArgs arguments) =>
-        Send(arguments.Value is true, Automix?.DepthDb ?? -15, Automix?.ResponseMs ?? 120);
 
     Task SetDepth(ChangeEventArgs arguments) =>
         double.TryParse(arguments.Value?.ToString(), CultureInfo.InvariantCulture, out double depth)

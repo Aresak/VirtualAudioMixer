@@ -51,8 +51,8 @@
         </div>
 
         <div class="knob">
-            <div class="between"><span>Role</span></div>
-            <select @bind="busRole" aria-label="Role">
+            <div class="between"><span>@L["bus.role"]</span></div>
+            <select @bind="busRole" aria-label="@L["bus.role"]">
                 <option value="Output">@L["bus.role.output"]</option>
                 <option value="Monitor">@L["bus.role.monitor"]</option>
                 <option value="Stream">@L["bus.role.stream"]</option>

@@ -1,53 +1,89 @@
 @inherits VamComponent
 
 @*
-    D5. A monitor bus is an output bus with a different role, and the console says so rather than
-    pretending it is a separate kind of thing. What makes it a monitor is where it goes and what it
-    is allowed to hear, and both of those are visible here.
+    D5 and F7. One panel per monitor bus: a source grid, a level, which physical output drives it,
+    and a warning when it has none.
+
+    A monitor is a bus with the monitor role, not a monitor of the master. That is why adding one is
+    the same code path as adding any other bus, and why there is a source grid here rather than a
+    single "listen to" dropdown.
 *@
 
 <div class="view">
     <div class="pad">
         <h1>@L["view.monitors"]</h1>
-        <p class="sub">
-            A monitor is a bus whose audio goes to somebody in the room rather than out of it. It
-            obeys solo, and mix-minus keeps it from feeding a voice back to the person making it.
-        </p>
+        <p class="sub">@L["monitors.intro"]</p>
 
-        @if (Monitors.Count == 0)
-        {
-            <p class="sub">No monitor buses. Add one from the mixer.</p>
-        }
-        else
-        {
-            <div class="grid2">
-                @foreach (BusState bus in Monitors)
-                {
-                    <div class="card">
-                        <div class="between">
-                            <h2 style="margin:0;border:none;padding:0">@bus.Name</h2>
-                            <span class="pill @(bus.IsMuted ? "bad" : "ok")">
-                                @(bus.IsMuted ? L["common.off"] : L["common.on"])
-                            </span>
-                        </div>
+        <div class="grid2">
+            @foreach (BusState monitor in Monitors)
+            {
+                <div class="card">
+                    <div class="between">
+                        <b class="lbl" style="font-size:14px">@monitor.Name</b>
 
-                        <div class="kv" style="margin-top:10px">
-                            <span class="k">@L["bus.output"]</span>
-                            <span class="v">@OutputName(bus)</span>
-                            <span class="k">@L["bus.gain"]</span>
-                            <span class="v">@FaderScale.Format(bus.GainDb) dB</span>
-                            <span class="k">@L["send.locked"]</span>
-                            <span class="v">@bus.ExcludedChannels.Count</span>
-                        </div>
+                        @*
+                            Amber until an output device is assigned. A monitor bus with nowhere to
+                            go is a silent headphone feed, and a silent headphone feed is half an
+                            hour of hunting during a meeting.
+                        *@
+                        <span class="pill @(HasOutput(monitor) ? "ok" : "warn")">
+                            @(HasOutput(monitor) ? L["monitors.active"] : L["monitors.noOutput"])
+                        </span>
+                    </div>
 
-                        <div class="row" style="margin-top:12px">
-                            <button type="button" class="btn" @onclick="() => Open(bus)">@L["strip.options"]</button>
-                            <button type="button" class="btn" @onclick="() => ToggleMute(bus)">@L["strip.mute"]</button>
+                    <div class="kv" style="margin-top:9px">
+                        <span class="k">@L["bus.output"]</span>
+                        <span class="v">@OutputName(monitor)</span>
+                        <span class="k">@L["bus.gain"]</span>
+                        <span class="v">@FaderScale.Format(monitor.GainDb) dB</span>
+                        <span class="k">@L["bus.limiter"]</span>
+                        <span class="v">@monitor.LimiterReductionDb.ToString("0.0", CultureInfo.InvariantCulture) dB</span>
+                    </div>
+
+                    <div class="srcgroup">
+                        <span class="gl">@L["monitors.inputs"]</span>
+                        <div class="srcgrid">
+                            @foreach (ChannelState channel in Channels)
+                            {
+                                <b class="@(IsOn(channel, monitor) ? "on" : null)"
+                                   role="button" tabindex="0"
+                                   title="@(IsExcluded(channel, monitor) ? L["send.lockedWhy"] : channel.Name)"
+                                   @onclick="() => Toggle(channel, monitor)">
+                                    <span class="swatch" style="background:@Colour(channel)"></span>
+                                    @channel.Name
+                                    @if (IsExcluded(channel, monitor))
+                                    {
+                                        <span class="pill bad" style="margin-left:auto">N−1</span>
+                                    }
+                                </b>
+                            }
                         </div>
                     </div>
-                }
-            </div>
-        }
+
+                    @*
+                        D9, bus-to-bus, is phase 1, so a monitor cannot yet be fed a whole bus. Said
+                        rather than drawn as chips that would do nothing when pressed.
+                    *@
+                    <div class="srcgroup">
+                        <span class="gl">@L["monitors.buses"]</span>
+                        <p class="sub" style="margin:0">@L["monitors.busesLater"]</p>
+                    </div>
+
+                    <div class="row" style="margin-top:11px">
+                        <span class="sub" style="margin:0;flex:1">@L["monitors.soloWins"]</span>
+                        <ConfirmButton Label="@L["common.remove"]"
+                                       Question="@L.Format("monitors.removeWhy", monitor.Name)"
+                                       Confirmed="() => Remove(monitor)" />
+                    </div>
+                </div>
+            }
+
+            <button type="button" class="card" style="border-style:dashed;color:var(--ink-mute);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:150px"
+                    @onclick="Add">
+                <span style="font-size:28px;font-family:var(--f-cond);line-height:1">＋</span>
+                <span class="lbl">@L["monitors.add"]</span>
+            </button>
+        </div>
     </div>
 </div>
 
@@ -58,28 +94,57 @@
             .ToList()
         ?? [];
 
-    string OutputName(BusState bus)
+    IReadOnlyList<ChannelState> Channels => Session.Console?.Channels ?? [];
+
+    static string Colour(ChannelState channel) =>
+        string.IsNullOrWhiteSpace(channel.Colour) ? StripPalette.For(channel.Index) : channel.Colour;
+
+    static bool HasOutput(BusState monitor) => monitor.OutputDeviceId.Length > 0;
+
+    string OutputName(BusState monitor) =>
+        monitor.OutputDeviceName.Length > 0
+            ? monitor.OutputDeviceName
+            : monitor.OutputDeviceId.Length > 0 ? monitor.OutputDeviceId : L["bus.none"];
+
+    bool IsExcluded(ChannelState channel, BusState monitor) => monitor.ExcludedChannels.Contains(channel.Index);
+
+    bool IsOn(ChannelState channel, BusState monitor) =>
+        Session.Console?.Sends
+            .FirstOrDefault(send => send.ChannelIndex == channel.Index && send.BusIndex == monitor.Index)?.State == "On";
+
+    async Task Toggle(ChannelState channel, BusState monitor)
     {
-        foreach (DeviceInfo device in Session.Devices)
+        if (IsExcluded(channel, monitor))
         {
-            if (device.Id == bus.OutputDeviceId)
-            {
-                return device.Name;
-            }
+            return;
         }
 
-        return bus.OutputDeviceId.Length == 0 ? L["bus.none"] : bus.OutputDeviceId;
-    }
-
-    void Open(BusState bus)
-    {
-        Shell.View = ViewId.Mixer;
-        Shell.OpenBus(bus.Index);
-    }
-
-    async Task ToggleMute(BusState bus) =>
+        // The same command the strip's send button sends. A monitor source is a send, and if this
+        // were its own mechanism the two would disagree the first time somebody used both.
         await Session.ApplyAsync(new Command
         {
-            SetBusMuted = new SetBusMuted { BusIndex = bus.Index, Muted = !bus.IsMuted }
+            SetSend = new SetSend
+            {
+                ChannelIndex = channel.Index,
+                BusIndex = monitor.Index,
+                On = !IsOn(channel, monitor),
+                Decibels = 0
+            }
         });
+    }
+
+    async Task Add() =>
+        await Session.ApplyAsync(new Command
+        {
+            AddBus = new AddBus
+            {
+                Name = L.Format("monitors.newName", Monitors.Count + 1),
+                Role = "Monitor",
+                ChannelCount = 2,
+                OutputDeviceId = string.Empty
+            }
+        });
+
+    async Task Remove(BusState monitor) =>
+        await Session.ApplyAsync(new Command { RemoveBus = new RemoveBus { BusIndex = monitor.Index } });
 }

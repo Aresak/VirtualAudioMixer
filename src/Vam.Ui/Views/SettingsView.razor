@@ -4,6 +4,7 @@
 <div class="view">
     <div class="pad">
         <h1>@L["settings.title"]</h1>
+        <p class="sub">@L["settings.sub"]</p>
 
         <div class="grid2">
             <div class="card">
@@ -49,16 +50,63 @@
             </div>
 
             <div class="card">
-                <h2>@L["settings.density"]</h2>
+                <h2>@L["settings.interface"]</h2>
 
-                <div class="row">
-                    <button type="button" class="chip @(Shell.IsCompact ? null : "on")" @onclick="() => Shell.IsCompact = false">
-                        @L["mixer.full"]
-                    </button>
-                    <button type="button" class="chip @(Shell.IsCompact ? "on" : null)" @onclick="() => Shell.IsCompact = true">
-                        @L["mixer.compact"]
-                    </button>
+                <div class="kv">
+                    <span class="k">
+                        @L["settings.density"]
+                        <InlineHelp Title="@L["settings.density"]" Body="@L["help.density"]" />
+                    </span>
+                    <span class="v row" style="gap:5px">
+                        <button type="button" class="chip @(Shell.IsCompact ? null : "on")" @onclick="() => Shell.IsCompact = false">
+                            @L["mixer.full"]
+                        </button>
+                        <button type="button" class="chip @(Shell.IsCompact ? "on" : null)" @onclick="() => Shell.IsCompact = true">
+                            @L["mixer.compact"]
+                        </button>
+                    </span>
+
+                    @*
+                        U6. Not a choice, and the reason is worth saying rather than leaving as a
+                        missing option somebody files a bug about.
+                    *@
+                    <span class="k">
+                        @L["settings.theme"]
+                        <InlineHelp Title="@L["settings.theme"]" Body="@L["help.theme"]" />
+                    </span>
+                    <span class="v">@L["settings.themeFixed"]</span>
+
+                    <span class="k">
+                        @L["settings.ballistics"]
+                        <InlineHelp Title="@L["settings.ballistics"]" Body="@L["help.ballistics"]" />
+                    </span>
+                    <span class="v">@L["settings.ballisticsValue"]</span>
+
+                    <span class="k">@L["settings.meterRate"]</span>
+                    <span class="v">25 / s</span>
                 </div>
+            </div>
+
+            <div class="card">
+                <h2>@L["settings.startup"]</h2>
+
+                @*
+                    H3 and H6. Stated rather than offered: the engine restores what it went down in,
+                    and nothing here is a switch yet. A control that cannot be moved is worse than a
+                    line of text saying how it behaves.
+                *@
+                <div class="kv">
+                    <span class="k">
+                        @L["settings.loadLast"]
+                        <InlineHelp Title="@L["settings.loadLast"]" Body="@L["help.loadLast"]" />
+                    </span>
+                    <span class="v"><span class="pill ok">@L["common.on"]</span></span>
+
+                    <span class="k">@L["settings.autoRecord"]</span>
+                    <span class="v"><span class="pill ok">@L["common.on"]</span></span>
+                </div>
+
+                <p class="note">@L["settings.startupWhy"]</p>
             </div>
 
             <div class="card">

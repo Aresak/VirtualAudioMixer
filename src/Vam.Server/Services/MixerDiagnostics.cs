@@ -1,3 +1,4 @@
+using Vam.Engine.Devices;
 using Vam.Engine.Devices.Abstractions;
 using Vam.Engine.Diagnostics;
 using Vam.Engine.Graph;
@@ -53,6 +54,7 @@ public static class MixerDiagnostics
             Allocations = BuildAllocations(engine)
         };
 
+        AddDeviceClocks(state, engine);
         AddDrift(state, engine);
         AddDropouts(state, engine);
         AddCosts(state, engine);
@@ -138,6 +140,43 @@ public static class MixerDiagnostics
         TotalManagedBytes = GC.GetTotalMemory(forceFullCollection: false),
         LongestPauseMs = GC.GetTotalPauseDuration().TotalMilliseconds
     };
+
+    /// <summary>
+    /// K1's table. One row per device rather than one clock.
+    /// </summary>
+    /// <remarks>
+    /// The question this panel answers is which device is the one that is wrong, and a single
+    /// measured rate cannot say. Four devices at four different offsets look identical through one
+    /// number.
+    /// </remarks>
+    static void AddDeviceClocks(DiagnosticsState state, VamEngine engine)
+    {
+        for (int index = 0; index < engine.Channels.Count; index++)
+        {
+            DeviceTelemetry telemetry = engine.Channels.Channels[index].GetTelemetry();
+
+            state.DeviceClocks.Add(new DeviceClock
+            {
+                ChannelIndex = index,
+                Name = index < engine.Graph?.Config.Channels.Count
+                    ? engine.Graph.Config.Channels[index].Name
+                    : $"endpoint {index}",
+                Direction = "capture",
+                NominalRate = telemetry.NominalSampleRate,
+                MeasuredRate = telemetry.MeasuredSampleRate,
+                DriftPpm = telemetry.DriftPpm,
+
+                // What the servo is applying, which is not what the estimator measured. In a closed
+                // loop the two converge, and the gap between them while they do is the interesting
+                // part.
+                CorrectionPpm = (telemetry.Ratio - 1.0) * 1_000_000.0,
+                FillPercentage = telemetry.FillPercentage,
+                Underruns = telemetry.UnderrunCount,
+                Overruns = telemetry.OverrunCount,
+                State = telemetry.State.ToString()
+            });
+        }
+    }
 
     static void AddDrift(DiagnosticsState state, VamEngine engine)
     {

@@ -19,18 +19,43 @@
 
             <h2>@L["bus.output"]</h2>
 
-            <div class="kv">
-                <span class="k">@L["bus.output"]</span>
-                <span class="v">@OutputName(bus)</span>
-                <span class="k">@L["common.channel"]</span>
-                <span class="v">@bus.ChannelCount</span>
+            <div class="card">
+                <div class="kv">
+                    <span class="k">@L["bus.role"]</span>
+                    <span class="v">
+                        <select value="@bus.Role" @onchange="argument => SetRole(bus, argument)" aria-label="@L["bus.role"]">
+                            <option value="Output">@L["bus.role.output"]</option>
+                            <option value="Monitor">@L["bus.role.monitor"]</option>
+                            <option value="Stream">@L["bus.role.stream"]</option>
+                        </select>
+                    </span>
+
+                    <span class="k">@L["bus.output"]</span>
+                    <span class="v">@OutputName(bus)</span>
+
+                    <span class="k">@L["common.channel"]</span>
+                    <span class="v">@bus.ChannelCount</span>
+
+                    <span class="k">@L["bus.tap"]</span>
+                    <span class="v">@(bus.IsPreFader ? L["send.pre"] : L["send.post"])</span>
+                </div>
             </div>
+
+            <h2>@L["strip.chain"] <span class="chip">@L["mixer.reorder"]</span></h2>
+
+            @*
+                D6. The same editor a strip's chain uses, because a bus chain is a strip chain on a
+                summed signal and nothing about editing it differs.
+            *@
+            <ChainEditor Target="@(new ChainTarget { Index = bus.Index, IsBus = true })"
+                         Chain="bus.Chain"
+                         HasMandatoryLimiter="bus.HasMandatoryLimiter" />
 
             <h2>@L["send.locked"]</h2>
 
             @if (bus.ExcludedChannels.Count == 0)
             {
-                <p class="sub">Nothing is excluded from this bus.</p>
+                <p class="sub">@L["bus.nothingExcluded"]</p>
             }
             else
             {
@@ -82,6 +107,12 @@
 
         return bus.OutputDeviceId.Length == 0 ? L["bus.none"] : bus.OutputDeviceId;
     }
+
+    async Task SetRole(BusState bus, ChangeEventArgs arguments) =>
+        await Session.ApplyAsync(new Command
+        {
+            SetBusRole = new SetBusRole { BusIndex = bus.Index, Role = arguments.Value?.ToString() ?? bus.Role }
+        });
 
     async Task Rename(BusState bus, ChangeEventArgs arguments) =>
         await Session.ApplyAsync(new Command
