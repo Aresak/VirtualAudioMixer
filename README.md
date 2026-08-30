@@ -4,9 +4,10 @@
 physical and virtual I/O, a gain-sharing automixer, composable DSP chains, and
 remote control from a tablet or a second machine.
 
-> **Status: design, not software.** There is no implementation yet. What exists is
-> a feature catalogue, a set of architecture decisions and a complete clickable UI
-> mockup. Everything below describes intent.
+> **Status: early implementation.** What exists is a feature catalogue, a set of
+> architecture decisions, a complete clickable UI mockup, and the build foundation —
+> the test harness and the allocation gate that the audio-path rule rests on. No audio
+> flows through anything yet. Everything below describes intent unless it says otherwise.
 
 ## Why
 

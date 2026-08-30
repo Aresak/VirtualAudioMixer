@@ -4,8 +4,19 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
 
-  <ItemGroup>
+  <ItemGroup Label="Analyzers">
     <PackageVersion Include="Microsoft.VisualStudio.Threading.Analyzers" Version="17.14.15" />
+  </ItemGroup>
+
+  <ItemGroup Label="Logging and telemetry">
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+    <PackageVersion Include="NLog.Extensions.Logging" Version="6.2.0" />
+    <PackageVersion Include="Sentry" Version="6.9.0" />
+    <PackageVersion Include="Sentry.NLog" Version="6.9.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Testing">
+    <PackageVersion Include="xunit.v3" Version="4.0.0" />
   </ItemGroup>
 
 </Project>

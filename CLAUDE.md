@@ -26,19 +26,27 @@ only repeats what must never be missed.
 | Rules | `AGENTS.md` |
 | Licence map | `LICENSING.md` |
 | UI mockup — the design of record | `_MockUp/vam-console.html` |
-| Audio path boundary | `docs/audio-path.md` (created by VAM-008) |
-| Task definitions | Not in this repository yet. Ask before starting a task you cannot read |
+| Audio path boundary | `docs/audio-path.md` |
+| Task definitions | GitHub issues on this repository, and the vault. Ask before starting a task you cannot read |
 
 ## Project layout
 
-| Project | Contains | Licence |
-|---|---|---|
-| `src/Vam.Engine` | Audio engine, graph, devices, DSP | AGPL-3.0-or-later |
-| `src/Vam.Protocol` | `.proto` contracts and generated code | Apache-2.0 |
-| `src/Vam.Ui` | Shared Razor components | MPL-2.0 |
-| `src/Vam.Client` | MAUI Blazor Hybrid host | MPL-2.0 |
-| `tests/Vam.TestKit` | Test utilities, including the allocation assertion | AGPL-3.0-or-later |
-| `tests/Vam.Engine.Tests` | Engine tests | AGPL-3.0-or-later |
+This table describes the projects **as they are today**, not as they will be. A row is updated
+when the project changes shape, so a row can be trusted rather than read as intent.
+
+| Project | Contains today | Becomes | Licence |
+|---|---|---|---|
+| `src/Vam.Core` | `VamException`, the base for VAM's own exceptions | Cross-cutting primitives everything shares | Apache-2.0 |
+| `src/Vam.Engine` | Nothing — a placeholder class | The audio engine, graph, devices and DSP, in EPIC-02 and EPIC-03 | AGPL-3.0-or-later **plus the modifier exception** |
+| `src/Vam.Protocol` | Nothing — a placeholder class | `.proto` contracts and generated gRPC code, in EPIC-08 | Apache-2.0 |
+| `src/Vam.Ui` | Nothing — a placeholder class. Not a Razor SDK project yet | The shared Razor component library, in EPIC-09 | MPL-2.0 |
+| `src/Vam.Client` | Nothing — a placeholder class. Not a MAUI project yet | The MAUI Blazor Hybrid host, in EPIC-09 | MPL-2.0 |
+| `tests/Vam.TestKit` | `AllocationAssert` and the test category policy | `NullAudioBackend` and the soak fixtures, in EPIC-02 and EPIC-12 | AGPL-3.0-or-later |
+| `tests/Vam.Engine.Tests` | The allocation gate and its proof | Engine, DSP and automix tests | AGPL-3.0-or-later |
+
+Not created yet: `src/Vam.Engine.Windows` (the WASAPI backend, EPIC-02), `src/Vam.Modifiers.Abstractions`
+(the modifier API the root `LICENSE` names, EPIC-04), `src/Vam.Server` (EPIC-08) and `src/Vam.WebClient`
+(EPIC-09).
 
 ## Commands
 

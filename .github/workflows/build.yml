@@ -1,0 +1,78 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # So the build can be smoke-tested on a branch without opening a pull request.
+  workflow_dispatch:
+
+# A superseded run on the same branch is wasted minutes and a confusing red cross
+# on a commit that has already been replaced.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Restore, build, test
+    # Windows-first: the device layer is WASAPI and there is nowhere else to run it.
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up the SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          # Pinned by the same file the developers use, so CI cannot drift onto a
+          # different SDK than the one the build was verified against.
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      # Long-running tests are excluded by default through VAM_LONGRUNNING, which is
+      # not set here. See CONTRIBUTING.md.
+      - name: Test
+        shell: pwsh
+        run: |
+          dotnet test --no-build --configuration Release 2>&1 | Tee-Object -FilePath test-output.txt
+          exit $LASTEXITCODE
+
+      # An allocation failure has to be readable without expanding anything. Annotations
+      # appear at the top of the run page, and the summary is the first thing on it.
+      - name: Surface allocation failures
+        if: failure()
+        shell: pwsh
+        run: |
+          if (-not (Test-Path test-output.txt)) { exit 0 }
+
+          $rule = 'allocates, locks or waits'
+          $hits = Select-String -Path test-output.txt -SimpleMatch -Pattern $rule -Context 2, 0
+
+          if (-not $hits) { exit 0 }
+
+          Write-Output "::error title=Audio-path allocation::Code in the audio path allocated. Nothing in the audio path allocates, locks or waits - see docs/audio-path.md"
+
+          $summary = @()
+          $summary += '## Audio-path allocation'
+          $summary += ''
+          $summary += 'The allocation gate fired. Nothing in the audio path allocates, locks or waits.'
+          $summary += 'The boundary is defined in [docs/audio-path.md](docs/audio-path.md).'
+          $summary += ''
+          $summary += '```'
+          foreach ($hit in $hits) {
+            foreach ($line in $hit.Context.PreContext) { $summary += $line.TrimEnd() }
+            $summary += $hit.Line.TrimEnd()
+            $summary += ''
+          }
+          $summary += '```'
+          $summary -join "`n" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append

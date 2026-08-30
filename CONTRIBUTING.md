@@ -66,13 +66,73 @@ accessibility, field naming, the async suffix) and the rest is convention: write
 C# to the [C# Coding Guidelines](https://csharpcodingguidelines.com/) and match the
 code around you.
 
+The conventions themselves are written down in `.claude/skills/csharp-code-writer`
+and `.claude/skills/razor-markup-formatting`, so they are one document rather than
+folklore.
+
 The audio-path rule above remains the only hard *behavioural* constraint; the
-style rules here are about form.
+style rules here are about form. Three of the C# conventions are inverted below
+that line — returning collection interfaces, avoiding nulls via LINQ, and avoiding
+`ref`/`out` — because each of them allocates. The skill says which and why.
 
 ## Testing
+
+Run the suite:
+
+```
+dotnet test
+```
+
+That runs the unit tests and skips the long-running ones. Run those too:
+
+```
+VAM_LONGRUNNING=1 dotnet test
+```
+
+or, in PowerShell:
+
+```
+$env:VAM_LONGRUNNING = "1"; dotnet test
+```
+
+Long-running tests opt in through an environment variable rather than a runner
+filter, so a plain `dotnet test` behaves the same way on your machine as it does
+in CI. Mark them with `[Trait("Category", TestCategories.LongRunning)]` and
+`SkipUnless = nameof(LongRunningTests.IsEnabled)`; there is a worked example in
+`tests/Vam.Engine.Tests/Harness/LongRunningCategoryTests.cs`.
 
 Anything touching the device layer or the mix graph needs a soak test, not a unit
 test. Clock drift between free-running USB devices does not show up in five
 minutes; it shows up in hour three, as a click, during a council meeting. The
 engine has a soak mode that drives it from a file faster than realtime — use it,
 and report what it did.
+
+### The allocation gate
+
+Where the boundary is drawn — what counts as the audio path and what does not — is
+[`docs/audio-path.md`](docs/audio-path.md). Read it before writing anything that runs
+on the mix thread or a device thread; it decides several cases that look obvious and
+are not.
+
+
+`AllocationAssert` in `tests/Vam.TestKit/Allocations/AllocationAssert.cs` asserts
+that a region of code allocates nothing. Use the closure-free overload — the one
+taking a state argument and a `static` lambda — everywhere: a capturing lambda
+allocates its closure, and then the harness is measuring itself.
+
+```csharp
+AllocationAssert.None(buffer, static samples =>
+{
+    Span<float> block = samples.AsSpan();
+
+    for (int index = 0; index < block.Length; index++)
+    {
+        block[index] = (block[index] * 0.5f) + 0.25f;
+    }
+});
+```
+
+The gate is only worth something if it fires. `tests/Vam.Engine.Tests/Allocations/AllocationGateProofTests.cs`
+allocates on purpose inside the gate and asserts that it throws — that test is
+intentional and must not be "fixed". Replacing the body of `AllocationAssert.None`
+with an empty method turns it red, along with three others.
