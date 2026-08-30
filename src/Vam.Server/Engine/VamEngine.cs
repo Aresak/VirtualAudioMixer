@@ -89,6 +89,9 @@ public sealed class VamEngine : IDisposable
     /// <summary>The recording, if one is running.</summary>
     public RecordingSession? Recording { get; private set; }
 
+    /// <summary>What virtual endpoints this machine has, and what to say when it has none. A6 and E2.</summary>
+    public VirtualEndpointReport? VirtualEndpoints { get; private set; }
+
     /// <summary>Whether the control loop is running.</summary>
     public bool IsRunning => control is not null;
 
@@ -129,6 +132,19 @@ public sealed class VamEngine : IDisposable
         Clock.Poll();
 
         Meters = BuildMeterPublisher();
+        VirtualEndpoints = VirtualEndpointReport.From(backend);
+
+        // Said once at startup, whichever way it went. A first-time user without a virtual driver
+        // gets a sentence naming what is missing and where to get it, and everything that does not
+        // need one carries on working - which is most of the actual requirement in EPIC-13.
+        if (VirtualEndpoints.CanTakeConferencingAudio && VirtualEndpoints.CanReachObs)
+        {
+            logger.LogInformation("{Report}", VirtualEndpoints.Description);
+        }
+        else
+        {
+            logger.LogWarning("{Report}", VirtualEndpoints.Description);
+        }
 
         control = new Thread(Run)
         {

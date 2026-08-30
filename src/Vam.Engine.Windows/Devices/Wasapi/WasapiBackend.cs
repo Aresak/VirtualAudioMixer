@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
+using Vam.Engine.Devices;
 using Vam.Engine.Devices.Abstractions;
 
 namespace Vam.Engine.Windows.Devices.Wasapi;
@@ -204,7 +205,13 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
                 direction,
                 format.Channels,
                 format.SampleRate,
-                client.IsFormatSupported(AudioClientShareMode.Exclusive, format));
+
+                // A virtual endpoint is never exclusive, whatever it claims. Another application has
+                // to keep using it at the same time - that is the whole point of one - and taking it
+                // exclusively would lock Teams or OBS out of the device VAM exists to share with them.
+                SupportsExclusiveMode: !IsVirtual(device.FriendlyName)
+                    && client.IsFormatSupported(AudioClientShareMode.Exclusive, format),
+                IsVirtual: IsVirtual(device.FriendlyName));
         }
         catch (Exception error)
         {
@@ -215,6 +222,16 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
             return null;
         }
     }
+
+    /// <summary>
+    /// Whether an endpoint comes from a virtual driver rather than from hardware.
+    /// </summary>
+    /// <remarks>
+    /// By name, which is not identity and is not pretending to be. Nothing above the backend
+    /// interface branches on this - it is used to derive mix-minus and to tell an operator what is
+    /// available, and the moment engine code asks "is this virtual" the abstraction has leaked.
+    /// </remarks>
+    static bool IsVirtual(string friendlyName) => VirtualDriver.Recognise(friendlyName) is not null;
 
     static DataFlow Flow(DeviceDirection direction) => direction switch
     {
