@@ -46,9 +46,13 @@
     /// Fixed rather than fitted to the data. An auto-scaled chart makes a perfectly healthy device
     /// wandering by two parts per million look exactly like one wandering by two hundred, which is
     /// the one distinction anybody opens this panel to make.
+    ///
+    /// Five hundred because that is FillServo.MaxCorrectionPpm — the edge of what the servo can do
+    /// anything about. A device drawn at the top of this chart is a device the correction has run out
+    /// of authority for, which is a boundary worth being able to see rather than a round number.
     /// </remarks>
     [Parameter]
-    public double Scale { get; set; } = 200.0;
+    public double Scale { get; set; } = 500.0;
 
     Dictionary<int, List<DriftPoint>> Series
     {

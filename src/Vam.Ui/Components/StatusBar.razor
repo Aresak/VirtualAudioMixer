@@ -61,7 +61,7 @@
             it is off, so nobody forgets it was switched off during setup and never switched back.
         *@
         <button type="button"
-                class="chip @(IsAutomixOn ? "on" : "bad")"
+                class="chip @(IsAutomixOn ? "on" : "warn")"
                 title="@L["help.automixSwitch"]"
                 @onclick="ToggleAutomix">
             @(IsAutomixOn ? L["status.automixOn"] : L["status.automixOff"])

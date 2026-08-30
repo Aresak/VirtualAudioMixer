@@ -134,6 +134,10 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .chip.on { border-color: var(--brass); color: var(--brass); background: rgba(214, 166, 74, .1); }
 .chip.bad { border-color: rgba(224, 80, 60, .4); color: var(--bad); background: rgba(224, 80, 60, .1); }
 
+/* C10. Amber, not red. The automixer being off is a thing somebody chose and has to be reminded of,
+   not a fault — and a red chip beside a green dropout counter reads as something having broken. */
+.chip.warn { border-color: var(--warn); color: var(--warn); background: rgba(229, 163, 46, .12); }
+
 /* ---------- rail (U2) ---------- */
 
 .rail {
@@ -220,7 +224,7 @@ th {
 
 td { padding: 7px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
 tr:last-child td { border-bottom: none; }
-.tw { overflow-x: auto; }
+.tw { overflow-x: auto; margin-bottom: 4px; }
 
 .pill {
   display: inline-flex;
