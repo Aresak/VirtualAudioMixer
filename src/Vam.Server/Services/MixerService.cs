@@ -469,7 +469,7 @@ public sealed class MixerService(
             Name = modifier.Descriptor.Name,
             IsBypassed = isBypassed,
             CostFraction = 0,
-            LevelDb = telemetry.LevelDb,
+            LevelDb = chain.OutputLevelsDb[link],
             IsActive = telemetry.IsActive
         };
 
