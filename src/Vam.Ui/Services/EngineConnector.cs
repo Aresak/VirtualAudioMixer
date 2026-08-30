@@ -1,3 +1,4 @@
+using Vam.Protocol.V1;
 using Vam.Ui.Abstractions;
 using Vam.Ui.Extensions;
 
@@ -82,6 +83,62 @@ public sealed class EngineConnector(
         await session.ConnectAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>Whether this console may stop the engine it is looking at.</summary>
+    /// <remarks>
+    /// Only one on this machine. Stopping a remote engine is ending somebody else's meeting from
+    /// across a network, and a button that can do that is a button that will eventually be pressed
+    /// by somebody who thought it was theirs.
+    /// </remarks>
+    public bool CanStopEngine => options.Address == VamSessionOptions.LocalAddress;
+
+    /// <summary>Whether this console may stop it and start another.</summary>
+    /// <remarks>
+    /// Stopping goes over the protocol and any console can do it; starting is a process, which only
+    /// a host that ships the engine beside it can. Offering restart without the second half would
+    /// stop the engine and leave it stopped.
+    /// </remarks>
+    public bool CanRestartEngine => CanStopEngine && platform.CanStartEngine;
+
+    /// <summary>Stops the engine this console is looking at.</summary>
+    /// <param name="reason">What the engine should write in its log.</param>
+    /// <param name="cancellationToken">Abandons the wait, not the request.</param>
+    /// <returns>Whether it was asked.</returns>
+    public async ValueTask<bool> StopEngineAsync(string reason, CancellationToken cancellationToken = default)
+    {
+        // Asked, never killed. The engine saves the console, closes the recording files and lets go
+        // of the devices on the way out, and none of that happens to a process that is simply gone.
+        CommandReply reply = await session
+            .ApplyAsync(new Command { Shutdown = new Shutdown { Reason = reason } }, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!reply.Accepted)
+        {
+            Report("settings.stopRefused", reply.Reason);
+        }
+
+        return reply.Accepted;
+    }
+
+    /// <summary>Stops the engine and starts a fresh one, then reconnects.</summary>
+    /// <param name="cancellationToken">Abandons the wait.</param>
+    public async ValueTask RestartEngineAsync(CancellationToken cancellationToken = default)
+    {
+        if (!await StopEngineAsync("Restarted from the console.", cancellationToken).ConfigureAwait(false))
+        {
+            return;
+        }
+
+        // Waited for rather than assumed. Starting a second engine while the first still holds the
+        // devices gives two processes fighting over the same microphones, which sounds exactly as
+        // bad as it reads.
+        await WaitUntilGoneAsync(VamSessionOptions.LocalAddress, cancellationToken).ConfigureAwait(false);
+
+        Report(string.Empty);
+
+        await StartHereAsync(VamSessionOptions.LocalAddress, cancellationToken).ConfigureAwait(false);
+        await session.ReconnectAsync(VamSessionOptions.LocalAddress, cancellationToken).ConfigureAwait(false);
+    }
+
     /// <summary>Points the console at a different engine.</summary>
     /// <param name="typed">An address or a bare host name.</param>
     /// <param name="cancellationToken">Abandons the wait.</param>
@@ -128,6 +185,26 @@ public sealed class EngineConnector(
             // It started and never answered, which is a different failure from not starting and has a
             // different answer: the engine's own log says why, and this console cannot.
             Report("settings.startedButSilent");
+        }
+    }
+
+    async ValueTask WaitUntilGoneAsync(string address, CancellationToken cancellationToken)
+    {
+        using PeriodicTimer timer = new(StartPollInterval);
+
+        DateTimeOffset giveUpAt = DateTimeOffset.UtcNow + StartTimeout;
+
+        while (DateTimeOffset.UtcNow < giveUpAt)
+        {
+            if (!await probe.IsListeningAsync(address, cancellationToken).ConfigureAwait(false))
+            {
+                return;
+            }
+
+            if (!await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+            {
+                return;
+            }
         }
     }
 

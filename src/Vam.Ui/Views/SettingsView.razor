@@ -57,6 +57,27 @@
                     <span class="note">@L["settings.addressWhy"]</span>
                 </div>
 
+                @*
+                    Only for an engine on this machine. Stopping a remote one ends somebody else's
+                    meeting, and a button that can do that from a console across the room is a button
+                    that will eventually be pressed by mistake.
+                *@
+                @if (Connector.CanStopEngine)
+                {
+                    <div class="row" style="margin-top:12px">
+                        @if (Connector.CanRestartEngine)
+                        {
+                            <button class="btn" @onclick="Restart">@L["settings.restartEngine"]</button>
+                        }
+
+                        <ConfirmButton Label="@L["settings.stopEngine"]"
+                                       Question="@L["settings.stopEngineConfirm"]"
+                                       Confirmed="Stop" />
+                    </div>
+
+                    <p class="note">@L["settings.engineLifeWhy"]</p>
+                }
+
                 @if (Connector.Problem.Length > 0)
                 {
                     <p class="note bad">@L[Connector.Problem]</p>
@@ -196,6 +217,10 @@
     void OnTyped(ChangeEventArgs args) => typed = args.Value?.ToString() ?? string.Empty;
 
     Task OnKey(KeyboardEventArgs args) => args.Key == "Enter" ? Switch() : Task.CompletedTask;
+
+    async Task Restart() => await Connector.RestartEngineAsync();
+
+    async Task Stop() => await Connector.StopEngineAsync("Stopped from the console.");
 
     async Task Switch()
     {
