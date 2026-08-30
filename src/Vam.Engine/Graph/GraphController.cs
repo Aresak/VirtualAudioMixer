@@ -186,14 +186,28 @@ public sealed class GraphController
     }
 
     /// <summary>Adds a strip. D1's counterpart for inputs; recompiles the plan.</summary>
+    /// <remarks>
+    /// It is sent to every bus that exists, for the reason <see cref="AddBus"/> sends every strip to
+    /// a new one: a strip that reaches nothing is a strip that does nothing, and a microphone added
+    /// during a meeting going nowhere until somebody finds the right switches is the failure this
+    /// avoids.
+    /// </remarks>
     /// <param name="channel">The strip.</param>
     /// <returns>Its index.</returns>
     public int AddChannel(ChannelConfig channel)
     {
         config.Channels.Add(channel);
+
+        int index = config.Channels.Count - 1;
+
+        for (int bus = 0; bus < config.Buses.Count; bus++)
+        {
+            config.Sends.Add(new SendConfig(index, bus, IsOn: true, LevelDb: 0));
+        }
+
         Recompile();
 
-        return config.Channels.Count - 1;
+        return index;
     }
 
     /// <summary>Removes a strip, and every send that came from it. U17.</summary>
@@ -279,14 +293,37 @@ public sealed class GraphController
     /// A monitor is one of these with a different role. That is the whole reason "add a bus" and
     /// "add a monitor" are one method rather than two.
     /// </remarks>
+    /// <remarks>
+    /// <para>
+    /// Every strip is sent to it, on, at unity. A bus nothing feeds is a bus that does nothing, and
+    /// somebody who adds a monitor has said they want somebody to hear the room — being handed
+    /// silence and a grid of switches to find is the console making them do the obvious part.
+    /// </para>
+    /// <para>
+    /// Turning one off afterwards is one click and is visible on the strip. Finding out why a new
+    /// monitor is silent is neither.
+    /// </para>
+    /// <para>
+    /// Mix-minus is unaffected: the compiler refuses a send that would play somebody their own
+    /// voice, and it refuses it after this rather than being asked politely first.
+    /// </para>
+    /// </remarks>
     /// <param name="bus">The bus.</param>
     /// <returns>Its index.</returns>
     public int AddBus(BusConfig bus)
     {
         config.Buses.Add(bus);
+
+        int index = config.Buses.Count - 1;
+
+        for (int channel = 0; channel < config.Channels.Count; channel++)
+        {
+            config.Sends.Add(new SendConfig(channel, index, IsOn: true, LevelDb: 0));
+        }
+
         Recompile();
 
-        return config.Buses.Count - 1;
+        return index;
     }
 
     /// <summary>

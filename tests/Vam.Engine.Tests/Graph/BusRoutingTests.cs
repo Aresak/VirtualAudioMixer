@@ -130,6 +130,79 @@ public class BusRoutingTests
         Assert.Equal(0.5f, peak, 0.01f);
     }
 
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void ANewBusIsFedByEveryStripRatherThanArrivingSilent()
+    {
+        ConsoleFixture console = Build();
+
+        int monitor = console.Controller.AddBus(new BusConfig
+        {
+            Name = "Councillor headphones",
+            Role = BusRole.Monitor,
+            ChannelCount = 2,
+            OutputDeviceId = Headphones
+        });
+
+        BusOutputChannel destination = new(
+            Headphones,
+            new DeviceInputChannelOptions
+            {
+                NominalSampleRate = ConsoleFixture.SampleRate,
+                ChannelCount = 2,
+                BlockFrames = ConsoleFixture.BlockFrames,
+                RingCapacityFrames = 4096,
+                TargetFillFrames = 1024
+            },
+            NullLogger<DeviceInputChannel>.Instance);
+
+        console.Controller.BindBusOutput(monitor, destination);
+        console.Controller.Recompile();
+
+        // No SetSend. That is the whole test: somebody adds a monitor, plugs in headphones, and
+        // hears the room - rather than silence and a grid of switches they have to find first.
+        console.Feed(0, 0.5f);
+
+        float[] played = new float[ConsoleFixture.BlockFrames * 2];
+        float peak = 0f;
+
+        for (int block = 0; block < ConsoleFixture.BlocksToSettle * 2; block++)
+        {
+            console.Render();
+            destination.Fill(played, ConsoleFixture.BlockFrames);
+        }
+
+        foreach (float sample in played)
+        {
+            peak = Math.Max(peak, Math.Abs(sample));
+        }
+
+        Assert.Equal(0.5f, peak, 0.01f);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void ANewStripReachesEveryBusThatAlreadyExists()
+    {
+        ConsoleFixture console = Build();
+
+        console.Controller.AddBus(new BusConfig { Name = "Monitor", Role = BusRole.Monitor, ChannelCount = 2 });
+
+        int strip = console.Controller.AddChannel(new ChannelConfig { DeviceId = Microphone, Name = "Lectern" });
+
+        // The same failure the other way round: a microphone added during a meeting that goes
+        // nowhere until somebody works out which switches it needs.
+        foreach (int bus in (ReadOnlySpan<int>)[0, 1])
+        {
+            SendConfig send = Assert.Single(
+                console.Controller.Config.Sends,
+                candidate => candidate.ChannelIndex == strip && candidate.BusIndex == bus);
+
+            Assert.True(send.IsOn);
+            Assert.Equal(0, send.LevelDb);
+        }
+    }
+
     static ConsoleFixture Build()
     {
         GraphConfig config = new();
