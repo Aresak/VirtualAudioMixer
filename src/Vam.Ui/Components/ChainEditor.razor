@@ -16,9 +16,13 @@
         ModifierState link = Chain[index];
         bool locked = IsLocked(position);
 
-        <div class="mod @(locked ? "anchor" : null)"
-             draggable="@((!locked).ToString().ToLowerInvariant())"
-             @ondragstart="() => dragging = position"
+        @*
+            The row is the drop target but never the drag source. A draggable element swallows
+            pointer interaction with everything inside it, so with the row draggable the help button
+            could be opened and never closed, and the bypass and remove buttons took two attempts.
+            The grip below is the handle, which is also what the cursor has been promising all along.
+        *@
+        <div class="mod @(locked ? "anchor" : null) @(IsSilent(link) ? "silent" : null)"
              @ondragover:preventDefault="true"
              @ondrop="() => MoveAsync(position)">
 
@@ -31,13 +35,28 @@
                 else
                 {
                     <span class="grip"
-                          title="@L["mixer.reorder"]">⠿</span>
+                          draggable="true"
+                          title="@L["mixer.reorder"]"
+                          @ondragstart="() => dragging = position">⠿</span>
                 }
 
                 <span class="t">@link.Name</span>
 
                 <InlineHelp Title="@link.Name"
                             Body="@HelpFor(link)" />
+
+                @*
+                    U19's rule, one stage further down. A meter greys when the automixer has a strip
+                    at its floor - making sound, none of it reaching the mix - and a chain link can
+                    do the same thing: a denoise set hard enough removes everything the microphone
+                    sent. The strip meter reads the input, so without this the console shows a signal
+                    jumping about and never says which link took it.
+                *@
+                @if (IsSilent(link))
+                {
+                    <span class="silentmark"
+                          title="@L["chain.silentWhy"]">@L["chain.silent"]</span>
+                }
 
                 <span style="flex:1"></span>
 

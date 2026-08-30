@@ -460,13 +460,17 @@ public sealed class MixerService(
     {
         Modifier modifier = chain.Modifiers[link];
 
+        ModifierTelemetry telemetry = chain.Telemetry[link];
+
         ModifierState state = new()
         {
             LinkId = chain.LinkIds[link],
             ModifierId = modifier.Descriptor.Id,
             Name = modifier.Descriptor.Name,
             IsBypassed = isBypassed,
-            CostFraction = 0
+            CostFraction = 0,
+            LevelDb = telemetry.LevelDb,
+            IsActive = telemetry.IsActive
         };
 
         foreach (ParameterDescriptor descriptor in modifier.Parameters)
