@@ -214,6 +214,12 @@ public sealed class VamEngine : IDisposable
         // Wrapped rather than passed straight through, so K4 and K5 measure the real callback on a
         // real machine rather than a test harness's idea of one. Both are a handful of instructions.
         Clock.SetConsumer(RenderAndMeasure);
+
+        // Said before the clock is asked to find one. The primary bus plays out through the clock, so
+        // the device an operator chose for it is the device that has to be keeping time; without this
+        // the clock takes whichever render endpoint enumerates first, and the console then shows one
+        // destination while the mix leaves through another.
+        Clock.Preferred = PrimaryOutputDeviceOf(config);
         Clock.Poll();
 
         BusOutputs = new BusOutputHost(backend, loggers);
@@ -408,14 +414,20 @@ public sealed class VamEngine : IDisposable
             });
         }
 
-        IReadOnlyList<AudioDeviceInfo> outputs = devices.Enumerate(DeviceDirection.Render);
+        // The system default, not the first one enumerated. The primary bus plays out through the
+        // master clock, so this choice is also the choice of timebase, and the first render endpoint
+        // on a machine with an HDMI display is often that display: an endpoint that opens, reports
+        // itself running, and never asks for a block. Whoever is sitting there has already told
+        // Windows where sound goes.
+        AudioDeviceInfo? output = devices.DefaultDevice(DeviceDirection.Render)
+            ?? devices.Enumerate(DeviceDirection.Render).FirstOrDefault();
 
         config.Buses.Add(new BusConfig
         {
             Name = "Stream",
             Role = BusRole.Stream,
             ChannelCount = 2,
-            OutputDeviceId = outputs.Count > 0 ? outputs[0].Id : AudioDeviceId.None
+            OutputDeviceId = output?.Id ?? AudioDeviceId.None
         });
 
         for (int channel = 0; channel < config.Channels.Count; channel++)
@@ -710,6 +722,14 @@ public sealed class VamEngine : IDisposable
             return;
         }
 
+        // The primary bus is not opened here - it goes out through the clock - so re-aiming it is a
+        // change of clock rather than of device thread. Doing this first means the endpoint it used
+        // to play to is released before anything else is asked to open one.
+        if (Clock is { } clock)
+        {
+            clock.Preferred = PrimaryOutputDeviceOf(config);
+        }
+
         List<BusOutputRequest> wanted = [];
 
         for (int bus = 0; bus < config.Buses.Count; bus++)
@@ -739,6 +759,17 @@ public sealed class VamEngine : IDisposable
         }
 
         Graph.Recompile();
+    }
+
+    /// <summary>Where the primary bus is aimed, which is where the clock has to be.</summary>
+    static AudioDeviceId PrimaryOutputDeviceOf(GraphConfig config)
+    {
+        if (config.Buses.Count == 0)
+        {
+            return AudioDeviceId.None;
+        }
+
+        return config.Buses[Math.Clamp(config.PrimaryBusIndex, 0, config.Buses.Count - 1)].OutputDeviceId;
     }
 
     void OnOverran(object? sender, ModifierOverrun overrun)

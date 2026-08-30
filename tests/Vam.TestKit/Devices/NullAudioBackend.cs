@@ -21,6 +21,7 @@ public sealed class NullAudioBackend : IAudioBackend
 {
     readonly Dictionary<AudioDeviceId, NullDeviceOptions> options = [];
     readonly Dictionary<AudioDeviceId, AudioDeviceInfo> devices = [];
+    readonly Dictionary<DeviceDirection, AudioDeviceId> defaults = [];
     readonly List<NullCaptureStream> captureStreams = [];
     readonly List<NullRenderStream> renderStreams = [];
 
@@ -123,6 +124,39 @@ public sealed class NullAudioBackend : IAudioBackend
         }
 
         return present;
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The first one added in that direction, and settable when a test needs to say which. A fake
+    /// with no notion of a default would let a test pass while the real backend picks differently.
+    /// </remarks>
+    public AudioDeviceInfo? DefaultDevice(DeviceDirection direction)
+    {
+        if (defaults.TryGetValue(direction, out AudioDeviceId chosen) && devices.TryGetValue(chosen, out AudioDeviceInfo? named))
+        {
+            return named;
+        }
+
+        foreach (AudioDeviceInfo info in devices.Values)
+        {
+            if (info.Direction == direction)
+            {
+                return info;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Says which device this backend calls the default.</summary>
+    /// <param name="deviceId">Which one.</param>
+    public void MakeDefault(AudioDeviceId deviceId)
+    {
+        if (devices.TryGetValue(deviceId, out AudioDeviceInfo? info))
+        {
+            defaults[info.Direction] = deviceId;
+        }
     }
 
     /// <inheritdoc />

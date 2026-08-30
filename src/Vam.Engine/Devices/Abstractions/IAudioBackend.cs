@@ -24,6 +24,26 @@ public interface IAudioBackend : IDisposable
     /// <returns>What is present now. Devices come and go; this is a snapshot, not a subscription.</returns>
     IReadOnlyList<AudioDeviceInfo> Enumerate(DeviceDirection direction);
 
+    /// <summary>
+    /// What the operating system plays sound through, when it is asked nothing in particular.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The first device an enumeration returns is not a default; it is an accident of ordering, and
+    /// on a machine with an HDMI display, a headset and an interface it is as likely to be the
+    /// display — an endpoint that opens, reports itself running, and never asks for a single block.
+    /// The person sitting there has already told their operating system where sound goes, and this
+    /// is that answer.
+    /// </para>
+    /// <para>
+    /// Null when there is none. A machine with no sound card is a real machine, and so is a CI
+    /// runner.
+    /// </para>
+    /// </remarks>
+    /// <param name="direction">Which way to look.</param>
+    /// <returns>The default device, or null.</returns>
+    AudioDeviceInfo? DefaultDevice(DeviceDirection direction);
+
     /// <summary>Opens a capture device.</summary>
     /// <param name="deviceId">Which device.</param>
     /// <param name="options">What to ask for.</param>

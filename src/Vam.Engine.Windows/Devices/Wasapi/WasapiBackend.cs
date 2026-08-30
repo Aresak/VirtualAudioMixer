@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
@@ -43,6 +44,25 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
         }
 
         return present;
+    }
+
+    /// <inheritdoc />
+    public AudioDeviceInfo? DefaultDevice(DeviceDirection direction)
+    {
+        try
+        {
+            // Multimedia rather than Console. The two differ on a machine where somebody has pointed
+            // communications audio at a headset, and a mixer is closer to media than to a phone call.
+            using MMDevice device = enumerator.GetDefaultAudioEndpoint(Flow(direction), Role.Multimedia);
+
+            return Describe(device, direction);
+        }
+        catch (Exception failure) when (failure is COMException or ArgumentException)
+        {
+            // No default endpoint at all. A machine with the sound card disabled reaches here, and it
+            // is a machine the engine still has to start on.
+            return null;
+        }
     }
 
     /// <inheritdoc />
