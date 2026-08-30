@@ -40,7 +40,14 @@ public sealed class GraphSnapshot
         SendMatrix sends,
         ChainParams[]? chains = null,
         AutomixParams? automix = null)
-        : this(plan, channels, buses, sends, chains ?? EmptyChains(channels.Length), automix ?? AutomixParams.Empty, version: 0)
+        : this(
+            plan,
+            channels,
+            buses,
+            sends,
+            chains ?? EmptyChains(channels.Length + buses.Length),
+            automix ?? AutomixParams.Empty,
+            version: 0)
     {
     }
 
@@ -184,6 +191,18 @@ public sealed class GraphSnapshot
         return new GraphSnapshot(Plan, channels, buses, Sends, changed, Automix, Version + 1);
     }
 
+    /// <summary>Produces a snapshot with one bus's chain settings changed and the plan shared.</summary>
+    /// <param name="busIndex">Which bus.</param>
+    /// <param name="parameters">Its new chain settings.</param>
+    /// <returns>The new snapshot.</returns>
+    public GraphSnapshot WithBusChain(int busIndex, ChainParams parameters)
+    {
+        ChainParams[] changed = [.. chains];
+        changed[ChannelCount + busIndex] = parameters;
+
+        return new GraphSnapshot(Plan, channels, buses, Sends, changed, Automix, Version + 1);
+    }
+
     /// <summary>Produces a snapshot with new automixer settings and the plan shared.</summary>
     /// <param name="parameters">The new settings.</param>
     /// <returns>The new snapshot.</returns>
@@ -194,7 +213,24 @@ public sealed class GraphSnapshot
     /// <param name="channelIndex">Which strip.</param>
     /// <returns>Its settings, or an empty chain when it has none.</returns>
     public ChainParams ChainOf(int channelIndex) =>
-        channelIndex >= 0 && channelIndex < chains.Length ? chains[channelIndex] : ChainParams.Empty;
+        channelIndex >= 0 && channelIndex < ChannelCount ? chains[channelIndex] : ChainParams.Empty;
+
+    /// <summary>
+    /// One bus's chain settings. D6.
+    /// </summary>
+    /// <remarks>
+    /// Bus chains live in the same array as the strips', after them, rather than in a second one.
+    /// A snapshot is copied on every published change, and one array copied is cheaper and harder to
+    /// get out of step than two that have to agree about their lengths.
+    /// </remarks>
+    /// <param name="busIndex">Which bus.</param>
+    /// <returns>Its chain settings, or empty.</returns>
+    public ChainParams BusChainOf(int busIndex)
+    {
+        int at = ChannelCount + busIndex;
+
+        return busIndex >= 0 && at < chains.Length ? chains[at] : ChainParams.Empty;
+    }
 
     static ChainParams[] EmptyChains(int count)
     {

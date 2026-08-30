@@ -1,0 +1,42 @@
+@inherits VamComponent
+
+@*
+    U14. A question mark that says how to set the thing well, not what the thing is called.
+
+    "Threshold: the level above which the gate opens" is a dictionary definition and helps nobody.
+    "Set it just above the room noise — if a quiet voice disappears, it is too high" is something an
+    operator can act on in the thirty seconds before a meeting starts. Every body of text behind one
+    of these is written to the second standard.
+
+    Not a `title` attribute: those do not appear on a touchscreen, take a second to show, and cannot
+    hold two sentences legibly.
+*@
+
+<span class="hlpwrap">
+    <button type="button"
+            class="hlp @(isOpen ? "on" : null)"
+            aria-expanded="@isOpen"
+            aria-label="@Title"
+            @onclick="() => isOpen = !isOpen">?</button>
+
+    @if (isOpen)
+    {
+        <span class="hlpbody" role="note">
+            <b>@Title</b>
+            @Body
+        </span>
+    }
+</span>
+
+@code {
+    bool isOpen;
+
+    /// <summary>What is being explained.</summary>
+    [Parameter]
+    [EditorRequired]
+    public required string Title { get; set; }
+
+    /// <summary>How to set it well.</summary>
+    [Parameter]
+    public string Body { get; set; } = string.Empty;
+}

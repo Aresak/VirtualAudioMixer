@@ -4,6 +4,8 @@ using Vam.Engine.Devices.Abstractions;
 using Vam.Engine.Recording;
 using Vam.Modifiers.Abstractions;
 using Vam.Engine.Graph;
+using Vam.Engine.Graph.Nodes;
+using Vam.Engine.Modifiers;
 using Vam.Engine.Metering;
 using Vam.Protocol;
 using Vam.Protocol.V1;
@@ -240,7 +242,9 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
                     : Refuse("The engine is not running.");
 
             case Command.KindOneofCase.AddModifier:
-                return AddLink(request.AddModifier);
+                return engine.Graph is { } graph
+                    ? ChainCommands.Add(graph, engine.Modifiers, request.AddModifier)
+                    : Refuse("The engine is not running.");
 
             case Command.KindOneofCase.SetRecording:
                 if (!request.SetRecording.Recording)
@@ -258,34 +262,6 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
             default:
                 return null;
         }
-    }
-
-    CommandReply AddLink(AddModifier request)
-    {
-        if (engine.Graph is not { } graph
-            || request.ChannelIndex < 0
-            || request.ChannelIndex >= graph.Config.Channels.Count)
-        {
-            return Refuse($"There is no strip {request.ChannelIndex}.");
-        }
-
-        if (engine.Modifiers.Create(request.ModifierId) is null)
-        {
-            return Refuse($"This engine has no modifier called '{request.ModifierId}'.");
-        }
-
-        List<Vam.Engine.Modifiers.ModifierSetting> chain = graph.Config.Channels[request.ChannelIndex].Chain;
-        int at = Math.Clamp(request.AtIndex, 0, chain.Count);
-
-        chain.Insert(at, new Vam.Engine.Modifiers.ModifierSetting
-        {
-            LinkId = Guid.NewGuid().ToString("n"),
-            ModifierId = request.ModifierId
-        });
-
-        graph.Recompile();
-
-        return Accept();
     }
 
     static CommandReply Refuse(string reason) => new() { Accepted = false, Reason = reason };
@@ -358,14 +334,18 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
                 break;
 
             case Command.KindOneofCase.SetModifierBypass:
-                return ApplyBypass(graph, request.SetModifierBypass);
+                return ChainCommands.SetBypass(graph, request.SetModifierBypass);
 
             case Command.KindOneofCase.SetModifierParameter:
-                return ApplyParameter(graph, request.SetModifierParameter);
+                return ChainCommands.SetParameter(graph, request.SetModifierParameter);
 
             case Command.KindOneofCase.SetChannelName:
                 return Rewrite(graph, request.SetChannelName.ChannelIndex,
                     channel => channel with { Name = request.SetChannelName.Name });
+
+            case Command.KindOneofCase.SetAutomixWeight:
+                return Rewrite(graph, request.SetAutomixWeight.ChannelIndex,
+                    channel => channel with { AutomixWeight = (float)request.SetAutomixWeight.Weight });
 
             case Command.KindOneofCase.SetChannelColour:
                 return Rewrite(graph, request.SetChannelColour.ChannelIndex,
@@ -395,10 +375,28 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
                 return Accept();
 
             case Command.KindOneofCase.RemoveModifier:
-                return RemoveLink(graph, request.RemoveModifier);
+                return ChainCommands.Remove(graph, request.RemoveModifier);
 
             case Command.KindOneofCase.MoveModifier:
-                return MoveLink(graph, request.MoveModifier);
+                return ChainCommands.Move(graph, request.MoveModifier);
+
+            case Command.KindOneofCase.SetBusRole:
+                if (request.SetBusRole.BusIndex < 0 || request.SetBusRole.BusIndex >= graph.Config.Buses.Count)
+                {
+                    return Refuse($"There is no bus {request.SetBusRole.BusIndex}.");
+                }
+
+                if (!Enum.TryParse(request.SetBusRole.Role, ignoreCase: true, out BusRole newRole))
+                {
+                    return Refuse($"There is no bus role called '{request.SetBusRole.Role}'.");
+                }
+
+                graph.Config.Buses[request.SetBusRole.BusIndex] =
+                    graph.Config.Buses[request.SetBusRole.BusIndex] with { Role = newRole };
+
+                graph.Recompile();
+
+                return Accept();
 
             default:
                 return Refuse("The command carried nothing.");
@@ -428,53 +426,6 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
         return Accept();
     }
 
-    static CommandReply RemoveLink(GraphController graph, RemoveModifier request)
-    {
-        if (request.ChannelIndex < 0 || request.ChannelIndex >= graph.Config.Channels.Count)
-        {
-            return Refuse($"There is no strip {request.ChannelIndex}.");
-        }
-
-        List<Vam.Engine.Modifiers.ModifierSetting> chain = graph.Config.Channels[request.ChannelIndex].Chain;
-
-        if (request.LinkIndex < 0 || request.LinkIndex >= chain.Count)
-        {
-            return Refuse($"Strip {request.ChannelIndex} has no link {request.LinkIndex}.");
-        }
-
-        chain.RemoveAt(request.LinkIndex);
-        graph.Recompile();
-
-        return Accept();
-    }
-
-    static CommandReply MoveLink(GraphController graph, MoveModifier request)
-    {
-        if (request.ChannelIndex < 0 || request.ChannelIndex >= graph.Config.Channels.Count)
-        {
-            return Refuse($"There is no strip {request.ChannelIndex}.");
-        }
-
-        List<Vam.Engine.Modifiers.ModifierSetting> chain = graph.Config.Channels[request.ChannelIndex].Chain;
-
-        if (request.FromIndex < 0 || request.FromIndex >= chain.Count
-            || request.ToIndex < 0 || request.ToIndex >= chain.Count)
-        {
-            return Refuse("A link cannot be moved to a place that is not there.");
-        }
-
-        // Order is the configuration, not an incidental list order: a gate before a denoise and a
-        // gate after one are different microphones. B0.
-        Vam.Engine.Modifiers.ModifierSetting moving = chain[request.FromIndex];
-
-        chain.RemoveAt(request.FromIndex);
-        chain.Insert(request.ToIndex, moving);
-
-        graph.Recompile();
-
-        return Accept();
-    }
-
     static CommandReply ApplySend(GraphController graph, SetSend request)
     {
         GraphSnapshot before = graph.Publisher.Current;
@@ -492,46 +443,6 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
 
         graph.Submit(GraphCommand.SetSend(request.ChannelIndex, request.BusIndex, request.On, request.Decibels));
         graph.Pump();
-
-        return Accept();
-    }
-
-    static CommandReply ApplyBypass(GraphController graph, SetModifierBypass request)
-    {
-        if (request.ChannelIndex < 0 || request.ChannelIndex >= graph.Config.Channels.Count)
-        {
-            return Refuse($"There is no strip {request.ChannelIndex}.");
-        }
-
-        List<Vam.Engine.Modifiers.ModifierSetting> chain = graph.Config.Channels[request.ChannelIndex].Chain;
-
-        if (request.LinkIndex < 0 || request.LinkIndex >= chain.Count)
-        {
-            return Refuse($"Strip {request.ChannelIndex} has no link {request.LinkIndex}.");
-        }
-
-        chain[request.LinkIndex] = chain[request.LinkIndex] with { IsBypassed = request.Bypassed };
-        graph.Recompile();
-
-        return Accept();
-    }
-
-    static CommandReply ApplyParameter(GraphController graph, SetModifierParameter request)
-    {
-        if (request.ChannelIndex < 0 || request.ChannelIndex >= graph.Config.Channels.Count)
-        {
-            return Refuse($"There is no strip {request.ChannelIndex}.");
-        }
-
-        List<Vam.Engine.Modifiers.ModifierSetting> chain = graph.Config.Channels[request.ChannelIndex].Chain;
-
-        if (request.LinkIndex < 0 || request.LinkIndex >= chain.Count)
-        {
-            return Refuse($"Strip {request.ChannelIndex} has no link {request.LinkIndex}.");
-        }
-
-        chain[request.LinkIndex].Values[request.ParameterId] = (float)request.Value;
-        graph.Recompile();
 
         return Accept();
     }
@@ -589,7 +500,7 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
         {
             BusConfig bus = config.Buses[index];
 
-            state.Buses.Add(new BusState
+            BusState wire = new()
             {
                 Index = index,
                 Name = bus.Name,
@@ -597,8 +508,18 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
                 ChannelCount = bus.ChannelCount,
                 GainDb = bus.GainDb,
                 IsMuted = bus.IsMuted,
-                OutputDeviceId = bus.OutputDeviceId.Value
-            });
+                OutputDeviceId = bus.OutputDeviceId.Value,
+                OutputDeviceName = DeviceName(bus.OutputDeviceId, DeviceDirection.Render),
+                Colour = bus.Colour,
+
+                // D8. Monitor sends are pre-fader, so moving a fader does not change what the person
+                // in the chair hears. Derived from the role rather than configured, like everything
+                // else the role decides.
+                IsPreFader = index < snapshot.BusCount && snapshot.Buses[index].IsPreFader
+            };
+
+            AddBusChain(wire, bus, snapshot, index);
+            state.Buses.Add(wire);
 
             // D4's exclusions, read off the compiled matrix rather than off the configuration. The
             // engine works them out from the declared pairing; the console shows the answer, and
@@ -628,9 +549,118 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
 
         state.Automix = BuildAutomix(config);
         state.Recording = BuildRecording();
+        state.Health = BuildHealth();
 
         return state;
     }
+
+    /// <summary>Fills in a bus's chain, its limiter activity, and whether the engine added the limiter.</summary>
+    static void AddBusChain(BusState wire, BusConfig bus, GraphSnapshot snapshot, int index)
+    {
+        IReadOnlyList<Vam.Engine.Modifiers.ModifierSetting> effective = GraphCompiler.EffectiveBusChain(bus);
+
+        wire.HasMandatoryLimiter = effective.Count > bus.Chain.Count;
+
+        foreach (AudioNode node in snapshot.Plan.Nodes)
+        {
+            if (node is not BusChainNode chainNode || chainNode.BusIndex != index)
+            {
+                continue;
+            }
+
+            ModifierChain chain = chainNode.Chain;
+            ChainParams parameters = snapshot.BusChainOf(index);
+
+            for (int link = 0; link < chain.Count; link++)
+            {
+                wire.Chain.Add(BuildLink(
+                    link < effective.Count ? effective[link] : null,
+                    chain,
+                    link,
+                    parameters.IsBypassed(link)));
+
+                // D6. What the limiter is taking off, read from the modifier's own telemetry. It is
+                // an activity light rather than a meter: once a second is enough to answer "is it
+                // working", which is the only question the bus strip asks.
+                if (chain.Modifiers[link].Descriptor.Id == GraphCompiler.MandatoryLimiterId
+                    || chain.Modifiers[link].Descriptor.Id == "vam.limiter")
+                {
+                    wire.LimiterReductionDb = chain.Telemetry[link].GainReductionDb;
+                }
+            }
+        }
+    }
+
+    static ModifierState BuildLink(
+        Vam.Engine.Modifiers.ModifierSetting? setting,
+        ModifierChain chain,
+        int link,
+        bool isBypassed)
+    {
+        Modifier modifier = chain.Modifiers[link];
+
+        ModifierState state = new()
+        {
+            LinkId = chain.LinkIds[link],
+            ModifierId = modifier.Descriptor.Id,
+            Name = modifier.Descriptor.Name,
+            IsBypassed = isBypassed,
+            CostFraction = 0
+        };
+
+        foreach (ParameterDescriptor descriptor in modifier.Parameters)
+        {
+            state.Parameters.Add(new ParameterState
+            {
+                Id = descriptor.Id,
+                Name = descriptor.Name,
+                Unit = descriptor.Unit,
+                Value = setting is not null && setting.Values.TryGetValue(descriptor.Id, out float saved)
+                    ? descriptor.Clamp(saved)
+                    : descriptor.Default,
+                Minimum = descriptor.Minimum,
+                Maximum = descriptor.Maximum
+            });
+        }
+
+        return state;
+    }
+
+    string DeviceName(Vam.Engine.Devices.Abstractions.AudioDeviceId id, DeviceDirection direction)
+    {
+        if (id.IsNone || engine.Backend is not { } backend)
+        {
+            return string.Empty;
+        }
+
+        foreach (AudioDeviceInfo device in backend.Enumerate(direction))
+        {
+            if (device.Id == id)
+            {
+                return device.FriendlyName;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>The handful of numbers the status bar shows. U1.</summary>
+    /// <remarks>
+    /// Carried with the console rather than behind GetDiagnostics: the status bar is on every view,
+    /// and an operator glancing at it must not be paying for a drift history nobody opened.
+    /// </remarks>
+    EngineHealth BuildHealth() => new()
+    {
+        Load = engine.Load,
+
+        // What is left, which is the number an operator actually reads, because it is the one that
+        // runs out. Clamped rather than allowed to go negative: a callback that took two blocks has
+        // no headroom, and "minus a hundred per cent" is not a thing anybody can act on.
+        Headroom = Math.Clamp(1.0 - engine.Load, 0.0, 1.0),
+        Dropouts = engine.Dropouts.TotalRecorded,
+        UptimeTicks = engine.StartedAt is { } started ? (DateTimeOffset.UtcNow - started).Ticks : 0,
+        IsTimerFallback = engine.Clock is null || engine.Clock.PrimaryDeviceId.IsNone
+    };
 
     ChannelState BuildChannel(GraphConfig config, int index)
     {

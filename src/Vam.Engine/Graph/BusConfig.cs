@@ -1,4 +1,5 @@
 using Vam.Engine.Devices.Abstractions;
+using Vam.Engine.Modifiers;
 
 namespace Vam.Engine.Graph;
 
@@ -31,4 +32,26 @@ public sealed record BusConfig
     /// Where it goes. None for a bus that only exists to be recorded or monitored elsewhere.
     /// </summary>
     public AudioDeviceId OutputDeviceId { get; init; } = AudioDeviceId.None;
+
+    /// <summary>
+    /// The colour its strip is topped with. U5.
+    /// </summary>
+    public string Colour { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The bus's own modifier chain. D6.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Same framework as a strip's, on the summed bus rather than on one microphone: equalisation
+    /// for the room a feed is going into, a compressor for the dynamic range a stream can carry, and
+    /// a limiter at the end.
+    /// </para>
+    /// <para>
+    /// <b>The limiter on a stream bus is not optional.</b> The compiler appends one if the operator
+    /// has not, because a stream that clips is a stream nobody can fix afterwards, and the person
+    /// who would notice is not in the room.
+    /// </para>
+    /// </remarks>
+    public List<ModifierSetting> Chain { get; init; } = [];
 }

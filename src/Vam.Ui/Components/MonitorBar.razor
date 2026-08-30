@@ -1,0 +1,102 @@
+@inherits VamComponent
+
+@*
+    D5 and F7. What each pair of headphones hears, along the bottom of the mixer.
+
+    It lives here as well as on the Monitors view because during setup an operator changes it while
+    they are adjusting everything else — and walking to another view to switch a headphone feed means
+    losing sight of the meters that told you it needed switching.
+
+    Collapsible, because during a meeting it is the least useful row on the screen.
+*@
+
+<div class="monbar @(Shell.IsMonitorBarOpen ? null : "collapsed")">
+    <div class="mhead">
+        <b class="lbl" style="font-size:12px;color:var(--ink-dim)">@L["mixer.monitors"]</b>
+        <span class="sub" style="margin:0">@L["monitors.sub"]</span>
+        <span style="flex:1"></span>
+        <button type="button" class="btn sm" @onclick="() => Shell.IsMonitorBarOpen = !Shell.IsMonitorBarOpen">
+            @(Shell.IsMonitorBarOpen ? L["common.collapse"] : L["common.expand"])
+        </button>
+    </div>
+
+    @foreach (BusState monitor in Monitors)
+    {
+        <div class="monrow">
+            <span class="nm">@monitor.Name</span>
+
+            <span class="grp">
+                <span class="gl">@L["monitors.inputs"]</span>
+                @foreach (ChannelState channel in Channels)
+                {
+                    <button type="button"
+                            class="mchip @(IsOn(channel, monitor) ? "on" : null)"
+                            disabled="@IsExcluded(channel, monitor)"
+                            title="@(IsExcluded(channel, monitor) ? L["send.lockedWhy"] : channel.Name)"
+                            @onclick="() => Toggle(channel, monitor)">
+                        @channel.Name
+                    </button>
+                }
+            </span>
+
+            @*
+                D9, bus-to-bus, is phase 1, so a monitor cannot yet be fed a whole bus — only the
+                inputs above. Saying so beats a row of chips that would do nothing when pressed.
+            *@
+            <span class="grp">
+                <span class="gl">@L["monitors.buses"]</span>
+                <span class="chip">@L["common.phaseOne"]</span>
+            </span>
+
+            <span style="flex:1"></span>
+            <span class="mono" style="font-size:11.5px;color:var(--ink-mute)">
+                @FaderScale.Format(monitor.GainDb) dB
+            </span>
+        </div>
+    }
+
+    @if (Monitors.Count == 0)
+    {
+        <div class="monrow">
+            <span class="sub" style="margin:0">@L["monitors.none"]</span>
+        </div>
+    }
+</div>
+
+@code {
+    IReadOnlyList<BusState> Monitors =>
+        Session.Console?.Buses
+            .Where(bus => bus.Role.Equals("Monitor", StringComparison.OrdinalIgnoreCase))
+            .ToList()
+        ?? [];
+
+    IReadOnlyList<ChannelState> Channels => Session.Console?.Channels ?? [];
+
+    bool IsExcluded(ChannelState channel, BusState monitor) => monitor.ExcludedChannels.Contains(channel.Index);
+
+    bool IsOn(ChannelState channel, BusState monitor) =>
+        Session.Console?.Sends
+            .FirstOrDefault(send => send.ChannelIndex == channel.Index && send.BusIndex == monitor.Index)?.State == "On";
+
+    async Task Toggle(ChannelState channel, BusState monitor)
+    {
+        if (IsExcluded(channel, monitor))
+        {
+            return;
+        }
+
+        // The same command a send button sends, because a monitor source is a send. Nothing about
+        // this row is a second mechanism — it is a different view of the matrix, and if it were its
+        // own mechanism the two would disagree the first time somebody used both.
+        await Session.ApplyAsync(new Command
+        {
+            SetSend = new SetSend
+            {
+                ChannelIndex = channel.Index,
+                BusIndex = monitor.Index,
+                On = !IsOn(channel, monitor),
+                Decibels = 0
+            }
+        });
+    }
+}

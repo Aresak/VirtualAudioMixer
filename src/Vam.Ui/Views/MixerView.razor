@@ -17,20 +17,18 @@
             @L["mixer.matrix"]
         </button>
 
+        <span style="flex:1"></span>
+
         <button type="button"
                 class="chip @(Shell.IsReorderArmed ? "on" : null)"
+                title="@L["help.reorder"]"
                 @onclick="() => Shell.IsReorderArmed = !Shell.IsReorderArmed">
             @L["mixer.reorder"]
         </button>
 
-        <button type="button" class="chip @(Shell.IsCompact ? "on" : null)" @onclick="ToggleDensity">
-            @L["mixer.density"]: @(Shell.IsCompact ? L["mixer.compact"] : L["mixer.full"])
-        </button>
-
-        <span style="flex:1"></span>
-
-        <button type="button" class="btn" @onclick="() => Shell.Overlay = OverlayId.Add">
-            @L["mixer.add"]
+        @* U4. The button says what pressing it does, not what the console is already doing. *@
+        <button type="button" class="btn" title="@L["help.density"]" @onclick="ToggleDensity">
+            @(Shell.IsCompact ? L["mixer.full"] : L["mixer.compact"])
         </button>
     </div>
 
@@ -57,15 +55,27 @@
                                   Buses="Session.Console.Buses"
                                   Reordered="OnReordered" />
                 }
+
+                @*
+                    U17. A tile at the end of the strips rather than a button in the toolbar, because
+                    that is where an operator looks for the place a new strip would go.
+                *@
+                <button type="button" class="addtile" title="@L["help.addInput"]"
+                        @onclick="() => Shell.Overlay = OverlayId.Add">
+                    <span>＋</span>
+                    <em>@L["mixer.addInput"]</em>
+                </button>
             </div>
 
             <div class="buses">
                 @foreach (BusState bus in Session.Console.Buses)
                 {
-                    <BusStrip @key="bus.Index" Bus="bus" />
+                    <BusStrip @key="bus.Index" Bus="bus" IsMaster="@IsMaster(bus)" />
                 }
             </div>
         </div>
+
+        <MonitorBar />
     }
 
     @switch (Shell.Overlay)
@@ -150,7 +160,7 @@
 
         return console is null
             ? 0
-            : HashCode.Combine(console.Channels.Count, console.Buses.Count, Shell.IsCompact, Shell.Overlay);
+            : HashCode.Combine(console.Channels.Count, console.Buses.Count, Shell.IsCompact, Shell.Overlay, Shell.IsMonitorBarOpen);
     }
 
     /// <summary>
@@ -215,6 +225,9 @@
             Volatile.Write(ref pending, 0);
         }
     }
+
+    static bool IsMaster(BusState bus) =>
+        bus.Role.Equals("Stream", StringComparison.OrdinalIgnoreCase);
 
     void ToggleDensity() => Shell.IsCompact = !Shell.IsCompact;
 

@@ -22,6 +22,7 @@ public sealed class CallbackHistogram
 
     long overruns;
     double worst;
+    double recentWorst;
 
     /// <summary>Creates a histogram over a block budget.</summary>
     /// <param name="bucketCount">How many buckets. The last one collects everything past the end.</param>
@@ -84,10 +85,33 @@ public sealed class CallbackHistogram
             worst = fraction;
         }
 
+        if (fraction > recentWorst)
+        {
+            recentWorst = fraction;
+        }
+
         if (fraction >= 1.0)
         {
             overruns++;
         }
+    }
+
+    /// <summary>
+    /// The worst callback since this was last asked, and forgets it.
+    /// </summary>
+    /// <remarks>
+    /// The status bar wants "how close are we right now", which the all-time worst cannot answer: one
+    /// bad block during startup would leave it reading ninety per cent for the rest of the evening
+    /// and an operator would learn to ignore it. Read once a second by the control loop.
+    /// </remarks>
+    /// <returns>The worst fraction of a block seen since the last call.</returns>
+    public double TakeRecentWorst()
+    {
+        double taken = recentWorst;
+
+        recentWorst = 0;
+
+        return taken;
     }
 
     /// <summary>Copies the buckets out, for a caller that owns the destination.</summary>
@@ -99,6 +123,7 @@ public sealed class CallbackHistogram
     {
         Array.Clear(buckets);
         worst = 0;
+        recentWorst = 0;
         overruns = 0;
     }
 }

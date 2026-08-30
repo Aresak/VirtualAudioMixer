@@ -4,6 +4,10 @@
     U3. Over the mixer, not away from it. An operator adjusting one microphone has not stopped
     needing to see the other fifteen, and a console that navigates to a settings page hides the
     meeting behind the thing being adjusted.
+
+    The chain is drawn with its anchors: the head that cannot be dragged downwards and the tail that
+    cannot be dragged upwards. Both are places in the compiled plan rather than a rule this console
+    is trusted to enforce — drawing them makes the arrangement visible instead of surprising.
 *@
 
 @if (Channel is { } channel)
@@ -12,83 +16,181 @@
         <div class="ohd">
             <span class="swatch" style="background:@Colour(channel)"></span>
             <span class="nm">@channel.Name</span>
+
+            @* Stepping between strips without closing and reopening. Comparing two microphones means
+               looking at both, and the overlay is where the numbers are. *@
+            <button type="button" class="btn sm" disabled="@(channel.Index == 0)" @onclick="() => Step(-1)">◀</button>
+            <button type="button" class="btn sm" disabled="@(channel.Index >= Count - 1)" @onclick="() => Step(1)">▶</button>
             <button type="button" class="btn sm" @onclick="Shell.CloseOverlay">@L["common.close"]</button>
         </div>
 
         <div class="obody">
-            <h2>@L["strip.name"]</h2>
+            <h2>@L["channel.input"]</h2>
 
-            <div class="row">
-                <input type="text"
-                       value="@channel.Name"
-                       aria-label="@L["strip.name"]"
-                       @onchange="argument => Rename(channel, argument)" />
-            </div>
+            <div class="card">
+                <div class="kv">
+                    <span class="k">@L["strip.device"]</span>
+                    <span class="v">@channel.DeviceName</span>
 
-            <div class="row" style="margin-top:8px">
-                @foreach (string colour in StripPalette.All)
-                {
-                    <button type="button"
-                            class="swatch"
-                            style="background:@colour;width:22px;height:22px;border:1px solid @(colour == Colour(channel) ? "var(--ink)" : "var(--line)")"
-                            aria-label="@colour"
-                            @onclick="() => SetColour(channel, colour)"></button>
-                }
-            </div>
+                    <span class="k">@L["channel.rates"]</span>
+                    <span class="v">@Rates(channel)</span>
 
-            <h2>@L["strip.device"]</h2>
+                    <span class="k">@L["channel.drift"]</span>
+                    <span class="v">@channel.DriftPpm.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) ppm</span>
 
-            <div class="kv">
-                <span class="k">@L["strip.device"]</span>
-                <span class="v">@channel.DeviceName</span>
-                <span class="k">@L["status.rate"]</span>
-                <span class="v">@channel.MeasuredSampleRate.ToString("0.000", CultureInfo.InvariantCulture) Hz</span>
-                <span class="k">Drift</span>
-                <span class="v">@channel.DriftPpm.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) ppm</span>
-            </div>
+                    <span class="k">@L["strip.name"]</span>
+                    <span class="v">
+                        <input type="text" value="@channel.Name" aria-label="@L["strip.name"]" style="width:170px"
+                               @onchange="argument => Rename(channel, argument)" />
+                    </span>
 
-            <h2>@L["strip.trim"]</h2>
-
-            <div class="knob">
-                <div class="between">
-                    <span>@L["strip.trim"]</span>
-                    <span class="mono">@channel.TrimDb.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) dB</span>
+                    <span class="k">@L["channel.colour"]</span>
+                    <span class="v row" style="gap:4px">
+                        @foreach (string colour in StripPalette.All)
+                        {
+                            <button type="button"
+                                    class="swatch"
+                                    style="background:@colour;width:18px;height:18px;border:1px solid @(colour == Colour(channel) ? "var(--ink)" : "var(--line)")"
+                                    aria-label="@colour"
+                                    @onclick="() => SetColour(channel, colour)"></button>
+                        }
+                    </span>
                 </div>
-                <input type="range" min="-24" max="24" step="0.5"
-                       value="@channel.TrimDb"
-                       aria-label="@L["strip.trim"]"
-                       @oninput="argument => SetTrim(channel, argument)" />
+
+                <div class="row" style="margin-top:12px">
+                    <span style="flex:1"></span>
+                    <ConfirmButton Label="@RemoveLabel(channel)"
+                                   Question="@RemovalQuestion(channel)"
+                                   Confirmed="() => Remove(channel)" />
+                </div>
             </div>
 
-            <h2>@L["automix.title"]</h2>
+            <h2>@L["strip.chain"] <span class="chip">@L["mixer.reorder"]</span></h2>
 
-            <label class="row">
-                <input type="checkbox"
-                       checked="@channel.ParticipatesInAutomix"
-                       @onchange='argument => SetFlagFromCheckbox(channel, "ParticipatesInAutomix", argument)' />
-                <span>@L["strip.automixOn"]</span>
-            </label>
+            @*
+                The fixed head. Trim, polarity and mono fold describe the signal arriving rather than
+                a treatment of it, so they cannot be dragged further down — their settings are edited
+                here like any other link, and only the position is fixed.
+            *@
+            <div class="mod anchor">
+                <div class="mh">
+                    <span class="anchoricon" title="@L["chain.anchoredWhy"]">⚓</span>
+                    <span class="t">@L["chain.head"]</span>
+                    <InlineHelp Title="@L["chain.head"]" Body="@L["help.head"]" />
+                </div>
+                <div class="anchornote">@L["chain.alwaysFirst"]</div>
+                <div class="mb">
+                    <div class="knob">
+                        <div class="between">
+                            <span>@L["strip.trim"] <InlineHelp Title="@L["strip.trim"]" Body="@L["help.trim"]" /></span>
+                            <span class="mono">@channel.TrimDb.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) dB</span>
+                        </div>
+                        <input type="range" min="-24" max="24" step="0.5"
+                               value="@channel.TrimDb"
+                               aria-label="@L["strip.trim"]"
+                               @oninput="argument => SetTrim(channel, argument)" />
+                    </div>
 
-            <p class="note">
-                Off for anything that is not a microphone in the room. Sharing gain with a
-                loudspeaker playing back what the mix just sent is a loop with a very slow period
-                and an unpleasant sound.
-            </p>
+                    <Switch Label="@L["strip.polarity"]"
+                            Help="@L["help.polarity"]"
+                            Checked="channel.IsPolarityInverted"
+                            Changed='value => SetFlag(channel, "PolarityInverted", value)' />
 
-            <h2>@L["strip.chain"]</h2>
+                    <Switch Label="@L["strip.monoFold"]"
+                            Help="@L["help.monoFold"]"
+                            Checked="channel.IsMonoFold"
+                            Changed='value => SetFlag(channel, "MonoFold", value)' />
+                </div>
+            </div>
 
-            <ChainEditor Channel="channel" />
+            <div class="flow" aria-hidden="true">↓</div>
 
-            <h2>@L["common.remove"]</h2>
+            @* B3. Worth stating where somebody might change the order and wonder why it did not move. *@
+            <div class="tap">@L["chain.vadTap"]</div>
 
-            <ConfirmButton Label="@L["common.remove"]"
-                           Question="@RemovalQuestion(channel)"
-                           Confirmed="() => Remove(channel)" />
+            <div class="flow" aria-hidden="true">↓</div>
+
+            <ChainEditor Target="@(new ChainTarget { Index = channel.Index, IsBus = false })"
+                         Chain="channel.Chain" />
+
+            <div class="flow" aria-hidden="true">↓</div>
+
+            @*
+                The fixed tail. The automix gain is applied after the fader, so the operator's fader
+                keeps meaning what it says.
+            *@
+            <div class="mod anchor">
+                <div class="mh">
+                    <span class="anchoricon" title="@L["chain.anchoredWhy"]">⚓</span>
+                    <span class="t">@L["chain.tail"]</span>
+                    <InlineHelp Title="@L["chain.tail"]" Body="@L["help.tail"]" />
+                </div>
+                <div class="anchornote">@L["chain.alwaysLast"]</div>
+                <div class="mb">
+                    <div class="knob">
+                        <div class="between">
+                            <span>@L["strip.fader"]</span>
+                            <span class="mono">@FaderScale.Format(channel.FaderDb) dB</span>
+                        </div>
+                        <input type="range" min="0" max="1000" step="1"
+                               value="@((int)Math.Round(FaderScale.ToPosition(channel.FaderDb) * 1000))"
+                               aria-label="@L["strip.fader"]"
+                               @oninput="argument => SetFader(channel, argument)" />
+                    </div>
+
+                    <div style="border-top:1px solid var(--line-soft);margin:10px 0 9px"></div>
+
+                    <Switch Label="@L["strip.automixOn"]"
+                            Help="@L["help.participate"]"
+                            Checked="channel.ParticipatesInAutomix"
+                            Changed='value => SetFlag(channel, "ParticipatesInAutomix", value)' />
+
+                    <div class="knob">
+                        <div class="between">
+                            <span>@L["strip.weight"] <InlineHelp Title="@L["strip.weight"]" Body="@L["help.weight"]" /></span>
+                            <span class="mono">@channel.AutomixWeight.ToString("0.00", CultureInfo.InvariantCulture)</span>
+                        </div>
+                        <input type="range" min="0.25" max="4" step="0.05"
+                               value="@channel.AutomixWeight"
+                               aria-label="@L["strip.weight"]"
+                               @oninput="argument => SetWeight(channel, argument)" />
+                    </div>
+                </div>
+            </div>
+
+            <h2>@L["channel.sends"]</h2>
+
+            <div class="card">
+                @foreach (BusState bus in Buses)
+                {
+                    <div class="between" style="padding:6px 0;border-bottom:1px solid var(--line-soft)">
+                        <span class="lbl" style="font-size:12px;color:@(IsOn(channel, bus) ? "var(--ink)" : "var(--ink-mute)")">
+                            @bus.Name
+                        </span>
+                        <span class="row">
+                            @if (bus.ExcludedChannels.Contains(channel.Index))
+                            {
+                                <span class="pill bad">@L["send.locked"]</span>
+                            }
+                            else
+                            {
+                                <span class="mono" style="font-size:11.5px">@(IsOn(channel, bus) ? "0.0 dB" : L["common.off"])</span>
+                                <span class="chip">@(bus.IsPreFader ? L["send.pre"] : L["send.post"])</span>
+                            }
+                        </span>
+                    </div>
+                }
+                <p class="sub" style="margin:10px 0 0">@L["send.preWhy"]</p>
+            </div>
         </div>
     </aside>
 }
 
 @code {
+    int Count => Session.Console?.Channels.Count ?? 0;
+
+    IReadOnlyList<BusState> Buses => Session.Console?.Buses ?? [];
+
     ChannelState? Channel =>
         Session.Console is { } console && Shell.SelectedChannel >= 0 && Shell.SelectedChannel < console.Channels.Count
             ? console.Channels[Shell.SelectedChannel]
@@ -97,8 +199,29 @@
     static string Colour(ChannelState channel) =>
         string.IsNullOrWhiteSpace(channel.Colour) ? StripPalette.For(channel.Index) : channel.Colour;
 
-    string RemovalQuestion(ChannelState channel) =>
-        $"Remove {channel.Name}? Its sends go with it, and the recording keeps the track it has already written.";
+    string Rates(ChannelState channel) =>
+        Session.SampleRate.ToString(CultureInfo.InvariantCulture)
+        + " / "
+        + channel.MeasuredSampleRate.ToString("0.0", CultureInfo.InvariantCulture)
+        + " Hz";
+
+    string RemoveLabel(ChannelState channel) => L.Format("channel.remove", channel.Name);
+
+    string RemovalQuestion(ChannelState channel) => L.Format("channel.removeWhy", channel.Name);
+
+    bool IsOn(ChannelState channel, BusState bus) =>
+        Session.Console?.Sends
+            .FirstOrDefault(send => send.ChannelIndex == channel.Index && send.BusIndex == bus.Index)?.State == "On";
+
+    void Step(int delta)
+    {
+        int next = Shell.SelectedChannel + delta;
+
+        if (next >= 0 && next < Count)
+        {
+            Shell.SelectedChannel = next;
+        }
+    }
 
     async Task Rename(ChannelState channel, ChangeEventArgs arguments) =>
         await Session.ApplyAsync(new Command
@@ -127,15 +250,36 @@
         }
     }
 
-    async Task SetFlagFromCheckbox(ChannelState channel, string flag, ChangeEventArgs arguments) =>
+    async Task SetFader(ChannelState channel, ChangeEventArgs arguments)
+    {
+        if (double.TryParse(arguments.Value?.ToString(), CultureInfo.InvariantCulture, out double raw))
+        {
+            await Session.ApplyAsync(new Command
+            {
+                SetFader = new SetFader
+                {
+                    ChannelIndex = channel.Index,
+                    Decibels = FaderScale.ToDecibels(raw / 1000.0)
+                }
+            });
+        }
+    }
+
+    async Task SetWeight(ChannelState channel, ChangeEventArgs arguments)
+    {
+        if (double.TryParse(arguments.Value?.ToString(), CultureInfo.InvariantCulture, out double weight))
+        {
+            await Session.ApplyAsync(new Command
+            {
+                SetAutomixWeight = new SetAutomixWeight { ChannelIndex = channel.Index, Weight = weight }
+            });
+        }
+    }
+
+    async Task SetFlag(ChannelState channel, string flag, bool enabled) =>
         await Session.ApplyAsync(new Command
         {
-            SetFlag = new SetFlag
-            {
-                ChannelIndex = channel.Index,
-                Flag = flag,
-                Enabled = arguments.Value is true
-            }
+            SetFlag = new SetFlag { ChannelIndex = channel.Index, Flag = flag, Enabled = enabled }
         });
 
     async Task Remove(ChannelState channel)

@@ -1,37 +1,41 @@
 @inherits VamComponent
 
 @*
-    U1. The five things an operator glances at without stopping what they are doing: whether the
-    console is talking to an engine, what the clock is doing, how many dropouts there have been, and
-    whether it is recording. Everything else is a click away; these are never more than a look away.
+    U1. The things an operator glances at without stopping what they are doing: whether the console
+    is talking to an engine, how many dropouts there have been, how close the audio thread is to its
+    deadline, whether it is recording, and how long the session has been going.
+
+    The rate and the block size are deliberately not here. They are set once and never change, so a
+    number that never moves would train an operator to stop reading the bar. They live on the
+    diagnostics clock panel, which is where somebody goes to ask about them.
 *@
 
 <header class="statusbar">
     <div class="brand"><b>@L["app.name"]</b></div>
 
-    <div class="stat">
+    <div class="stat" title="@L["help.engine"]">
         <span class="dot @ConnectionDotClass"></span>
         <span class="k">@L["status.engine"]</span>
         <span class="v">@ConnectionText</span>
-    </div>
-
-    <div class="stat">
-        <span class="k">@L["status.rate"]</span>
-        <span class="v">@RateText</span>
-    </div>
-
-    <div class="stat">
-        <span class="k">@L["status.block"]</span>
-        <span class="v">@BlockText</span>
     </div>
 
     @*
         Zero is drawn green rather than grey. A dropout count is the one number on this bar that is
         good news when it is nothing, and an operator should be able to confirm that from a distance.
     *@
-    <div class="stat">
+    <div class="stat" title="@L["help.dropouts"]">
         <span class="k">@L["status.dropouts"]</span>
-        <span class="v @(Dropouts == 0 ? "zero" : "")">@Dropouts</span>
+        <span class="v @(Dropouts == 0 ? "zero" : null)">@Dropouts</span>
+    </div>
+
+    <div class="stat" title="@L["help.load"]">
+        <span class="k">@L["status.load"]</span>
+        <span class="v" style="color:@LoadColour">@Percent(Health?.Load ?? 0)</span>
+    </div>
+
+    <div class="stat" title="@L["help.headroom"]">
+        <span class="k">@L["status.headroom"]</span>
+        <span class="v">@Percent(Health?.Headroom ?? 0)</span>
     </div>
 
     @if (Recording is { IsRecording: true })
@@ -40,20 +44,44 @@
             <span class="dot rec"></span>
             <span class="k">@L["status.recording"]</span>
             <span class="v">@RecordedText</span>
+            <span class="k">·</span>
+            <span class="v">@Gigabytes(Recording.FreeBytes)</span>
         </div>
     }
 
+    <div class="stat">
+        <span class="k">@L["status.session"]</span>
+        <span class="v">@Uptime</span>
+    </div>
+
     <div class="stat grow">
+        @*
+            C10. The global automix switch lives here rather than on the automix view, so it is one
+            click from any view when the automixer misbehaves mid-session — and it goes amber while
+            it is off, so nobody forgets it was switched off during setup and never switched back.
+        *@
+        <button type="button"
+                class="chip @(IsAutomixOn ? "on" : "bad")"
+                title="@L["help.automixSwitch"]"
+                @onclick="ToggleAutomix">
+            @(IsAutomixOn ? L["status.automixOn"] : L["status.automixOff"])
+        </button>
+
         @if (Session.StatusMessage.Length > 0)
         {
             <span class="chip bad">@Session.StatusMessage</span>
         }
+
         <span class="chip">@Session.ServerName</span>
     </div>
 </header>
 
 @code {
     RecordingState? Recording => Session.Console?.Recording;
+
+    EngineHealth? Health => Session.Console?.Health;
+
+    bool IsAutomixOn => Session.Console?.Automix is { IsBypassed: false };
 
     string ConnectionDotClass => Session.Connection switch
     {
@@ -71,17 +99,20 @@
         _ => L["status.offline"]
     };
 
-    string RateText => Session.SampleRate > 0
-        ? (Session.SampleRate / 1000.0).ToString("0.#", CultureInfo.InvariantCulture) + " kHz"
-        : "—";
+    // Above seventy per cent the callback starts missing its deadline, so that is where the colour
+    // changes rather than at some round number.
+    string LoadColour => (Health?.Load ?? 0) switch
+    {
+        >= 1.0 => "var(--bad)",
+        >= 0.7 => "var(--warn)",
+        _ => "var(--ink)"
+    };
 
-    string BlockText => Session.BlockFrames > 0 && Session.SampleRate > 0
-        ? Session.BlockFrames + " · " + (Session.BlockFrames * 1000.0 / Session.SampleRate).ToString("0.0", CultureInfo.InvariantCulture) + " ms"
-        : "—";
+    long Dropouts => Health?.Dropouts ?? 0;
 
-    // Counted from the engine's own event stream rather than kept by the console, so a console that
-    // reconnects halfway through a meeting shows what the engine has seen and not what it has.
-    int Dropouts => Session.Events.Count(engineEvent => engineEvent.Kind == "dropout");
+    string Uptime => Health is { UptimeTicks: > 0 }
+        ? TimeSpan.FromTicks(Health.UptimeTicks).ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture)
+        : "—";
 
     string RecordedText
     {
@@ -96,5 +127,31 @@
 
             return elapsed.ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture);
         }
+    }
+
+    static string Percent(double fraction) =>
+        (fraction * 100).ToString("0", CultureInfo.InvariantCulture) + "%";
+
+    static string Gigabytes(long bytes) =>
+        (bytes / (1024.0 * 1024 * 1024)).ToString("0", CultureInfo.InvariantCulture) + " GB";
+
+    async Task ToggleAutomix()
+    {
+        AutomixState? automix = Session.Console?.Automix;
+
+        if (automix is null)
+        {
+            return;
+        }
+
+        await Session.ApplyAsync(new Command
+        {
+            SetAutomix = new SetAutomix
+            {
+                Bypassed = !automix.IsBypassed,
+                DepthDb = automix.DepthDb,
+                ResponseMs = automix.ResponseMs
+            }
+        });
     }
 }

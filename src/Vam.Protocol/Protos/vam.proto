@@ -65,6 +65,21 @@ message ConsoleState {
   repeated SendState sends = 3;
   AutomixState automix = 4;
   RecordingState recording = 5;
+  // U1. The handful of numbers the status bar shows, carried with the console rather than behind
+  // GetDiagnostics: the status bar is on every view, and an operator glancing at it must not be
+  // paying for a drift history nobody opened.
+  EngineHealth health = 6;
+}
+
+message EngineHealth {
+  // How much of the callback deadline the worst recent block used, from 0 to 1. F6.
+  double load = 1;
+  // What is left of it. The number an operator actually reads, because it is the one that runs out.
+  double headroom = 2;
+  int64 dropouts = 3;
+  // Since the engine started, not since this console connected. The engine outlives every console.
+  int64 uptime_ticks = 4;
+  bool is_timer_fallback = 5;
 }
 
 message ChannelState {
@@ -123,6 +138,17 @@ message BusState {
   // Which strips this bus refuses, and why. D4 works it out from the declared pairing rather than
   // taking it as configuration, and the console shows the answer rather than offering the question.
   repeated int32 excluded_channels = 9;
+  // D6. What the bus limiter is taking off, in decibels. Zero when it is not working.
+  double limiter_reduction_db = 10;
+  repeated ModifierState chain = 13;
+  // D6. True when the engine added the limiter itself because this is a stream bus. The console
+  // shows it as a link that cannot be removed rather than hiding it, so an operator can see what is
+  // actually in the path.
+  bool has_mandatory_limiter = 14;
+  // D8. Monitor sends are pre-fader by default, so moving a fader does not change what the person
+  // in the chair hears.
+  bool is_pre_fader = 11;
+  string output_device_name = 12;
 }
 
 message SendState {
@@ -174,6 +200,8 @@ message Command {
     MoveModifier move_modifier = 19;
     SetRecording set_recording = 20;
     SetBusName set_bus_name = 21;
+    SetBusRole set_bus_role = 22;
+    SetAutomixWeight set_automix_weight = 23;
   }
 }
 
@@ -186,8 +214,16 @@ message SetSend { int32 channel_index = 1; int32 bus_index = 2; bool on = 3; dou
 message AddBus { string name = 1; string role = 2; int32 channel_count = 3; string output_device_id = 4; }
 message RemoveBus { int32 bus_index = 1; }
 message SetAutomix { bool bypassed = 1; double depth_db = 2; double response_ms = 3; }
-message SetModifierBypass { int32 channel_index = 1; int32 link_index = 2; bool bypassed = 3; }
-message SetModifierParameter { int32 channel_index = 1; int32 link_index = 2; string parameter_id = 3; double value = 4; }
+// A chain belongs to a strip or to a bus, and every command that edits one says which. A single
+// index that meant a strip when positive and a bus when negative is an index somebody eventually
+// reads wrongly, and this one decides what a public stream sounds like.
+message ChainTarget {
+  int32 index = 1;
+  bool is_bus = 2;
+}
+
+message SetModifierBypass { ChainTarget target = 1; int32 link_index = 2; bool bypassed = 3; }
+message SetModifierParameter { ChainTarget target = 1; int32 link_index = 2; string parameter_id = 3; double value = 4; }
 
 message SetChannelName { int32 channel_index = 1; string name = 2; }
 message SetChannelColour { int32 channel_index = 1; string colour = 2; }
@@ -196,11 +232,18 @@ message RemoveChannel { int32 channel_index = 1; }
 // U13. From and to rather than a whole order, so two consoles reordering at once cannot silently
 // undo each other's work by each sending the list they started from.
 message MoveChannel { int32 from_index = 1; int32 to_index = 2; }
-message AddModifier { int32 channel_index = 1; string modifier_id = 2; int32 at_index = 3; }
-message RemoveModifier { int32 channel_index = 1; int32 link_index = 2; }
-message MoveModifier { int32 channel_index = 1; int32 from_index = 2; int32 to_index = 3; }
+message AddModifier { ChainTarget target = 1; string modifier_id = 2; int32 at_index = 3; }
+message RemoveModifier { ChainTarget target = 1; int32 link_index = 2; }
+message MoveModifier { ChainTarget target = 1; int32 from_index = 2; int32 to_index = 3; }
 message SetRecording { bool recording = 1; string directory = 2; }
+// A bus's role changes exactly three behaviours - its default send tap, whether it obeys solo, and
+// whether it needs an output device - so changing it is one command rather than rebuilding the bus.
+message SetBusRole { int32 bus_index = 1; string role = 2; }
 message SetBusName { int32 bus_index = 1; string name = 2; }
+// C1. How much louder this microphone reads than the others for the same voice. A lectern somebody
+// leans into and a table microphone a metre away are not comparable without it, and the automixer
+// would hand the gain to the closer one every time.
+message SetAutomixWeight { int32 channel_index = 1; double weight = 2; }
 
 message DeviceList {
   repeated DeviceInfo devices = 1;
@@ -238,6 +281,23 @@ message DiagnosticsState {
   AllocationDiagnostics allocations = 5;
   repeated ModifierCostState costs = 6;
   repeated LogLine log = 7;
+  // K1's table. One row per device rather than one clock, because the question this panel answers is
+  // which device is the one that is wrong, and a single measured rate cannot say.
+  repeated DeviceClock device_clocks = 8;
+}
+
+message DeviceClock {
+  int32 channel_index = 1;
+  string name = 2;
+  string direction = 3;
+  double nominal_rate = 4;
+  double measured_rate = 5;
+  double drift_ppm = 6;
+  double correction_ppm = 7;
+  double fill_percentage = 8;
+  int64 underruns = 9;
+  int64 overruns = 10;
+  string state = 11;
 }
 
 // K1.

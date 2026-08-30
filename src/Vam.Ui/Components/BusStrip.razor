@@ -3,16 +3,26 @@
 @*
     A bus. Narrower than an input strip and deliberately so: a bus is something an operator sets up
     once and then watches, not something they ride during a meeting.
+
+    The master is wider than the rest and outlined in brass, because it is the one that goes out of
+    the building and mistaking it for a monitor is the expensive mistake.
 *@
 
-<div class="strip @(Bus.IsMuted ? "muted" : null) @(IsSelected ? "sel" : null)" style="width:96px;flex-basis:96px">
-    <div class="top" style="background:@Colour"></div>
-
+<div class="bstrip @StateClass">
     <div class="hd" @onclick="Open">
-        <span style="min-width:0">
-            <span class="nm">@Bus.Name</span>
-            <span class="dev">@RoleText · @Bus.ChannelCount ch</span>
-        </span>
+        <div style="font-family:var(--f-cond);text-transform:uppercase;font-size:14px;letter-spacing:.05em;color:@NameColour">
+            @Bus.Name
+        </div>
+        <div class="out">@OutputLine</div>
+    </div>
+
+    @*
+        D6. Not a meter — an activity light. The only question a bus strip asks about the limiter is
+        whether it is working, and a number would invite an operator to watch it instead of listening.
+    *@
+    <div class="lim" title="@L["help.limiter"]">
+        <i class="@(IsLimiting ? "on" : null)"></i>
+        @L["bus.limiter"]
     </div>
 
     <div class="mf">
@@ -28,11 +38,12 @@
         </div>
     </div>
 
-    <div class="val">@FaderScale.Format(Bus.GainDb)</div>
+    <div class="val">@FaderScale.Format(Bus.GainDb) dB</div>
 
-    <div class="msm" style="grid-template-columns:1fr 1fr">
-        <b class="m @(Bus.IsMuted ? "on" : null)" role="button" tabindex="0" @onclick="ToggleMute">@L["strip.mute"]</b>
-        <b class="o" role="button" tabindex="0" @onclick="Open">@L["strip.options"]</b>
+    <div class="msm">
+        <b class="m @(Bus.IsMuted ? "on" : null)" role="button" tabindex="0" @onclick="ToggleMute">
+            @L["bus.mute"]
+        </b>
     </div>
 </div>
 
@@ -42,20 +53,62 @@
     [EditorRequired]
     public required BusState Bus { get; set; }
 
-    bool IsSelected => Shell.Overlay == OverlayId.Bus && Shell.SelectedBus == Bus.Index;
+    /// <summary>Whether this is the bus the primary output takes. D3.</summary>
+    [Parameter]
+    public bool IsMaster { get; set; }
 
-    string RoleText => L["bus.role." + Bus.Role.ToLowerInvariant()];
+    // Anything at all counts as working. A limiter taking a tenth of a decibel off is a limiter that
+    // caught something, and that is exactly what the light is for.
+    bool IsLimiting => Bus.LimiterReductionDb < -0.05;
 
-    string Colour => string.IsNullOrWhiteSpace(Bus.Colour)
-        ? Bus.Role.ToLowerInvariant() switch
+    string StateClass
+    {
+        get
         {
-            // The roles are coloured apart because confusing them is the expensive mistake: a stream
-            // bus goes out of the building and a monitor bus goes into somebody's ear.
-            "monitor" => "#d6a64a",
-            "stream" => "#9b8cd9",
-            _ => "#39b9ae"
+            List<string> classes = [];
+
+            if (IsMaster)
+            {
+                classes.Add("master");
+            }
+
+            if (Bus.IsMuted)
+            {
+                classes.Add("muted");
+            }
+
+            if (Shell.Overlay == OverlayId.Bus && Shell.SelectedBus == Bus.Index)
+            {
+                classes.Add("sel");
+            }
+
+            return string.Join(' ', classes);
         }
-        : Bus.Colour;
+    }
+
+    // The roles are coloured apart because confusing them is the expensive mistake: a stream bus
+    // goes out of the building and a monitor bus goes into somebody's ear.
+    string NameColour
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(Bus.Colour))
+            {
+                return Bus.Colour;
+            }
+
+            return Bus.Role.ToLowerInvariant() switch
+            {
+                "stream" => "var(--brass)",
+                "monitor" => "var(--teal)",
+                _ => "var(--ink)"
+            };
+        }
+    }
+
+    string OutputLine => Bus.OutputDeviceName.Length > 0
+        ? Bus.OutputDeviceName
+        : Bus.OutputDeviceId.Length > 0 ? Bus.OutputDeviceId : "— " + L["bus.none"];
 
     int Position => (int)Math.Round(FaderScale.ToPosition(Bus.GainDb) * 1000);
 

@@ -44,6 +44,7 @@ public sealed class VamEngine : IDisposable
     Thread? control;
     TimeSpan sinceCorrection;
     TimeSpan sinceMeters;
+    TimeSpan sinceLoad;
 
     readonly IAudioBackend? supplied;
 
@@ -98,6 +99,24 @@ public sealed class VamEngine : IDisposable
 
     /// <summary>Drift and ring fill over the session. K2.</summary>
     public DriftHistory Drift { get; } = new();
+
+    /// <summary>When the engine started, or null if it has not.</summary>
+    /// <remarks>
+    /// The engine's uptime, not the console's. G1 has the session outliving every console, so a
+    /// console that showed its own connection time would be answering a different question from the
+    /// one an operator is asking.
+    /// </remarks>
+    public DateTimeOffset? StartedAt { get; private set; }
+
+    /// <summary>
+    /// How close the audio thread is to its deadline, as a fraction of a block.
+    /// </summary>
+    /// <remarks>
+    /// The worst block since this was last read rather than the worst ever: one bad block during
+    /// startup would otherwise leave the status bar reading ninety per cent all evening, and an
+    /// operator would learn to ignore it. Read once a second by the control loop.
+    /// </remarks>
+    public double Load { get; private set; }
 
     /// <summary>How many times one link has overrun its budget. K6.</summary>
     /// <remarks>
@@ -193,6 +212,8 @@ public sealed class VamEngine : IDisposable
             IsBackground = true,
             Name = "vam-control"
         };
+
+        StartedAt = DateTimeOffset.UtcNow;
 
         control.Start();
 
@@ -541,6 +562,15 @@ public sealed class VamEngine : IDisposable
             // The other half of the arrangement: the audio threads wrote numbers, and this is where
             // they become sentences somebody can read afterwards.
             dropoutPump?.Pump();
+
+            // Once a second, so the status bar has a number that means "now" rather than "ever".
+            sinceLoad += interval;
+
+            if (sinceLoad >= TimeSpan.FromSeconds(1))
+            {
+                Load = Callbacks.TakeRecentWorst();
+                sinceLoad = TimeSpan.Zero;
+            }
 
             sinceCorrection += interval;
             sinceMeters += interval;

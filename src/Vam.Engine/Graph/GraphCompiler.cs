@@ -136,6 +136,7 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
     {
         List<AudioNode> nodes = [];
         List<ModifierChain> chains = BuildModifierChains(config, layout, previous);
+        List<ModifierChain> busChains = BuildBusChains(config, layout, previous);
 
         // The order is the topology. Inputs fill the pre-fader planes, faders fill the post-fader
         // planes from them, buses read both, and the output reads a bus - so a plain walk of this
@@ -190,6 +191,17 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
         for (int bus = 0; bus < config.Buses.Count; bus++)
         {
             nodes.Add(new BusMixNode(layout, bus, config.Channels.Count, smoothing));
+        }
+
+        // D6. After the sum, because limiting each microphone separately does not stop the sum of
+        // them clipping - and before the meter, because a bus meter has to show what the bus is
+        // actually sending.
+        for (int bus = 0; bus < config.Buses.Count; bus++)
+        {
+            if (busChains[bus].Count > 0)
+            {
+                nodes.Add(new BusChainNode(layout, bus, busChains[bus], smoothing));
+            }
         }
 
         // After the buses are summed, so what a bus meter shows is what the bus is actually
@@ -260,6 +272,54 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
         return chains;
     }
 
+    /// <summary>Builds one chain per bus, keeping the instances a previous plan already had.</summary>
+    /// <param name="config">What the operator set up.</param>
+    /// <param name="layout">Where the planes are.</param>
+    /// <param name="previous">The plan being replaced, if any.</param>
+    /// <returns>One chain per bus, in order.</returns>
+    List<ModifierChain> BuildBusChains(GraphConfig config, GraphLayout layout, GraphPlan? previous)
+    {
+        List<ModifierChain> chains = [];
+
+        for (int bus = 0; bus < config.Buses.Count; bus++)
+        {
+            ModifierChain? existing = BusChainFor(previous, bus);
+            List<ChainLink> links = [];
+
+            foreach (ModifierSetting setting in EffectiveBusChain(config.Buses[bus]))
+            {
+                Modifier? modifier = existing?.Find(setting.LinkId) ?? registry?.Create(setting.ModifierId);
+
+                if (modifier is not null)
+                {
+                    links.Add(new ChainLink(setting.LinkId, modifier));
+                }
+            }
+
+            chains.Add(new ModifierChain(links, layout.BusWidth(bus), sampleRate, blockFrames));
+        }
+
+        return chains;
+    }
+
+    static ModifierChain? BusChainFor(GraphPlan? plan, int busIndex)
+    {
+        if (plan is null)
+        {
+            return null;
+        }
+
+        foreach (AudioNode node in plan.Nodes)
+        {
+            if (node is BusChainNode chain && chain.BusIndex == busIndex)
+            {
+                return chain.Chain;
+            }
+        }
+
+        return null;
+    }
+
     static ModifierChain? ChainFor(GraphPlan? plan, int channelIndex)
     {
         if (plan is null)
@@ -286,24 +346,84 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
     /// is fast; configuration reads by name because that is stable, and this is the one place the
     /// two meet.
     /// </remarks>
+    /// <summary>The limiter a stream bus gets whether or not anybody asked for it. D6.</summary>
+    public const string MandatoryLimiterId = "vam.limiter";
+
+    /// <summary>
+    /// Its link identity, fixed rather than minted.
+    /// </summary>
+    /// <remarks>
+    /// A fresh identity each compile would mean a fresh instance each compile, and the limiter's
+    /// envelope restarting every time somebody moved a fader — audible, on the one bus that must
+    /// never make a noise of its own.
+    /// </remarks>
+    public const string MandatoryLimiterLinkId = "vam-stream-limiter";
+
     static ChainParams[] BuildChains(GraphConfig config, GraphPlan plan)
     {
-        ChainParams[] result = new ChainParams[config.Channels.Count];
+        ChainParams[] result = new ChainParams[config.Channels.Count + config.Buses.Count];
 
         Array.Fill(result, ChainParams.Empty);
 
         foreach (AudioNode node in plan.Nodes)
         {
-            if (node is ChainNode chain && chain.ChannelIndex < result.Length)
+            if (node is ChainNode chain && chain.ChannelIndex < config.Channels.Count)
             {
-                result[chain.ChannelIndex] = BuildChain(config.Channels[chain.ChannelIndex], chain.Chain);
+                result[chain.ChannelIndex] = BuildChain(config.Channels[chain.ChannelIndex].Chain, chain.Chain);
+            }
+
+            // Buses sit after the strips in the same array. See GraphSnapshot.BusChainOf.
+            if (node is BusChainNode bus && bus.BusIndex < config.Buses.Count)
+            {
+                result[config.Channels.Count + bus.BusIndex] =
+                    BuildChain(EffectiveBusChain(config.Buses[bus.BusIndex]), bus.Chain);
             }
         }
 
         return result;
     }
 
-    static ChainParams BuildChain(ChannelConfig channel, ModifierChain chain)
+    /// <summary>
+    /// A bus's chain as it is actually built, which is not always the one that was configured.
+    /// </summary>
+    /// <remarks>
+    /// D6: the limiter on a stream bus is not optional. An operator who has not added one gets one,
+    /// at the end, where a limiter belongs — because a stream that clips is a stream nobody can fix
+    /// afterwards and the person who would have noticed is not in the room.
+    /// </remarks>
+    /// <param name="bus">The bus.</param>
+    /// <returns>Its chain, with the mandatory limiter appended if it is missing.</returns>
+    public static IReadOnlyList<ModifierSetting> EffectiveBusChain(BusConfig bus)
+    {
+        if (bus.Role != BusRole.Stream)
+        {
+            return bus.Chain;
+        }
+
+        foreach (ModifierSetting setting in bus.Chain)
+        {
+            if (setting.ModifierId == MandatoryLimiterId)
+            {
+                return bus.Chain;
+            }
+        }
+
+        // Built by hand rather than with a collection expression. A spread into IReadOnlyList makes
+        // the compiler reach for MemoryMarshal, which drags System.Runtime.InteropServices into an
+        // assembly a test asserts is platform-free - and that test is right to object, because the
+        // day it stops objecting is the day something genuinely platform-specific slips in behind it.
+        List<ModifierSetting> withLimiter = new(bus.Chain.Count + 1);
+
+        withLimiter.AddRange(bus.Chain);
+
+        // A stable identity rather than a fresh one each compile: the link has to survive a
+        // recompile, or the limiter's envelope restarts every time somebody moves a fader.
+        withLimiter.Add(new ModifierSetting { LinkId = MandatoryLimiterLinkId, ModifierId = MandatoryLimiterId });
+
+        return withLimiter;
+    }
+
+    static ChainParams BuildChain(IReadOnlyList<ModifierSetting> settings, ModifierChain chain)
     {
         float[] targets = new float[chain.ParameterCount];
         ulong bypass = 0UL;
@@ -311,7 +431,7 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
 
         for (int link = 0; link < chain.Count; link++)
         {
-            ModifierSetting? setting = link < channel.Chain.Count ? channel.Chain[link] : null;
+            ModifierSetting? setting = link < settings.Count ? settings[link] : null;
             ReadOnlySpan<ParameterDescriptor> descriptors = chain.Modifiers[link].Parameters;
 
             if (setting is not null && setting.IsBypassed)

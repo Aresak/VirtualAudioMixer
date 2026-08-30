@@ -1,0 +1,39 @@
+@*
+    The mockup's toggle: a labelled switch with its help beside it, rather than a bare checkbox.
+
+    A checkbox reads as "is this true"; a switch reads as "is this on", and every one of these is a
+    thing that is either working or not working. The difference matters at a glance from across a
+    room, which is the only distance this console is ever read from.
+*@
+
+<label class="sw @(Checked ? "on" : null)">
+    <input type="checkbox" checked="@Checked" @onchange="OnChanged" />
+    <i aria-hidden="true"></i>
+    <span>@Label</span>
+
+    @if (Help.Length > 0)
+    {
+        <InlineHelp Title="@Label" Body="@Help" />
+    }
+</label>
+
+@code {
+    /// <summary>What it switches.</summary>
+    [Parameter]
+    [EditorRequired]
+    public required string Label { get; set; }
+
+    /// <summary>How to set it well. U14.</summary>
+    [Parameter]
+    public string Help { get; set; } = string.Empty;
+
+    /// <summary>Whether it is on.</summary>
+    [Parameter]
+    public bool Checked { get; set; }
+
+    /// <summary>Raised when somebody changed it.</summary>
+    [Parameter]
+    public EventCallback<bool> Changed { get; set; }
+
+    Task OnChanged(ChangeEventArgs arguments) => Changed.InvokeAsync(arguments.Value is true);
+}

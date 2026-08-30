@@ -653,3 +653,162 @@ input.num { min-width: 0; width: 62px; text-align: right; }
 }
 
 input[type=checkbox] { accent-color: var(--brass); width: 15px; height: 15px; }
+
+
+/* ---------- taken from the mockup, verbatim ---------- */
+
+.slider{height:5px;background:var(--sunken);border:1px solid var(--line);border-radius:2px;position:relative;cursor:pointer}
+.slider i{position:absolute;inset:0 auto 0 0;background:var(--brass);border-radius:2px}
+.slider b{position:absolute;top:50%;width:13px;height:13px;margin:-6.5px 0 0 -6.5px;border-radius:50%;
+  background:var(--ink);border:1px solid var(--ground)}
+.sw{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-dim);cursor:pointer}
+.sw i{width:30px;height:16px;border-radius:8px;background:var(--sunken);border:1px solid var(--line);
+  position:relative;transition:.15s;flex:0 0 30px}
+.sw.on i{background:rgba(214,166,74,.25);border-color:var(--brass)}
+.hlp{width:14px;height:14px;border-radius:50%;border:1px solid var(--line);color:var(--ink-mute);
+  font-size:9.5px;line-height:1;display:inline-flex;align-items:center;justify-content:center;
+  font-family:var(--f-mono);flex:0 0 14px}
+.hlp:hover{border-color:var(--brass);color:var(--brass)}
+.addtile{width:44px;flex:0 0 44px;border:1px dashed var(--line);border-radius:2px;background:transparent;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--ink-mute)}
+.addtile:hover{border-color:var(--brass);color:var(--brass);background:rgba(214,166,74,.05)}
+.addtile span{font-size:22px;line-height:1;font-family:var(--f-cond)}
+.addtile em{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.1em;font-size:9.5px;
+  font-style:normal;writing-mode:vertical-rl;transform:rotate(180deg)}
+.bstrip{width:112px;flex:0 0 112px;background:var(--raised);border:1px solid var(--line);border-radius:2px;
+  display:flex;flex-direction:column}
+.bstrip.master{width:132px;flex-basis:132px;border-color:var(--brass-dim)}
+.bstrip .hd{padding:6px 7px;border-bottom:1px solid var(--line-soft);cursor:pointer}
+.bstrip .out{font-family:var(--f-mono);font-size:9px;color:var(--ink-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lim{display:flex;align-items:center;gap:5px;padding:5px 7px;border-bottom:1px solid var(--line-soft);
+  font-family:var(--f-cond);font-size:10.5px;letter-spacing:.07em;color:var(--ink-mute)}
+.lim i{width:6px;height:6px;border-radius:50%;background:var(--line)}
+.monbar{flex:0 0 auto;border-top:1px solid var(--line);background:var(--panel);padding:0 12px}
+.monbar .mhead{display:flex;align-items:center;gap:10px;padding:6px 0}
+.monrow{display:flex;align-items:center;gap:8px;padding:5px 0 8px;border-top:1px solid var(--line-soft);flex-wrap:wrap}
+.monrow .nm{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.08em;font-size:12.5px;
+  color:var(--brass);width:64px;flex:0 0 64px}
+.monrow .grp{display:flex;align-items:center;gap:4px}
+.monrow .gl{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.09em;font-size:9.5px;color:var(--ink-mute);margin-right:2px}
+.mchip{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.05em;font-size:11.5px;
+  padding:4px 9px;border:1px solid var(--line);border-radius:2px;background:var(--sunken);color:var(--ink-mute);cursor:pointer}
+.mchip.on{color:#101418;background:var(--brass);border-color:var(--brass);font-weight:600}
+.mchip.bus.on{background:var(--teal);border-color:var(--teal)}
+.monbar.collapsed .monrow{display:none}
+.mod{background:var(--raised);border:1px solid var(--line);border-radius:2px;margin-bottom:3px}
+.mod.anchor{background:#11161b;border-style:dashed;border-color:#333e49}
+.mod.byp{opacity:.5}
+.mod .mh{display:flex;align-items:center;gap:8px;padding:8px 11px;cursor:pointer}
+.mod .mh .t{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.08em;font-size:13px;flex:1}
+.mod .mh .cost{font-family:var(--f-mono);font-size:10px;color:var(--ink-mute)}
+.mod .mb{padding:0 11px 11px;display:none}
+.mod.open .mb{display:block}
+.mod .anchornote{font-size:11.5px;color:var(--ink-mute);padding:0 11px 9px}
+.anchoricon{color:var(--ink-mute);font-size:12px;line-height:1;flex:0 0 auto}
+.mod.dragging{opacity:.4}
+.mod.over{border-color:var(--brass)}
+.addmod{width:100%;border:1px dashed var(--line);border-radius:2px;padding:9px;color:var(--ink-mute);
+  font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.09em;font-size:12px;margin-top:4px}
+.addmod:hover{border-color:var(--brass);color:var(--brass)}
+.tap{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--ink-mute);
+  border-left:2px solid var(--teal);padding:4px 0 4px 10px;margin:3px 0 3px 18px}
+.flow{text-align:center;color:#333e49;font-size:11px;line-height:1.1}
+.srcgroup{margin-top:10px}
+.srcgroup .gl{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.09em;font-size:10.5px;
+  color:var(--ink-mute);display:block;margin-bottom:5px}
+.srcgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:4px}
+.srcgrid b{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.05em;font-size:11.5px;
+  padding:7px 9px;border:1px solid var(--line);border-radius:2px;background:var(--sunken);
+  color:var(--ink-mute);cursor:pointer;font-weight:500;display:flex;align-items:center;gap:6px}
+.srcgrid b.on{color:var(--ink);border-color:var(--brass-dim);background:rgba(214,166,74,.13)}
+.tabs{display:flex;border-bottom:1px solid var(--line);margin-bottom:16px;flex-wrap:wrap}
+.tabs button{padding:8px 15px;font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.08em;
+  font-size:12px;color:var(--ink-mute);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button.on{color:var(--brass);border-bottom-color:var(--brass)}
+.tab{display:none}
+.band{height:96px;background:var(--sunken);border:1px solid var(--line);border-radius:2px;width:100%;display:block}
+.spark{width:100%;height:120px;display:block;background:var(--sunken);border:1px solid var(--line);border-radius:2px}
+.logbox{background:var(--sunken);border:1px solid var(--line);border-radius:2px;padding:9px 11px;
+  font-family:var(--f-mono);font-size:11.5px;line-height:1.65;max-height:300px;overflow:auto}
+.logbox .t{color:var(--ink-mute)}
+
+/* Rules the mockup expresses through JavaScript or a body class, and which this console needs as
+   plain CSS because its state lives in C#. */
+
+.tab.on { display: block; }
+.mod .mb { display: block; }
+.lim i.on { background: var(--warn); box-shadow: 0 0 7px var(--warn); }
+.sw input { position: absolute; opacity: 0; pointer-events: none; }
+.sw i::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ink-mute);
+  transition: .15s;
+}
+.sw.on i::after { background: var(--brass); transform: translateX(14px); }
+
+/* U14. The help body, which the mockup shows in a shared panel and this console shows in place. A
+   panel would need somewhere to put it on every view; in place needs nothing and cannot be left
+   open behind you. */
+.hlpwrap { position: relative; display: inline-flex; }
+.hlp { cursor: pointer; background: none; }
+.hlp.on { border-color: var(--brass); color: var(--brass); }
+
+.hlpbody {
+  position: absolute;
+  top: 20px;
+  left: -8px;
+  z-index: 40;
+  width: 280px;
+  background: var(--raised);
+  border: 1px solid var(--brass-dim);
+  border-radius: 2px;
+  padding: 9px 11px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-dim);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .55);
+}
+
+.hlpbody b {
+  display: block;
+  font-family: var(--f-cond);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: 11.5px;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+/* The meter and its gain-reduction strip are canvases here, so they need an explicit height inside
+   the bus strip's .mf the way they do inside a channel strip's. */
+.bstrip .mf { flex: 1; display: flex; gap: 6px; padding: 8px 7px; min-height: 118px; }
+.bstrip .val { font-family: var(--f-mono); font-size: 11.5px; text-align: center; padding: 3px 0; color: var(--ink-dim); border-top: 1px solid var(--line-soft); }
+.bstrip .msm { display: grid; grid-template-columns: 1fr; gap: 3px; padding: 3px 6px 8px; }
+.bstrip.sel { border-color: var(--brass); box-shadow: inset 0 0 0 1px rgba(214, 166, 74, .3); }
+.bstrip.muted { filter: saturate(.16) brightness(.6); }
+
+.compact .bstrip { width: 64px; flex-basis: 64px; }
+.compact .bstrip.master { width: 74px; flex-basis: 74px; }
+.compact .bstrip .out,
+.compact .lim { display: none; }
+
+/* U19. The gate threshold, drawn over the meter canvas rather than into it: it moves when an
+   operator drags a threshold and not twenty-five times a second with the level. */
+.mf { position: relative; }
+
+.thr {
+  position: absolute;
+  left: 7px;
+  width: 14px;
+  height: 0;
+  border-top: 1px dashed var(--bad);
+  opacity: .85;
+  pointer-events: none;
+  z-index: 3;
+}

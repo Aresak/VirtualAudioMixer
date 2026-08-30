@@ -125,7 +125,14 @@ public sealed class GraphController
         {
             if (node is ChainNode chain)
             {
-                bypassed += BypassOverruns(chain, budgetFraction);
+                bypassed += BypassOverruns(chain.Chain, chain.ChannelIndex, isBus: false, budgetFraction);
+            }
+
+            // Bus chains are guarded too. A bus equaliser somebody set to sixty-four bands can eat a
+            // block just as thoroughly as a denoise can.
+            if (node is BusChainNode busChain)
+            {
+                bypassed += BypassOverruns(busChain.Chain, busChain.BusIndex, isBus: true, budgetFraction);
             }
         }
 
@@ -403,14 +410,26 @@ public sealed class GraphController
     /// <summary>Raised when a modifier is switched out for overrunning its budget. Control thread.</summary>
     public event EventHandler<ModifierOverrun>? Overran;
 
-    int BypassOverruns(ChainNode node, double budgetFraction)
+    int BypassOverruns(ModifierChain chain, int index, bool isBus, double budgetFraction)
     {
-        ChainParams parameters = Publisher.Current.ChainOf(node.ChannelIndex);
+        ChainParams parameters = isBus
+            ? Publisher.Current.BusChainOf(index)
+            : Publisher.Current.ChainOf(index);
+
         int bypassed = 0;
 
-        for (int link = 0; link < node.Chain.Count; link++)
+        for (int link = 0; link < chain.Count; link++)
         {
-            ModifierCost cost = node.Chain.Costs[link];
+            // D6. The stream bus's limiter is never switched out, whatever it costs. Trading a
+            // clipped stream for a slightly late one is the wrong way round: a late block is a
+            // dropout somebody hears once, and a clipped stream is a recording of a public meeting
+            // that cannot be repaired afterwards.
+            if (isBus && chain.LinkIds[link] == GraphCompiler.MandatoryLimiterLinkId)
+            {
+                continue;
+            }
+
+            ModifierCost cost = chain.Costs[link];
 
             // Ignored until it has been measured for a while. A modifier's first blocks include the
             // first-call compilation of everything it touches, and bypassing on that would switch
@@ -431,15 +450,18 @@ public sealed class GraphController
             bypassed++;
 
             Overran?.Invoke(this, new ModifierOverrun(
-                node.ChannelIndex,
+                index,
                 link,
-                node.Chain.Modifiers[link].Descriptor.Name,
-                fraction));
+                chain.Modifiers[link].Descriptor.Name,
+                fraction,
+                isBus));
         }
 
         if (bypassed > 0)
         {
-            Publisher.Publish(Publisher.Current.WithChain(node.ChannelIndex, parameters));
+            Publisher.Publish(isBus
+                ? Publisher.Current.WithBusChain(index, parameters)
+                : Publisher.Current.WithChain(index, parameters));
         }
 
         return bypassed;
