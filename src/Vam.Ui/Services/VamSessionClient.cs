@@ -261,7 +261,8 @@ public sealed class VamSessionClient(
 
         await Task.WhenAll(
             MeterPumpAsync(client, cancellationToken),
-            EventPumpAsync(client, cancellationToken));
+            EventPumpAsync(client, cancellationToken),
+            RefreshPumpAsync(cancellationToken));
     }
 
     async Task MeterPumpAsync(Mixer.MixerClient current, CancellationToken cancellationToken)
@@ -293,6 +294,16 @@ public sealed class VamSessionClient(
 
             // A device arriving or a modifier being switched out changes what the console shows, so
             // this one does redraw. They happen a handful of times in a session.
+            await RefreshAsync(cancellationToken);
+        }
+    }
+
+    async Task RefreshPumpAsync(CancellationToken cancellationToken)
+    {
+        using PeriodicTimer timer = new(options.RefreshInterval);
+
+        while (await timer.WaitForNextTickAsync(cancellationToken))
+        {
             await RefreshAsync(cancellationToken);
         }
     }

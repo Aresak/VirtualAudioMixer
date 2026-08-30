@@ -22,4 +22,18 @@ public sealed class VamSessionOptions
 
     /// <summary>How many engine events to keep for the diagnostics view.</summary>
     public int EventHistory { get; set; } = 500;
+
+    /// <summary>
+    /// How often the console state is read back while nothing has changed it.
+    /// </summary>
+    /// <remarks>
+    /// Numbers on the strips move without anybody touching anything: the measured rate, the drift in
+    /// parts per million, how long the recording has been running. Left to refresh only when a
+    /// command is sent, they would sit at whatever they read when the console connected, which is a
+    /// console quietly lying about a device that has started drifting.
+    ///
+    /// Once a second, not at meter rate. The meters have their own stream and their own canvas
+    /// precisely so that this one can be slow.
+    /// </remarks>
+    public TimeSpan RefreshInterval { get; set; } = TimeSpan.FromSeconds(1);
 }
