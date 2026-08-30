@@ -47,7 +47,7 @@
             Deleting a preset does not touch the chains that came from it — they keep working, they
             just stop having somewhere to be restored from. Worth saying in the question.
         *@
-        <ConfirmButton Label="@L["common.remove"]"
+        <ConfirmButton Label="@L.Format("preset.delete", chosen)"
                        Question="@L.Format("preset.deleteWhy", chosen)"
                        Confirmed="Delete" />
     }

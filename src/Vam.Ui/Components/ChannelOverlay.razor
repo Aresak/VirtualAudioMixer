@@ -29,8 +29,23 @@
 
             <div class="card">
                 <div class="kv">
+                    @*
+                        A selector rather than a label. A microphone that came back on a different
+                        endpoint, or one assigned to the wrong strip during setup, has to be fixable
+                        in place - rebuilding the strip would take its sends, its chain and its name
+                        with it.
+                    *@
                     <span class="k">@L["strip.device"]</span>
-                    <span class="v">@channel.DeviceName</span>
+                    <span class="v">
+                        <select value="@channel.DeviceId"
+                                aria-label="@L["strip.device"]"
+                                @onchange="argument => SetDevice(channel, argument)">
+                            @foreach (DeviceInfo device in Captures)
+                            {
+                                <option value="@device.Id">@device.Name</option>
+                            }
+                        </select>
+                    </span>
 
                     <span class="k">@L["channel.rates"]</span>
                     <span class="v">@Rates(channel)</span>
@@ -165,6 +180,15 @@
 
                     <div style="border-top:1px solid var(--line-soft);margin:10px 0 9px"></div>
 
+                    @*
+                        B7. Pre-fade listen, beside the fader because that is what it bypasses. An
+                        operator checking a microphone that is faded all the way down still hears it.
+                    *@
+                    <Switch Label="@L["strip.pfl"]"
+                            Help="@L["help.pfl"]"
+                            Checked="channel.IsPreFadeListen"
+                            Changed='value => SetFlag(channel, "PreFadeListen", value)' />
+
                     <Switch Label="@L["strip.automixOn"]"
                             Help="@L["help.participate"]"
                             Checked="channel.ParticipatesInAutomix"
@@ -224,6 +248,9 @@
     int Count => Session.Console?.Channels.Count ?? 0;
 
     IReadOnlyList<BusState> Buses => Session.Console?.Buses ?? [];
+
+    IEnumerable<DeviceInfo> Captures =>
+        Session.Devices.Where(device => device.Direction.Equals("Capture", StringComparison.OrdinalIgnoreCase));
 
     ChannelState? Channel =>
         Session.Console is { } console && Shell.SelectedChannel >= 0 && Shell.SelectedChannel < console.Channels.Count
@@ -290,6 +317,16 @@
             {
                 ChannelIndex = channel.Index,
                 Name = arguments.Value?.ToString() ?? channel.Name
+            }
+        });
+
+    async Task SetDevice(ChannelState channel, ChangeEventArgs arguments) =>
+        await Session.ApplyAsync(new Command
+        {
+            SetChannelDevice = new SetChannelDevice
+            {
+                ChannelIndex = channel.Index,
+                DeviceId = arguments.Value?.ToString() ?? channel.DeviceId
             }
         });
 

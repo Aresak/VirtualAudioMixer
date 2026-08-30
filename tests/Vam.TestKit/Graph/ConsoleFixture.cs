@@ -1,6 +1,7 @@
 using Vam.Engine.Devices;
 using Vam.Engine.Devices.Abstractions;
 using Vam.Engine.Graph;
+using Vam.Engine.Graph.Nodes;
 using Vam.Engine.Modifiers;
 
 namespace Vam.TestKit.Graph;
@@ -102,6 +103,46 @@ public sealed class ConsoleFixture
         {
             Render(outputChannelCount);
         }
+    }
+
+    /// <summary>
+    /// The largest absolute sample one bus carried in the last block.
+    /// </summary>
+    /// <remarks>
+    /// Read straight out of the arena, which is where the bus lives. The alternative is binding a
+    /// BusOutputChannel and draining it, which is right for testing the device hand-off and far too
+    /// much machinery for "what did the monitor carry".
+    /// </remarks>
+    /// <param name="busIndex">Which bus.</param>
+    /// <returns>Its peak.</returns>
+    public float BusPeak(int busIndex)
+    {
+        GraphSnapshot snapshot = Controller.Publisher.Current;
+        GraphLayout layout = LayoutOf(snapshot);
+        float peak = 0f;
+
+        for (int plane = 0; plane < layout.BusWidth(busIndex); plane++)
+        {
+            foreach (float sample in snapshot.Plan.Arena.Plane(layout.BusPlane(busIndex) + plane, BlockFrames))
+            {
+                peak = Math.Max(peak, Math.Abs(sample));
+            }
+        }
+
+        return peak;
+    }
+
+    static GraphLayout LayoutOf(GraphSnapshot snapshot)
+    {
+        foreach (AudioNode node in snapshot.Plan.Nodes)
+        {
+            if (node is BusMixNode mix)
+            {
+                return mix.Layout;
+            }
+        }
+
+        throw new InvalidOperationException("The plan has no bus mix in it.");
     }
 
     /// <summary>The largest absolute sample in the last output block.</summary>

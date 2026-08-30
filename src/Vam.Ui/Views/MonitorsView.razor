@@ -33,7 +33,17 @@
 
                     <div class="kv" style="margin-top:9px">
                         <span class="k">@L["bus.output"]</span>
-                        <span class="v">@OutputName(monitor)</span>
+                        <span class="v">
+                            <select value="@monitor.OutputDeviceId"
+                                    aria-label="@L["bus.output"]"
+                                    @onchange="argument => SetOutput(monitor, argument)">
+                                <option value="">@L["bus.none"]</option>
+                                @foreach (DeviceInfo device in Renders)
+                                {
+                                    <option value="@device.Id">@device.Name</option>
+                                }
+                            </select>
+                        </span>
                         <span class="k">@L["bus.gain"]</span>
                         <span class="v">@FaderScale.Format(monitor.GainDb) dB</span>
                         <span class="k">@L["bus.limiter"]</span>
@@ -71,7 +81,7 @@
 
                     <div class="row" style="margin-top:11px">
                         <span class="sub" style="margin:0;flex:1">@L["monitors.soloWins"]</span>
-                        <ConfirmButton Label="@L["common.remove"]"
+                        <ConfirmButton Label="@L.Format("bus.remove", monitor.Name)"
                                        Question="@L.Format("monitors.removeWhy", monitor.Name)"
                                        Confirmed="() => Remove(monitor)" />
                     </div>
@@ -132,6 +142,19 @@
             }
         });
     }
+
+    IEnumerable<DeviceInfo> Renders =>
+        Session.Devices.Where(device => device.Direction.Equals("Render", StringComparison.OrdinalIgnoreCase));
+
+    async Task SetOutput(BusState monitor, ChangeEventArgs arguments) =>
+        await Session.ApplyAsync(new Command
+        {
+            SetBusOutputDevice = new SetBusOutputDevice
+            {
+                BusIndex = monitor.Index,
+                DeviceId = arguments.Value?.ToString() ?? string.Empty
+            }
+        });
 
     async Task Add() =>
         await Session.ApplyAsync(new Command

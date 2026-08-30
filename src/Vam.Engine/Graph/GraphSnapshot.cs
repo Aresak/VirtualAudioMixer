@@ -75,6 +75,7 @@ public sealed class GraphSnapshot
 
         Automix = automix;
         IsAnySoloed = AnySoloed(channels);
+        IsAnyPreFadeListening = AnyFlagged(channels, ChannelFlags.PreFadeListen);
     }
 
     /// <summary>The compiled graph. Shared across every snapshot built on it.</summary>
@@ -129,6 +130,29 @@ public sealed class GraphSnapshot
         }
 
         return !IsAnySoloed || (channel.Flags & ChannelFlags.Soloed) != 0;
+    }
+
+    /// <summary>
+    /// Whether any strip is being listened to before its fader. B7.
+    /// </summary>
+    public bool IsAnyPreFadeListening { get; }
+
+    /// <summary>
+    /// Whether one strip is what a monitor bus should be carrying, under pre-fade listen. B7.
+    /// </summary>
+    /// <remarks>
+    /// PFL is the operator's inspection tool: it replaces what a monitor carries with the strips
+    /// being listened to, taken before the fader so a strip pulled all the way down can still be
+    /// checked. It reaches monitors only — a PFL that changed the stream would be an operator
+    /// checking a microphone and broadcasting the check.
+    /// </remarks>
+    /// <param name="channelIndex">Which strip.</param>
+    /// <returns>Whether it should be heard while a pre-fade listen is engaged.</returns>
+    public bool IsPreFadeListened(int channelIndex)
+    {
+        ChannelParams channel = channels[channelIndex];
+
+        return !channel.IsSilent && (channel.Flags & ChannelFlags.PreFadeListen) != 0;
     }
 
     /// <summary>Produces a snapshot with one strip changed and everything else shared.</summary>
@@ -239,6 +263,19 @@ public sealed class GraphSnapshot
         Array.Fill(empty, ChainParams.Empty);
 
         return empty;
+    }
+
+    static bool AnyFlagged(ChannelParams[] channels, ChannelFlags flag)
+    {
+        foreach (ChannelParams channel in channels)
+        {
+            if ((channel.Flags & flag) != 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     static bool AnySoloed(ChannelParams[] channels)

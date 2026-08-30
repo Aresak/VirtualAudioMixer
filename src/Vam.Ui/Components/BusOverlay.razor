@@ -31,7 +31,29 @@
                     </span>
 
                     <span class="k">@L["bus.output"]</span>
-                    <span class="v">@OutputName(bus)</span>
+                    <span class="v">
+                        <select value="@bus.OutputDeviceId"
+                                aria-label="@L["bus.output"]"
+                                @onchange="argument => SetOutput(bus, argument)">
+                            <option value="">@L["bus.none"]</option>
+                            @foreach (DeviceInfo device in Renders)
+                            {
+                                <option value="@device.Id">@device.Name</option>
+                            }
+                        </select>
+                    </span>
+
+                    <span class="k">@L["channel.colour"]</span>
+                    <span class="v row" style="gap:4px">
+                        @foreach (string colour in StripPalette.All)
+                        {
+                            <button type="button"
+                                    class="swatch"
+                                    style="background:@colour;width:18px;height:18px;border:1px solid @(colour == bus.Colour ? "var(--ink)" : "var(--line)")"
+                                    aria-label="@colour"
+                                    @onclick="() => SetColour(bus, colour)"></button>
+                        }
+                    </span>
 
                     <span class="k">@L["common.channel"]</span>
                     <span class="v">@bus.ChannelCount</span>
@@ -83,8 +105,12 @@
 
             <h2>@L["common.remove"]</h2>
 
-            <ConfirmButton Label="@L["common.remove"]"
-                           Question="@($"Remove {bus.Name}? Every send pointing at it goes too.")"
+            @*
+                U8. Named, not "Remove". A destructive control that does not say what it will
+                destroy is one an operator confirms without reading, which is the same as not asking.
+            *@
+            <ConfirmButton Label="@L.Format("bus.remove", bus.Name)"
+                           Question="@L.Format("bus.removeWhy", bus.Name)"
                            Confirmed="() => Remove(bus)" />
         </div>
     </aside>
@@ -113,6 +139,25 @@
 
         return bus.OutputDeviceId.Length == 0 ? L["bus.none"] : bus.OutputDeviceId;
     }
+
+    IEnumerable<DeviceInfo> Renders =>
+        Session.Devices.Where(device => device.Direction.Equals("Render", StringComparison.OrdinalIgnoreCase));
+
+    async Task SetOutput(BusState bus, ChangeEventArgs arguments) =>
+        await Session.ApplyAsync(new Command
+        {
+            SetBusOutputDevice = new SetBusOutputDevice
+            {
+                BusIndex = bus.Index,
+                DeviceId = arguments.Value?.ToString() ?? string.Empty
+            }
+        });
+
+    async Task SetColour(BusState bus, string colour) =>
+        await Session.ApplyAsync(new Command
+        {
+            SetBusColour = new SetBusColour { BusIndex = bus.Index, Colour = colour }
+        });
 
     async Task SetRole(BusState bus, ChangeEventArgs arguments) =>
         await Session.ApplyAsync(new Command

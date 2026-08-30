@@ -848,6 +848,7 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
             IsMuted = (channel.Flags & ChannelFlags.Muted) != 0,
             IsSoloed = (channel.Flags & ChannelFlags.Soloed) != 0,
             IsPolarityInverted = (channel.Flags & ChannelFlags.PolarityInverted) != 0,
+            IsPreFadeListen = (channel.Flags & ChannelFlags.PreFadeListen) != 0,
             IsMonoFold = (channel.Flags & ChannelFlags.MonoFold) != 0,
             ParticipatesInAutomix = channel.ParticipatesInAutomix,
             AutomixWeight = channel.AutomixWeight,

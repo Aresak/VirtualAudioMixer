@@ -68,8 +68,16 @@
                 @foreach (ParameterState parameter in link.Parameters)
                 {
                     <div class="knob">
+                        @*
+                            U14 asks for help on every parameter, not every modifier. "Threshold" is
+                            not self-explanatory at 19:40 on a Tuesday, and knowing which modifier it
+                            belongs to does not help.
+                        *@
                         <div class="between">
-                            <span>@parameter.Name</span>
+                            <span>
+                                @parameter.Name
+                                <InlineHelp Title="@parameter.Name" Body="@HelpForParameter(link, parameter)" />
+                            </span>
                             <span class="mono">@Format(parameter)</span>
                         </div>
                         <input type="range"
@@ -140,6 +148,36 @@
     }
 
     string HelpFor(ModifierState link) => L["help.mod." + link.ModifierId];
+
+    /// <summary>
+    /// How to set one parameter well.
+    /// </summary>
+    /// <remarks>
+    /// Looked up by parameter first and by its bare name second, so a third-party modifier that
+    /// happens to call something "threshold" inherits an explanation that is true of thresholds
+    /// rather than getting a key on screen.
+    /// </remarks>
+    string HelpForParameter(ModifierState link, ParameterState parameter)
+    {
+        string specific = L["help.par." + link.ModifierId + "." + parameter.Id];
+
+        if (!specific.StartsWith("help.par.", StringComparison.Ordinal))
+        {
+            return specific;
+        }
+
+        string generic = L["help.par." + Bare(parameter.Id)];
+
+        return generic.StartsWith("help.par.", StringComparison.Ordinal) ? string.Empty : generic;
+    }
+
+    // "band2.frequency" is a frequency. The band it belongs to does not change the advice.
+    static string Bare(string id)
+    {
+        int dot = id.LastIndexOf('.');
+
+        return dot >= 0 && dot < id.Length - 1 ? id[(dot + 1)..] : id;
+    }
 
     async Task ToggleBypass(int index, ModifierState link) =>
         await Session.ApplyAsync(new Command

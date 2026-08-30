@@ -97,6 +97,9 @@ message ChannelState {
   bool is_muted = 8;
   bool is_soloed = 9;
   bool is_polarity_inverted = 10;
+  // B7. Pre-fade listen. Replaces what the monitors carry with the strips being inspected, taken
+  // before the fader so a strip pulled all the way down can still be checked.
+  bool is_pre_fade_listen = 23;
   bool is_mono_fold = 11;
   bool participates_in_automix = 12;
   double automix_weight = 13;

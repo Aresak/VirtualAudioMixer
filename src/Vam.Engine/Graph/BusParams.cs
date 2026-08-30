@@ -26,4 +26,15 @@ public readonly record struct BusParams(
     /// silences a public broadcast, which is the kind of mistake that ends up in the minutes.
     /// </remarks>
     public bool ObeysSolo => Role == BusRole.Output;
+
+    /// <summary>
+    /// Whether a pre-fade listen replaces what this bus carries. B7.
+    /// </summary>
+    /// <remarks>
+    /// Monitors only, and never anything else. PFL is an operator putting one microphone in their
+    /// own ears to check it; a bus that took it would be broadcasting the check. That is a stronger
+    /// rule than <see cref="ObeysSolo"/> and it is deliberately a separate one — solo reaches an
+    /// output bus and PFL must not.
+    /// </remarks>
+    public bool ObeysPreFadeListen => Role == BusRole.Monitor;
 }

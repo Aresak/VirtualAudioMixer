@@ -21,6 +21,12 @@ public sealed class BusMixNode(GraphLayout layout, int busIndex, int channelCoun
     // this graph can make, so it is the one that most needs sliding rather than stepping.
     readonly SmoothedGain[] sendGains = new SmoothedGain[channelCount];
 
+    /// <summary>Where this bus's planes are, for anything that needs to read them back.</summary>
+    public GraphLayout Layout => layout;
+
+    /// <summary>Which bus it sums into.</summary>
+    public int BusIndex => busIndex;
+
     /// <inheritdoc />
     public override void Reset() => Array.Clear(sendGains);
 
@@ -42,14 +48,25 @@ public sealed class BusMixNode(GraphLayout layout, int busIndex, int channelCoun
             return;
         }
 
-        bool preFader = bus.IsPreFader;
+        // B7. Pre-fade listen replaces what a monitor carries with the strips being inspected, and
+        // it takes them before the fader so a strip pulled all the way down can still be checked.
+        // Monitors only: a PFL that reached the stream would be an operator checking a microphone
+        // and broadcasting the check.
+        bool listening = bus.ObeysPreFadeListen && snapshot.IsAnyPreFadeListening;
+        bool preFader = bus.IsPreFader || listening;
 
         for (int channel = 0; channel < snapshot.ChannelCount && channel < sendGains.Length; channel++)
         {
             // Solo is the operator's monitoring tool. It reaches an output bus and never the stream,
             // because one click silencing a public broadcast is a mistake that ends up in the minutes.
-            bool heard = !bus.ObeysSolo || snapshot.IsHeard(channel);
-            float target = heard ? snapshot.Sends.GainOf(channel, busIndex) * bus.Gain : 0f;
+            bool heard = listening
+                ? snapshot.IsPreFadeListened(channel)
+                : !bus.ObeysSolo || snapshot.IsHeard(channel);
+
+            // Under PFL the send matrix is bypassed too: an operator listening to a microphone wants
+            // to hear it whether or not it happens to be routed to the monitor they are wearing.
+            float routing = listening ? bus.Gain : snapshot.Sends.GainOf(channel, busIndex) * bus.Gain;
+            float target = heard ? routing : 0f;
             float gain = sendGains[channel].Advance(target, smoothing);
 
             if (gain == 0f)
