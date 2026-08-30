@@ -1,0 +1,16 @@
+@*
+    One route.
+
+    The console does not navigate: the rail switches views and overlays open over the mixer, because
+    an operator adjusting one strip has not stopped needing to see the others. A router with six
+    routes would put a back button in the middle of a meeting.
+*@
+
+<Router AppAssembly="typeof(Program).Assembly">
+    <Found Context="route">
+        <RouteView RouteData="route" />
+    </Found>
+    <NotFound>
+        <Console />
+    </NotFound>
+</Router>

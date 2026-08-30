@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    MPL-2.0, like the console it hosts.
+
+    A host and nothing more. Its whole contribution is a startup file, one platform-services class
+    and the document the console is rendered into. Every view, view model and service in the product
+    lives in Vam.Ui, and a .razor file here that is not App or Routes is a defect.
+
+    Blazor Server rather than WebAssembly on purpose: the engine speaks gRPC over HTTP/2, which a
+    browser cannot do without a proxy, and the meter stream is exactly the traffic a proxy would
+    make worse. This process holds the connection and pushes drawn frames down a socket.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Vam.WebClient</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Vam.Ui\Vam.Ui.csproj" />
+  </ItemGroup>
+
+</Project>

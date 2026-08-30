@@ -1,0 +1,27 @@
+@*
+    The document. Nothing else belongs here.
+
+    U6: one fixed dark scheme, declared on the document rather than left to a media query, so the
+    page does not flash white before the stylesheet lands in a room where somebody is cutting
+    cameras in low light.
+*@
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>VAM</title>
+    <base href="/" />
+    <link rel="stylesheet" href="_content/Vam.Ui/css/vam.css" />
+    <HeadOutlet />
+</head>
+
+<body>
+    <Routes />
+    <script src="_framework/blazor.web.js"></script>
+</body>
+
+</html>
