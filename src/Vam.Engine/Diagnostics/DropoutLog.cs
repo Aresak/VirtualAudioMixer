@@ -81,6 +81,30 @@ public sealed class DropoutLog(int capacity = 1024)
         return count;
     }
 
+    /// <summary>
+    /// Copies what the ring holds without consuming it.
+    /// </summary>
+    /// <remarks>
+    /// The diagnostics view reads; the pump drains. If the view drained, opening it would delete the
+    /// lines that were about to be written to the log file, and the operator looking for a fault
+    /// would be the reason nobody else could find it afterwards.
+    /// </remarks>
+    /// <param name="destination">Where they go, oldest first.</param>
+    /// <returns>How many were written.</returns>
+    public int Peek(Span<DropoutRecord> destination)
+    {
+        long end = Interlocked.Read(ref written);
+        long start = Math.Max(end - Math.Min(records.Length, destination.Length), 0);
+        int count = (int)(end - start);
+
+        for (int index = 0; index < count; index++)
+        {
+            destination[index] = records[(int)((start + index) & (records.Length - 1))];
+        }
+
+        return count;
+    }
+
     /// <summary>Forgets everything.</summary>
     public void Clear()
     {

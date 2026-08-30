@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Vam.Engine.Automix;
 using Vam.Engine.Configuration;
@@ -36,6 +37,7 @@ public sealed class VamEngine : IDisposable
     readonly ILogger<VamEngine> logger;
     readonly ConsoleStore store;
     readonly CancellationTokenSource stopping = new();
+    readonly Dictionary<(int Channel, int Link), long> overruns = [];
 
     IAudioBackend? backend;
     DropoutPump? dropoutPump;
@@ -80,6 +82,34 @@ public sealed class VamEngine : IDisposable
     /// <summary>Where the audio threads note things going wrong. I2.</summary>
     public DropoutLog Dropouts { get; }
 
+    /// <summary>The devices this engine can see, or null before it started.</summary>
+    /// <remarks>
+    /// Exposed so a console can be told what is plugged into the engine's machine. A console on a
+    /// laptop cannot enumerate the sound cards of the machine wired to the microphones, and asking
+    /// it to would make the remote case quietly different from the local one.
+    /// </remarks>
+    public IAudioBackend? Backend => backend;
+
+    /// <summary>How long the render callback has been taking. K4.</summary>
+    public CallbackHistogram Callbacks { get; } = new();
+
+    /// <summary>What the audio thread allocated. K5, and it reads zero.</summary>
+    public AudioThreadAllocations Allocations { get; } = new();
+
+    /// <summary>Drift and ring fill over the session. K2.</summary>
+    public DriftHistory Drift { get; } = new();
+
+    /// <summary>How many times one link has overrun its budget. K6.</summary>
+    /// <remarks>
+    /// Kept per link rather than as a total, because the useful question is which modifier is the
+    /// expensive one and a single number cannot answer it.
+    /// </remarks>
+    /// <param name="channelIndex">Which strip.</param>
+    /// <param name="linkIndex">Which link of its chain.</param>
+    /// <returns>The count, or zero.</returns>
+    public long OverrunsOf(int channelIndex, int linkIndex) =>
+        overruns.TryGetValue((channelIndex, linkIndex), out long count) ? count : 0;
+
     /// <summary>The console. Commands go here.</summary>
     public GraphController? Graph { get; private set; }
 
@@ -118,6 +148,7 @@ public sealed class VamEngine : IDisposable
         GraphConfig config = LoadOrDiscover(backend);
 
         Graph = new GraphController(config, options.BlockFrames, options.SampleRate, Modifiers);
+        Graph.Overran += OnOverran;
 
         OpenDevices(config);
         StartRecording(config);
@@ -134,7 +165,9 @@ public sealed class VamEngine : IDisposable
             },
             loggers);
 
-        Clock.SetConsumer(Graph.Render);
+        // Wrapped rather than passed straight through, so K4 and K5 measure the real callback on a
+        // real machine rather than a test harness's idea of one. Both are a handful of instructions.
+        Clock.SetConsumer(RenderAndMeasure);
         Clock.Poll();
 
         dropoutPump = new DropoutPump(Dropouts, loggers.CreateLogger<DropoutPump>());
@@ -288,25 +321,93 @@ public sealed class VamEngine : IDisposable
         return config;
     }
 
+    /// <summary>
+    /// Adds a strip and opens its device. U17.
+    /// </summary>
+    /// <param name="channel">The strip.</param>
+    /// <returns>Its index, or -1 when there is no graph to add it to.</returns>
+    public int AddChannel(ChannelConfig channel)
+    {
+        ArgumentNullException.ThrowIfNull(channel);
+
+        if (Graph is null)
+        {
+            return -1;
+        }
+
+        int index = Graph.AddChannel(channel);
+
+        Track(channel, index);
+
+        return index;
+    }
+
     void OpenDevices(GraphConfig config)
     {
-        foreach (ChannelConfig channel in config.Channels)
+        for (int index = 0; index < config.Channels.Count; index++)
         {
-            Supervisor!.Track(
-                channel.DeviceId,
-                new DeviceInputChannelOptions
-                {
-                    NominalSampleRate = options.SampleRate,
-                    ChannelCount = Math.Max(channel.ChannelCount, 1),
-                    BlockFrames = options.BlockFrames,
-                    RingCapacityFrames = options.SampleRate / 8,
-                    TargetFillFrames = options.SampleRate / 40,
-                    CorrectionInterval = options.CorrectionInterval,
-                    Dropouts = Dropouts,
-                    EndpointIndex = config.Channels.IndexOf(channel)
-                },
-                new CaptureOptions(ShareMode.Shared, TimeSpan.FromMilliseconds(20), Math.Max(channel.ChannelCount, 1)));
+            Track(config.Channels[index], index);
         }
+    }
+
+    void Track(ChannelConfig channel, int index) =>
+        Supervisor!.Track(
+            channel.DeviceId,
+            new DeviceInputChannelOptions
+            {
+                NominalSampleRate = options.SampleRate,
+                ChannelCount = Math.Max(channel.ChannelCount, 1),
+                BlockFrames = options.BlockFrames,
+                RingCapacityFrames = options.SampleRate / 8,
+                TargetFillFrames = options.SampleRate / 40,
+                CorrectionInterval = options.CorrectionInterval,
+                Dropouts = Dropouts,
+                EndpointIndex = index
+            },
+            new CaptureOptions(ShareMode.Shared, TimeSpan.FromMilliseconds(20), Math.Max(channel.ChannelCount, 1)));
+
+    /// <summary>
+    /// Starts recording now, into a folder of its own. J1.
+    /// </summary>
+    /// <param name="directory">
+    /// Where the session folder goes, or null for the configured root. The session always gets its
+    /// own dated folder underneath: a recording that could land on top of an earlier one is a
+    /// recording that will, eventually, and there is no undoing that.
+    /// </param>
+    /// <returns>What the disk had to say. A refusal explains itself.</returns>
+    public DiskVerdict StartRecording(string? directory = null)
+    {
+        if (Recording is not null)
+        {
+            return new DiskVerdict(true, 0, 0, "Already recording.");
+        }
+
+        if (Graph is null)
+        {
+            return new DiskVerdict(false, 0, 0, "The engine is not running.");
+        }
+
+        return BeginRecording(Graph.Config, directory ?? options.RecordingDirectory);
+    }
+
+    /// <summary>Stops recording and closes the files.</summary>
+    /// <returns>Whether anything was recording.</returns>
+    public bool StopRecording()
+    {
+        if (Recording is null)
+        {
+            return false;
+        }
+
+        Graph?.BindRecording(null);
+
+        Recording.Stop();
+        Recording.Dispose();
+        Recording = null;
+
+        logger.LogInformation("Recording stopped.");
+
+        return true;
     }
 
     void StartRecording(GraphConfig config)
@@ -316,8 +417,13 @@ public sealed class VamEngine : IDisposable
             return;
         }
 
+        BeginRecording(config, options.RecordingDirectory);
+    }
+
+    DiskVerdict BeginRecording(GraphConfig config, string root)
+    {
         string directory = Path.Combine(
-            options.RecordingDirectory,
+            root,
             DateTimeOffset.Now.ToString("yyyy-MM-dd_HH-mm-ss", System.Globalization.CultureInfo.InvariantCulture));
 
         Recording = new RecordingSession(directory, new DiskGuard(loggers.CreateLogger<DiskGuard>()), loggers.CreateLogger<RecordingSession>());
@@ -343,10 +449,12 @@ public sealed class VamEngine : IDisposable
             Recording.Dispose();
             Recording = null;
 
-            return;
+            return verdict;
         }
 
         Graph!.BindRecording(Recording);
+
+        return verdict;
     }
 
     MeterPublisher? BuildMeterPublisher()
@@ -360,6 +468,60 @@ public sealed class VamEngine : IDisposable
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The render callback, with a stopwatch and an allocation counter around it.
+    /// </summary>
+    /// <remarks>
+    /// Inside the audio path. Two counter reads and a subtract; nothing here allocates, and that is
+    /// the point, because this is the thing measuring whether anything else does.
+    /// </remarks>
+    /// <param name="inputs">One block from each device.</param>
+    /// <param name="output">Where the primary output's audio goes.</param>
+    /// <param name="frameCount">Frames wanted.</param>
+    /// <returns>Frames written.</returns>
+    int RenderAndMeasure(MixBlocks inputs, Span<float> output, int frameCount)
+    {
+        long started = Stopwatch.GetTimestamp();
+
+        Allocations.Begin();
+
+        int written = Graph!.Render(inputs, output, frameCount);
+
+        Allocations.End();
+        Callbacks.Record(Stopwatch.GetTimestamp() - started, Graph.BlockTicks);
+
+        return written;
+    }
+
+    void OnOverran(object? sender, ModifierOverrun overrun)
+    {
+        // On the control thread: the guard runs there, not in the callback that noticed.
+        (int, int) key = (overrun.ChannelIndex, overrun.LinkIndex);
+
+        overruns[key] = overruns.TryGetValue(key, out long count) ? count + 1 : 1;
+    }
+
+    void RecordDrift(TimeSpan elapsed)
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+
+        for (int index = 0; index < Channels.Count; index++)
+        {
+            DeviceTelemetry telemetry = Channels.Channels[index].GetTelemetry();
+
+            Drift.Record(new DriftSample(
+                index,
+                now,
+                telemetry.DriftPpm,
+                telemetry.FillPercentage,
+
+                // What the servo is actually applying, which is not the same as what the estimator
+                // measured: in a closed loop the two converge, and the gap between them while they
+                // do is the thing worth looking at on a chart.
+                (telemetry.Ratio - 1.0) * 1_000_000.0));
+        }
     }
 
     void Run()
@@ -386,6 +548,7 @@ public sealed class VamEngine : IDisposable
             if (sinceCorrection >= options.CorrectionInterval)
             {
                 Channels.UpdateCorrections(sinceCorrection);
+                RecordDrift(sinceCorrection);
                 sinceCorrection = TimeSpan.Zero;
             }
 
