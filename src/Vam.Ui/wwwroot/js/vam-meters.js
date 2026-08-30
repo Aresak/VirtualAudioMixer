@@ -27,6 +27,7 @@ const FLAG_FAULTED = 4;
 const FLAG_DUCKED = 8;
 const FLAG_ABSENT = 16;
 const FLAG_CLIPPED = 32;
+const FLAG_SPEAKING = 64;
 
 // Peak hold. A peak that vanished in forty milliseconds is a peak nobody saw.
 const HOLD_MS = 1200;
@@ -307,9 +308,10 @@ export function frame(payload, channelCount, busCount) {
         }
 
         if (target.speaking) {
-            // Speaking is holding a real share of the automixer's gain, not merely being above a
-            // threshold. A microphone picking up the room from four metres away is not speaking.
-            target.speaking.classList.toggle('on', readUint16(view, at + 6) > 0.12);
+            // B3. The detector's own answer, taken before the denoise. Deriving it from the
+            // automixer's share was a proxy that went dark the moment somebody switched gain
+            // sharing off — which is exactly when an operator most needs to see who is live.
+            target.speaking.classList.toggle('on', (flags & FLAG_SPEAKING) !== 0);
         }
     }
 

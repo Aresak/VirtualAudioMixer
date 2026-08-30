@@ -585,7 +585,8 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
                 reading.GainReductionDb,
                 reading.AutomixShare,
                 (byte)((reading.IsDucked ? MeterFlags.Ducked : MeterFlags.None)
-                    | (reading.HasClipped ? MeterFlags.Clipped : MeterFlags.None))));
+                    | (reading.HasClipped ? MeterFlags.Clipped : MeterFlags.None)
+                    | (reading.IsSpeaking ? MeterFlags.Speaking : MeterFlags.None))));
         }
 
         for (int index = 0; index < buses; index++)

@@ -152,6 +152,13 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
         // the processing has not already happened to it.
         AddRecordingTaps(config, layout, recording, nodes);
 
+        // B3. Before the chain, so the detector sees what the microphone sent rather than what the
+        // denoise left of it. A detector reading denoised audio agrees with the denoise instead of
+        // checking it.
+        VoiceActivityTapNode voiceActivity = new(layout, config.Channels.Count, sampleRate, blockFrames);
+
+        nodes.Add(voiceActivity);
+
         // Between the head stage and the fader, and that position is the contract. Everything before
         // is the fixed head, everything after is the fixed tail, and the operator composes what
         // happens in between - so the anchors are places in the plan rather than a rule the console
@@ -186,7 +193,13 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
             nodes.Add(align);
         }
 
-        nodes.Add(new AutomixNode(layout, new AutomixState(config.Channels.Count), sampleRate, blockFrames));
+        nodes.Add(new AutomixNode(layout, new AutomixState(config.Channels.Count), sampleRate, blockFrames)
+        {
+            // B3 feeding C1. The automixer weights its detector by how far each strip is above its
+            // own noise floor, so a microphone next to the air conditioning does not win the gain
+            // by being the loudest thing in the room.
+            VoiceActivity = voiceActivity
+        });
 
         for (int bus = 0; bus < config.Buses.Count; bus++)
         {

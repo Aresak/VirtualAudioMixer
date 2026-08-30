@@ -311,6 +311,33 @@ public sealed class VamEngine : IDisposable
         }
     }
 
+    /// <summary>
+    /// Who the voice-activity tap says is speaking. B3 and F2.
+    /// </summary>
+    /// <remarks>
+    /// Read from the published plan on the control thread. The tap writes it on the audio thread
+    /// into an array it owns; a stale block here shows a speaking dot forty milliseconds late,
+    /// which is nobody's problem.
+    /// </remarks>
+    /// <returns>One flag per strip, or empty when there is no plan.</returns>
+    ReadOnlySpan<bool> SpeakingNow()
+    {
+        if (Graph is not { } graph)
+        {
+            return default;
+        }
+
+        foreach (AudioNode node in graph.Publisher.Current.Plan.Nodes)
+        {
+            if (node is VoiceActivityTapNode tap)
+            {
+                return tap.Speaking;
+            }
+        }
+
+        return default;
+    }
+
     /// <summary>What the automixer is doing, for the meters and the console.</summary>
     /// <returns>Its state, or null when there is no graph yet.</returns>
     public AutomixState? AutomixState()
@@ -763,7 +790,11 @@ public sealed class VamEngine : IDisposable
 
             if (sinceMeters >= meterInterval && Meters is not null)
             {
-                Meters.Publish(sinceMeters, AutomixState(), Graph?.Config.AutomixDepthDb ?? -15.0);
+                Meters.Publish(
+                    sinceMeters,
+                    AutomixState(),
+                    Graph?.Config.AutomixDepthDb ?? -15.0,
+                    SpeakingNow());
                 sinceMeters = TimeSpan.Zero;
             }
         }

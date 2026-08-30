@@ -89,7 +89,10 @@ public sealed class MeterPublisher
     /// <param name="elapsed">Time since the previous frame.</param>
     /// <param name="automix">What the automixer is doing, for the share and the ducked flag.</param>
     /// <param name="depthDb">The automixer's floor, for deciding what counts as ducked.</param>
-    public void Publish(TimeSpan elapsed, AutomixState? automix, double depthDb)
+    /// <param name="speaking">
+    /// Who the voice-activity tap says is speaking. B3 and F2.
+    /// </param>
+    public void Publish(TimeSpan elapsed, AutomixState? automix, double depthDb, ReadOnlySpan<bool> speaking = default)
     {
         for (int index = 0; index < channels.Length; index++)
         {
@@ -109,7 +112,8 @@ public sealed class MeterPublisher
                 gainDb,
                 share,
                 isDucked,
-                channelCells.HasClipped(index));
+                channelCells.HasClipped(index),
+                index < speaking.Length && speaking[index]);
         }
 
         for (int index = 0; index < buses.Length; index++)

@@ -50,9 +50,30 @@ public sealed class AutomixNode(GraphLayout layout, AutomixState state, int samp
     public AutomixState State => state;
 
     /// <summary>
+    /// The voice-activity tap, when the plan has one. B3 feeding C1.
+    /// </summary>
+    /// <remarks>
+    /// Set by the compiler, once, before the plan is published. The automixer weights its detector
+    /// by how confidently each strip is carrying speech rather than by level alone — a microphone
+    /// next to the air conditioning is the loudest thing in some rooms, and gain sharing on level
+    /// alone hands it the meeting.
+    /// </remarks>
+    public VoiceActivityTapNode? VoiceActivity { get; init; }
+
+    /// <summary>
     /// The most C4 will add back, in decibels. Eight equally-open microphones.
     /// </summary>
     public const double MaximumNomGainDb = 9.0;
+
+    /// <summary>
+    /// How much of its weight a strip keeps when the detector does not think it is speech. B3.
+    /// </summary>
+    /// <remarks>
+    /// Half, which is six decibels of disadvantage and not a silencing. The number exists so that
+    /// the voice-activity tap can bias the sharing without ever becoming a gate — a detector is a
+    /// guess, and a wrong guess must cost a speaker some gain rather than all of it.
+    /// </remarks>
+    public const float MinimumConfidenceWeight = 0.5f;
 
     /// <inheritdoc />
     public override void Reset()
@@ -122,7 +143,23 @@ public sealed class AutomixNode(GraphLayout layout, AutomixState state, int samp
                 level = Math.Max(level, ((ReadOnlySpan<float>)context.Plane(first + plane)).PeakAbs());
             }
 
-            detectors[channel] = (float)Math.Pow(level * parameters.Channels[channel].Weight, DetectorExponent);
+            // B3, as a bias and emphatically not as a gate.
+            //
+            // The first attempt multiplied the detector by the confidence outright, and the test
+            // suite immediately showed what that means: a signal the detector does not recognise as
+            // speech gets no gain at all. That is a gate, and C1's whole claim is that this is not
+            // one — a voice the detector missed would be silenced rather than merely disfavoured,
+            // which is the failure that gets an automixer switched off for good.
+            //
+            // So the confidence moves the weight between half and whole. A microphone sitting on its
+            // own noise floor still competes, at six decibels of disadvantage; one plainly carrying a
+            // voice competes fully. Nothing is ever zero because of this.
+            float confidence = VoiceActivity?.ConfidenceOf(channel) ?? 1f;
+            float bias = MinimumConfidenceWeight + ((1f - MinimumConfidenceWeight) * confidence);
+
+            detectors[channel] =
+                (float)Math.Pow(level * parameters.Channels[channel].Weight, DetectorExponent) * bias;
+
             total += detectors[channel];
         }
 

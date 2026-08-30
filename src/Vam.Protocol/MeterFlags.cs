@@ -40,5 +40,15 @@ public enum MeterFlags : byte
     /// about two milliseconds to catch it — which means they never would. It stays lit until somebody
     /// clears it, and clearing it is how they say they have seen it.
     /// </remarks>
-    Clipped = 32
+    Clipped = 32,
+
+    /// <summary>
+    /// The voice-activity tap says somebody is speaking into it. B3 and F2.
+    /// </summary>
+    /// <remarks>
+    /// A decision made on the signal the microphone sent, before the denoise removed the very
+    /// characteristics the detector keys on. Not derived from the automixer's share, which is a
+    /// proxy that goes dark the moment somebody switches gain sharing off.
+    /// </remarks>
+    Speaking = 64
 }
