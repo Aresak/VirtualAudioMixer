@@ -20,10 +20,14 @@ namespace Vam.Engine.Modifiers;
 /// </remarks>
 public sealed class ModifierChain
 {
+    /// <summary>What a block of nothing reports, rather than negative infinity.</summary>
+    const float SilenceDb = -120f;
+
     readonly Modifier[] modifiers;
     readonly int[] parameterOffsets;
     readonly float[] smoothed;
     readonly ModifierTelemetry[] telemetry;
+    readonly float[] outputLevels;
     readonly ModifierCost[] costs;
     readonly float[] scratch;
     readonly int channelCount;
@@ -47,6 +51,7 @@ public sealed class ModifierChain
 
         parameterOffsets = new int[modifiers.Length + 1];
         telemetry = new ModifierTelemetry[modifiers.Length];
+        outputLevels = new float[modifiers.Length];
         costs = new ModifierCost[modifiers.Length];
 
         int total = 0;
@@ -97,6 +102,17 @@ public sealed class ModifierChain
 
     /// <summary>What each link is doing, for the meters.</summary>
     public ReadOnlySpan<ModifierTelemetry> Telemetry => telemetry;
+
+    /// <summary>
+    /// What is leaving each link, in dBFS, measured here rather than reported by the modifier.
+    /// </summary>
+    /// <remarks>
+    /// A modifier's own <c>LevelDb</c> is whatever it found useful to publish — the compressor's
+    /// detector, the adaptive gain's loudness — and several publish nothing at all. The level
+    /// leaving a link is a property of the chain, so the chain measures it, and a modifier that
+    /// wants to say something different about itself still can.
+    /// </remarks>
+    public ReadOnlySpan<float> OutputLevelsDb => outputLevels;
 
     /// <summary>What each link is costing, for K6 and the budget guard.</summary>
     public ReadOnlySpan<ModifierCost> Costs => costs;
@@ -209,7 +225,30 @@ public sealed class ModifierChain
             modifiers[link].Process(ref context);
 
             costs[link].Record(Stopwatch.GetTimestamp() - started);
+            outputLevels[link] = PeakDb(audio, frameCount * channelCount);
         }
+    }
+
+    /// <summary>The block's peak, in dBFS. Inside the audio path.</summary>
+    /// <remarks>
+    /// One pass, no branches worth naming, and it answers the only question the console has about a
+    /// link that appears to be doing nothing: is anything coming out of it.
+    /// </remarks>
+    static float PeakDb(ReadOnlySpan<float> audio, int samples)
+    {
+        float peak = 0f;
+
+        for (int index = 0; index < samples && index < audio.Length; index++)
+        {
+            float magnitude = Math.Abs(audio[index]);
+
+            if (magnitude > peak)
+            {
+                peak = magnitude;
+            }
+        }
+
+        return peak <= 0f ? SilenceDb : (float)(20.0 * Math.Log10(peak));
     }
 
     /// <summary>Throws away every filter history and cost measurement. Control thread.</summary>

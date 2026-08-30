@@ -123,7 +123,14 @@
                                                                Body="@L["help.trim"]" /></span>
                             <span class="mono">@channel.TrimDb.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) dB</span>
                         </div>
-                        <input type="range" min="-24" max="24" step="0.5"
+                        @*
+                            Up to thirty-six decibels of boost. A USB microphone that Windows
+                            captures quietly needs about twenty to sit level with everything else on
+                            the machine, and a range that stops at twenty-four puts that at the very
+                            top of the travel with nothing left for a quieter one. Cutting stays at
+                            twenty-four: nothing arrives so hot that more is useful.
+                        *@
+                        <input type="range" min="-24" max="36" step="0.5"
                                value="@channel.TrimDb"
                                aria-label="@L["strip.trim"]"
                                @oninput="argument => SetTrimAsync(channel, argument)" />

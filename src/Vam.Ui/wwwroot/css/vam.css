@@ -905,3 +905,18 @@ input[type=checkbox] { accent-color: var(--brass); width: 15px; height: 15px; }
 .closer-btn.primary { background: var(--brass); border-color: var(--brass); color: #17120a; }
 .closer-btn.primary span { color: rgba(23, 18, 10, .72); }
 .closer-btn.primary:hover { background: #e2b358; }
+
+/* A chain link that is running and leaving nothing behind. Grey, for the same reason a meter greys
+   at the automix floor: it is doing something, and none of it is reaching the mix. */
+.mod.silent .t { color: var(--ink-mute); }
+.mod.silent { border-color: var(--line-soft); }
+
+.silentmark {
+  font: 500 9.5px/1 var(--f-cond);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 2px 5px;
+}

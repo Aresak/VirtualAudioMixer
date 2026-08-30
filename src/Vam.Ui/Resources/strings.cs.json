@@ -137,6 +137,8 @@
   "chain.head": "Vstup · trim, polarita, mono",
   "chain.tail": "Fader · zesílení automixu",
   "chain.alwaysFirst": "Vždy první v řetězci. Nastavení níže se editovat dá.",
+  "chain.silent": "ticho",
+  "chain.silentWhy": "Tenhle článek běží a nic z něj nevychází. Metr na stripu ukazuje, co přišlo, ne co po řetězci zbylo.",
   "chain.alwaysLast": "Vždy poslední v řetězci. Nastavení níže se editovat dá.",
   "chain.anchoredWhy": "Pevná pozice — tímhle článkem nejde táhnout.",
   "chain.vadTap": "Detekce řeči se odečítá tady, před potlačením šumu — protože potlačení odstraní přesně to, na co se detektor chytá.",
