@@ -57,7 +57,7 @@ public sealed class BusMixNode(GraphLayout layout, int busIndex, int channelCoun
                 continue;
             }
 
-            Accumulate(ref context, channel, busFirst, busWidth, preFader, gain);
+            Accumulate(ref context, channel, busFirst, busWidth, preFader, gain, snapshot.Channels[channel]);
         }
     }
 
@@ -67,13 +67,20 @@ public sealed class BusMixNode(GraphLayout layout, int busIndex, int channelCoun
         int busFirst,
         int busWidth,
         bool preFader,
-        float gain)
+        float gain,
+        ChannelParams channel)
     {
         int width = layout.ChannelWidth(channelIndex);
         int first = preFader ? layout.PreFaderPlane(channelIndex) : layout.PostFaderPlane(channelIndex);
 
         for (int plane = 0; plane < busWidth; plane++)
         {
+            // B8. The pan is folded into the send gain here rather than applied as a stage of its
+            // own, so it costs a multiply that was happening anyway. A strip already as wide as the
+            // bus keeps its own image: panning a stereo pair by moving both of its channels the same
+            // way is not panning, it is a balance control that collapses the image.
+            float panned = width < busWidth ? gain * channel.PanFor(plane, busWidth) : gain;
+
             // A mono strip is heard across a stereo bus rather than only on the left; a strip wider
             // than the bus folds its extra channels down onto the ones that exist.
             Span<float> destination = context.Plane(busFirst + plane);
@@ -84,13 +91,13 @@ public sealed class BusMixNode(GraphLayout layout, int busIndex, int channelCoun
 
                 for (int frame = 0; frame < destination.Length; frame++)
                 {
-                    destination[frame] += from[frame] * gain;
+                    destination[frame] += from[frame] * panned;
                 }
             }
 
             if (width < busWidth)
             {
-                CopyNarrowSource(ref context, first, width, plane, destination, gain);
+                CopyNarrowSource(ref context, first, width, plane, destination, panned);
             }
         }
     }

@@ -518,11 +518,26 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
         {
             ChannelConfig channel = config.Channels[index];
 
+            // Constant power, so a strip panned hard to one side is as loud as it was in the middle.
+            // A linear law drops a centred voice by three decibels when somebody moves it, which an
+            // operator then corrects on the fader, and the two controls end up fighting.
+            //
+            // Normalised so that the centre is unity rather than 0.707, which is not the textbook
+            // pan law and is the right one here. A mono strip has always been heard at unity across
+            // both sides of a stereo bus, and pan defaults to centre — so the textbook law would
+            // have made every existing console three decibels quieter the moment this feature
+            // landed, without anybody asking for it. The power is still constant across the travel;
+            // only where the constant sits has moved.
+            double angle = (Math.Clamp(channel.Pan, -1.0, 1.0) + 1.0) * (Math.PI / 4.0);
+            const double CentreUnity = 1.4142135623730951;
+
             channels[index] = new ChannelParams(
                 channel.TrimDb.ToLinearGain(),
                 channel.FaderDb.ToLinearGain(),
                 channel.Flags,
-                (channel.Flags & ChannelFlags.MonoFold) != 0 ? 1 : Math.Max(channel.ChannelCount, 1));
+                (channel.Flags & ChannelFlags.MonoFold) != 0 ? 1 : Math.Max(channel.ChannelCount, 1),
+                (float)(Math.Cos(angle) * CentreUnity),
+                (float)(Math.Sin(angle) * CentreUnity));
         }
 
         return channels;

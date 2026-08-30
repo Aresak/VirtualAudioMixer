@@ -243,5 +243,8 @@
   "preset.save": "Save",
   "preset.saveAs": "Save as…",
   "preset.deleteWhy": "Delete the preset {0}? The chains that came from it keep working — they just stop having somewhere to be restored from.",
-  "help.presetModified": "The live chain has been changed since this preset was applied."
+  "help.presetModified": "The live chain has been changed since this preset was applied.",
+  "strip.pan": "Pan",
+  "strip.centre": "C",
+  "help.pan": "Where the strip sits across a stereo bus. It does nothing to a mono stream, which is what a council watches on a phone speaker — it is for the monitors, where an operator wearing headphones for two hours does not want four microphones stacked in the middle of their head. Constant power, so moving one does not change how loud it is."
 }

@@ -114,6 +114,9 @@ message ChannelState {
   bool is_preset_modified = 20;
   // D2. The send level for each bus, so the console can show and change it without a second call.
   repeated double send_levels_db = 21;
+  // B8. Where the strip sits across a stereo bus, -1 to 1. Irrelevant for a mono stream and not
+  // irrelevant at all for a monitor somebody wears for two hours.
+  double pan = 22;
 }
 
 message ModifierState {
@@ -212,6 +215,7 @@ message Command {
     SetBusName set_bus_name = 21;
     SetBusRole set_bus_role = 22;
     SetAutomixWeight set_automix_weight = 23;
+    SetPan set_pan = 28;
     ClearClip clear_clip = 24;
     SaveChainPreset save_chain_preset = 25;
     ApplyChainPreset apply_chain_preset = 26;
@@ -221,6 +225,7 @@ message Command {
 
 message SetFader { int32 channel_index = 1; double decibels = 2; }
 message SetTrim { int32 channel_index = 1; double decibels = 2; }
+message SetPan { int32 channel_index = 1; double pan = 2; }
 message SetFlag { int32 channel_index = 1; string flag = 2; bool enabled = 3; }
 message SetBusGain { int32 bus_index = 1; double decibels = 2; }
 message SetBusMuted { int32 bus_index = 1; bool muted = 2; }

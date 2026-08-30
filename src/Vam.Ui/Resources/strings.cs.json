@@ -243,5 +243,8 @@
   "preset.save": "Uložit",
   "preset.saveAs": "Uložit jako…",
   "preset.deleteWhy": "Smazat předvolbu {0}? Řetězce, které z ní vznikly, fungují dál — jen už nebudou mít odkud se obnovit.",
-  "help.presetModified": "Živý řetězec se od použití téhle předvolby změnil."
+  "help.presetModified": "Živý řetězec se od použití téhle předvolby změnil.",
+  "strip.pan": "Panorama",
+  "strip.centre": "C",
+  "help.pan": "Kde kanál sedí napříč stereo sběrnicí. Na mono stream, který zastupitelstvo sleduje z reproduktoru telefonu, nemá vliv — je to pro odposlech, kde člověk se sluchátky na hlavě dvě hodiny nechce mít čtyři mikrofony naskládané uprostřed hlavy. Konstantní výkon, takže posun nemění hlasitost."
 }

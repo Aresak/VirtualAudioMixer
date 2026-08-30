@@ -366,6 +366,10 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
                 return Rewrite(graph, request.SetChannelName.ChannelIndex,
                     channel => channel with { Name = request.SetChannelName.Name });
 
+            case Command.KindOneofCase.SetPan:
+                return Rewrite(graph, request.SetPan.ChannelIndex,
+                    channel => channel with { Pan = Math.Clamp(request.SetPan.Pan, -1.0, 1.0) });
+
             case Command.KindOneofCase.SetAutomixWeight:
                 return Rewrite(graph, request.SetAutomixWeight.ChannelIndex,
                     channel => channel with { AutomixWeight = (float)request.SetAutomixWeight.Weight });
@@ -751,6 +755,7 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
             IsMonoFold = (channel.Flags & ChannelFlags.MonoFold) != 0,
             ParticipatesInAutomix = channel.ParticipatesInAutomix,
             AutomixWeight = channel.AutomixWeight,
+            Pan = channel.Pan,
             Colour = channel.Colour,
             PresetName = channel.PresetName,
 

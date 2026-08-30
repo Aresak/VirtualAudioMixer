@@ -38,6 +38,17 @@ public sealed record ChannelConfig
     /// <summary>Fader position. B8.</summary>
     public double FaderDb { get; init; }
 
+    /// <summary>
+    /// Where the strip sits across a stereo bus, from -1 for hard left to 1 for hard right. B8.
+    /// </summary>
+    /// <remarks>
+    /// Irrelevant for the stream, which a council watches in mono on a phone speaker, and not
+    /// irrelevant at all for a monitor: an operator listening for two hours to four microphones
+    /// stacked in the centre of their head will move them apart, and being able to is the reason
+    /// this exists.
+    /// </remarks>
+    public double Pan { get; init; }
+
     /// <summary>Mute, solo, polarity and mono fold.</summary>
     public ChannelFlags Flags { get; init; } = ChannelFlags.None;
 

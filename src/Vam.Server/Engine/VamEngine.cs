@@ -10,7 +10,9 @@ using Vam.Engine.Graph.Nodes;
 using Vam.Engine.Metering;
 using Vam.Engine.Modifiers;
 using Vam.Engine.Recording;
+using Vam.Engine.Modifiers.BuiltIn;
 using Vam.Engine.Windows.Devices.Wasapi;
+using Vam.Engine.Windows.Dsp;
 
 namespace Vam.Server.Engine;
 
@@ -165,6 +167,8 @@ public sealed class VamEngine : IDisposable
         }
 
         backend = supplied ?? new WasapiBackend(loggers.CreateLogger<WasapiBackend>());
+
+        ChooseNoiseSuppressor();
 
         Supervisor = new DeviceSupervisor(backend, Channels, loggers);
 
@@ -518,6 +522,37 @@ public sealed class VamEngine : IDisposable
         Callbacks.Record(Stopwatch.GetTimestamp() - started, Graph.BlockTicks);
 
         return written;
+    }
+
+    /// <summary>
+    /// Points the denoise at RNNoise when the native library is there, and says which it picked. B4.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Asked once, at startup, and never on the audio thread. RNNoise is BSD-licensed and freely
+    /// available but is not shipped with VAM, so a first-time user has the managed spectral
+    /// suppressor — which works, and sounds like what it is.
+    /// </para>
+    /// <para>
+    /// Said out loud either way. An operator wondering why the denoise sounds different from the one
+    /// they read about needs to be able to find out which one is running, and a silent fallback is
+    /// how that question goes unanswered for a year.
+    /// </para>
+    /// </remarks>
+    void ChooseNoiseSuppressor()
+    {
+        if (!RnnoiseSuppressor.IsAvailable)
+        {
+            logger.LogInformation(
+                "RNNoise is not installed, so the denoise is the managed spectral suppressor. "
+                + "Drop rnnoise.dll beside the engine to use RNNoise instead.");
+
+            return;
+        }
+
+        Modifiers.Register("vam.denoise", static () => new DenoiseModifier(static () => new RnnoiseSuppressor()));
+
+        logger.LogInformation("Denoise is RNNoise, through the native library.");
     }
 
     void OnOverran(object? sender, ModifierOverrun overrun)

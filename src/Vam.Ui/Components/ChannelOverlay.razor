@@ -108,6 +108,23 @@
                             Help="@L["help.monoFold"]"
                             Checked="channel.IsMonoFold"
                             Changed='value => SetFlag(channel, "MonoFold", value)' />
+
+                    @*
+                        B8. Only worth anything on a stereo bus, which in practice means the monitors:
+                        a council watches the stream on a phone speaker, and an operator wearing
+                        headphones for two hours does not want four microphones stacked in the middle
+                        of their head.
+                    *@
+                    <div class="knob">
+                        <div class="between">
+                            <span>@L["strip.pan"] <InlineHelp Title="@L["strip.pan"]" Body="@L["help.pan"]" /></span>
+                            <span class="mono">@PanText(channel)</span>
+                        </div>
+                        <input type="range" min="-1" max="1" step="0.02"
+                               value="@channel.Pan"
+                               aria-label="@L["strip.pan"]"
+                               @oninput="argument => SetPan(channel, argument)" />
+                    </div>
                 </div>
             </div>
 
@@ -315,6 +332,23 @@
             await Session.ApplyAsync(new Command
             {
                 SetAutomixWeight = new SetAutomixWeight { ChannelIndex = channel.Index, Weight = weight }
+            });
+        }
+    }
+
+    // Written the way a console prints it: a number of steps off centre, and the word for the middle
+    // rather than a zero somebody has to interpret.
+    string PanText(ChannelState channel) => Math.Abs(channel.Pan) < 0.005
+        ? L["strip.centre"]
+        : (channel.Pan < 0 ? "L" : "R") + (Math.Abs(channel.Pan) * 100).ToString("0", CultureInfo.InvariantCulture);
+
+    async Task SetPan(ChannelState channel, ChangeEventArgs arguments)
+    {
+        if (double.TryParse(arguments.Value?.ToString(), CultureInfo.InvariantCulture, out double pan))
+        {
+            await Session.ApplyAsync(new Command
+            {
+                SetPan = new SetPan { ChannelIndex = channel.Index, Pan = pan }
             });
         }
     }
