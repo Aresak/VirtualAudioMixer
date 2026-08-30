@@ -87,6 +87,60 @@ public class ProtocolGateTests : IAsyncLifetime
         client = new Mixer.MixerClient(channel);
     }
 
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public async Task MetersKeepMovingAfterTheGraphIsRebuilt()
+    {
+        Mixer.MixerClient live = client!;
+
+        Assert.True(await SawALevelAsync(live), "The meters were not moving to begin with.");
+
+        await live.ApplyAsync(
+            new Command { AddBus = new AddBus { Name = "Councillor headphones", Role = "Monitor", ChannelCount = 2 } },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        // Adding a bus recompiles, and a recompile builds a new meter node with new cells. The
+        // publisher held the old ones, so every meter in every console froze at the first structural
+        // change and stayed frozen until the engine was restarted - while the audio itself carried on
+        // perfectly, which is the worst way for this to fail.
+        Assert.True(await SawALevelAsync(live), "The meters stopped when the graph was rebuilt.");
+    }
+
+    /// <summary>Reads meter frames until one shows a channel above silence, or gives up.</summary>
+    static async Task<bool> SawALevelAsync(Mixer.MixerClient live)
+    {
+        using CancellationTokenSource giveUp = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+
+        giveUp.CancelAfter(TimeSpan.FromSeconds(5));
+
+        try
+        {
+            using AsyncServerStreamingCall<MeterFrame> stream = live.StreamMeters(new Empty(), cancellationToken: giveUp.Token);
+
+            while (await stream.ResponseStream.MoveNext(giveUp.Token))
+            {
+                MeterFrame frame = stream.ResponseStream.Current;
+
+                for (int channel = 0; channel < frame.ChannelCount; channel++)
+                {
+                    if (MeterFrameCodec.ReadChannel(frame.Payload.Span, channel).PeakDb > MeterFrameCodec.SilenceDb)
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        catch (RpcException)
+        {
+            // The deadline. Answered below by returning false.
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        return false;
+    }
+
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {

@@ -46,6 +46,7 @@ public sealed class VamEngine : IDisposable
     Thread? control;
     TimeSpan sinceCorrection;
     TimeSpan sinceMeters;
+    object? meterPlan;
     TimeSpan sinceLoad;
 
     readonly IAudioBackend? supplied;
@@ -231,6 +232,7 @@ public sealed class VamEngine : IDisposable
         dropoutPump.SetNames([.. config.Channels.Select(channel => channel.Name)]);
 
         Meters = BuildMeterPublisher();
+        meterPlan = Graph!.Publisher.Current.Plan;
         VirtualEndpoints = VirtualEndpointReport.From(backend);
 
         // Said once at startup, whichever way it went. A first-time user without a virtual driver
@@ -589,6 +591,39 @@ public sealed class VamEngine : IDisposable
         return verdict;
     }
 
+    /// <summary>
+    /// Points the meter publisher at the plan that is actually running.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A publisher wraps one meter node's arrays, and a recompile builds a new node with new ones.
+    /// Built once at startup, it went on reading the arrays of a plan nothing renders any more: every
+    /// meter in the console froze at the first structural change - a bus added, a strip added, a
+    /// chain edited - and stayed frozen until the engine was restarted.
+    /// </para>
+    /// <para>
+    /// Checked on the control loop rather than announced by whatever recompiled. Recompiles happen
+    /// from a dozen places and one of them will eventually forget to say so; the plan reference
+    /// cannot.
+    /// </para>
+    /// </remarks>
+    void FollowMeterNode()
+    {
+        if (Graph?.Publisher.Current.Plan is not { } plan || ReferenceEquals(plan, meterPlan))
+        {
+            return;
+        }
+
+        meterPlan = plan;
+
+        // Kept when a plan somehow has no meter node. Stale meters are bad; no meters at all, with
+        // nothing said, is worse.
+        if (BuildMeterPublisher() is { } rebuilt)
+        {
+            Meters = rebuilt;
+        }
+    }
+
     MeterPublisher? BuildMeterPublisher()
     {
         foreach (AudioNode node in Graph!.Publisher.Current.Plan.Nodes)
@@ -845,6 +880,11 @@ public sealed class VamEngine : IDisposable
                 BusOutputs?.UpdateCorrections(sinceCorrection);
                 RecordDrift(sinceCorrection);
                 sinceCorrection = TimeSpan.Zero;
+            }
+
+            if (sinceMeters >= meterInterval)
+            {
+                FollowMeterNode();
             }
 
             if (sinceMeters >= meterInterval && Meters is not null)
