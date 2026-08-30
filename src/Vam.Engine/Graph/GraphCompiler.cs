@@ -1,3 +1,4 @@
+using Vam.Engine.Automix;
 using Vam.Engine.Devices;
 using Vam.Engine.Devices.Abstractions;
 using Vam.Engine.Graph.Extensions;
@@ -62,7 +63,8 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
             BuildChannels(config),
             BuildBuses(config),
             BuildSends(config),
-            BuildChains(config, plan));
+            BuildChains(config, plan),
+            BuildAutomix(config));
     }
 
     /// <summary>
@@ -86,7 +88,8 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
             .WithSends(BuildSends(config))
             .WithChannels(BuildChannels(config))
             .WithBuses(BuildBuses(config))
-            .WithChains(BuildChains(config, previous.Plan));
+            .WithChains(BuildChains(config, previous.Plan))
+            .WithAutomix(BuildAutomix(config));
     }
 
     static GraphLayout BuildLayout(GraphConfig config)
@@ -153,6 +156,25 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
         {
             nodes.Add(new FaderNode(layout, channel, smoothing));
         }
+
+        // Aligned, then shared, then mixed. The alignment has to be after the chains because that is
+        // where the latencies come from, and before the automixer because the automixer compares the
+        // strips against each other - unaligned it favours whichever finished first.
+        List<int> latencies = [];
+
+        foreach (ModifierChain chain in chains)
+        {
+            latencies.Add(chain.LatencySamples);
+        }
+
+        LatencyAlignNode align = new(layout, latencies);
+
+        if (align.AlignedChannelCount > 0)
+        {
+            nodes.Add(align);
+        }
+
+        nodes.Add(new AutomixNode(layout, new AutomixState(config.Channels.Count), sampleRate, blockFrames));
 
         for (int bus = 0; bus < config.Buses.Count; bus++)
         {
@@ -293,6 +315,26 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
         }
 
         return new ChainParams(targets, bypass);
+    }
+
+    static AutomixParams BuildAutomix(GraphConfig config)
+    {
+        AutomixChannel[] channels = new AutomixChannel[config.Channels.Count];
+
+        for (int index = 0; index < channels.Length; index++)
+        {
+            ChannelConfig channel = config.Channels[index];
+
+            channels[index] = channel.ParticipatesInAutomix
+                ? new AutomixChannel(true, channel.AutomixWeight)
+                : AutomixChannel.Excluded;
+        }
+
+        return new AutomixParams(
+            channels,
+            (float)config.AutomixDepthDb,
+            (float)config.AutomixResponseMilliseconds,
+            config.IsAutomixBypassed);
     }
 
     static int DeviceIndexOf(GraphConfig config, int channelIndex)

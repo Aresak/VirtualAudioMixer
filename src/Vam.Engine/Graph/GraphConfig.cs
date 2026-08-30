@@ -20,6 +20,15 @@ public sealed class GraphConfig
     /// <summary>Sends the operator has switched on. Anything absent is off.</summary>
     public List<SendConfig> Sends { get; } = [];
 
+    /// <summary>How far a strip nobody is speaking into is turned down. C3.</summary>
+    public double AutomixDepthDb { get; set; } = -15.0;
+
+    /// <summary>How quickly gain sharing follows the conversation.</summary>
+    public double AutomixResponseMilliseconds { get; set; } = 120.0;
+
+    /// <summary>Whether the automixer is switched out entirely. C10.</summary>
+    public bool IsAutomixBypassed { get; set; } = true;
+
     /// <summary>
     /// Devices whose microphone and speaker belong to the same person, for mix-minus.
     /// </summary>

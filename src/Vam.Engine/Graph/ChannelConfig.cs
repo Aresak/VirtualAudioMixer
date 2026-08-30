@@ -39,4 +39,23 @@ public sealed record ChannelConfig
     /// denoise and a gate after one are different microphones.
     /// </remarks>
     public List<ModifierSetting> Chain { get; init; } = [];
+
+    /// <summary>
+    /// Whether this strip takes part in gain sharing. C2.
+    /// </summary>
+    /// <remarks>
+    /// Off by default for anything that is not a microphone in the room. Including the audience feed
+    /// or the online return means the automixer shares gain with a loudspeaker playing back what it
+    /// just sent, which is a loop with a very slow period and an unpleasant sound.
+    /// </remarks>
+    public bool ParticipatesInAutomix { get; init; }
+
+    /// <summary>
+    /// How much louder this microphone reads than the others for the same voice.
+    /// </summary>
+    /// <remarks>
+    /// A lectern microphone somebody leans into and a table microphone a metre away are not
+    /// comparable without it, and the automixer would hand the gain to the closer one every time.
+    /// </remarks>
+    public float AutomixWeight { get; init; } = 1f;
 }

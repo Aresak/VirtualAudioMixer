@@ -1,3 +1,4 @@
+using Vam.Engine.Automix;
 using Vam.Engine.Modifiers;
 
 namespace Vam.Engine.Graph;
@@ -31,13 +32,15 @@ public sealed class GraphSnapshot
     /// <param name="buses">Per-bus parameters.</param>
     /// <param name="sends">How much of each strip reaches each bus.</param>
     /// <param name="chains">Each strip's modifier chain settings.</param>
+    /// <param name="automix">The automixer's settings.</param>
     public GraphSnapshot(
         GraphPlan plan,
         ChannelParams[] channels,
         BusParams[] buses,
         SendMatrix sends,
-        ChainParams[]? chains = null)
-        : this(plan, channels, buses, sends, chains ?? EmptyChains(channels.Length), version: 0)
+        ChainParams[]? chains = null,
+        AutomixParams? automix = null)
+        : this(plan, channels, buses, sends, chains ?? EmptyChains(channels.Length), automix ?? AutomixParams.Empty, version: 0)
     {
     }
 
@@ -47,6 +50,7 @@ public sealed class GraphSnapshot
         BusParams[] buses,
         SendMatrix sends,
         ChainParams[] chains,
+        AutomixParams automix,
         long version)
     {
         ArgumentNullException.ThrowIfNull(plan);
@@ -62,11 +66,15 @@ public sealed class GraphSnapshot
         this.buses = buses;
         this.chains = chains;
 
+        Automix = automix;
         IsAnySoloed = AnySoloed(channels);
     }
 
     /// <summary>The compiled graph. Shared across every snapshot built on it.</summary>
     public GraphPlan Plan { get; }
+
+    /// <summary>The automixer's settings.</summary>
+    public AutomixParams Automix { get; }
 
     /// <summary>How much of each strip reaches each bus.</summary>
     public SendMatrix Sends { get; }
@@ -125,7 +133,7 @@ public sealed class GraphSnapshot
         ChannelParams[] changed = [.. channels];
         changed[channelIndex] = parameters;
 
-        return new GraphSnapshot(Plan, changed, buses, Sends, chains, Version + 1);
+        return new GraphSnapshot(Plan, changed, buses, Sends, chains, Automix, Version + 1);
     }
 
     /// <summary>Produces a snapshot with one bus changed and everything else shared.</summary>
@@ -137,32 +145,32 @@ public sealed class GraphSnapshot
         BusParams[] changed = [.. buses];
         changed[busIndex] = parameters;
 
-        return new GraphSnapshot(Plan, channels, changed, Sends, chains, Version + 1);
+        return new GraphSnapshot(Plan, channels, changed, Sends, chains, Automix, Version + 1);
     }
 
     /// <summary>Produces a snapshot with every strip replaced and the plan shared.</summary>
     /// <param name="parameters">The new per-strip parameters.</param>
     /// <returns>The new snapshot.</returns>
     public GraphSnapshot WithChannels(ChannelParams[] parameters) =>
-        new(Plan, parameters, buses, Sends, chains, Version + 1);
+        new(Plan, parameters, buses, Sends, chains, Automix, Version + 1);
 
     /// <summary>Produces a snapshot with every bus replaced and the plan shared.</summary>
     /// <param name="parameters">The new per-bus parameters.</param>
     /// <returns>The new snapshot.</returns>
     public GraphSnapshot WithBuses(BusParams[] parameters) =>
-        new(Plan, channels, parameters, Sends, chains, Version + 1);
+        new(Plan, channels, parameters, Sends, chains, Automix, Version + 1);
 
     /// <summary>Produces a snapshot with a new send matrix and everything else shared.</summary>
     /// <param name="sends">The new matrix.</param>
     /// <returns>The new snapshot.</returns>
     public GraphSnapshot WithSends(SendMatrix sends) =>
-        new(Plan, channels, buses, sends, chains, Version + 1);
+        new(Plan, channels, buses, sends, chains, Automix, Version + 1);
 
     /// <summary>Produces a snapshot with every chain replaced and the plan shared.</summary>
     /// <param name="parameters">The new chain settings, one per strip.</param>
     /// <returns>The new snapshot.</returns>
     public GraphSnapshot WithChains(ChainParams[] parameters) =>
-        new(Plan, channels, buses, Sends, parameters, Version + 1);
+        new(Plan, channels, buses, Sends, parameters, Automix, Version + 1);
 
     /// <summary>Produces a snapshot with one strip's chain changed and everything else shared.</summary>
     /// <param name="channelIndex">Which strip.</param>
@@ -173,8 +181,14 @@ public sealed class GraphSnapshot
         ChainParams[] changed = [.. chains];
         changed[channelIndex] = parameters;
 
-        return new GraphSnapshot(Plan, channels, buses, Sends, changed, Version + 1);
+        return new GraphSnapshot(Plan, channels, buses, Sends, changed, Automix, Version + 1);
     }
+
+    /// <summary>Produces a snapshot with new automixer settings and the plan shared.</summary>
+    /// <param name="parameters">The new settings.</param>
+    /// <returns>The new snapshot.</returns>
+    public GraphSnapshot WithAutomix(AutomixParams parameters) =>
+        new(Plan, channels, buses, Sends, chains, parameters, Version + 1);
 
     /// <summary>One strip's chain settings.</summary>
     /// <param name="channelIndex">Which strip.</param>
