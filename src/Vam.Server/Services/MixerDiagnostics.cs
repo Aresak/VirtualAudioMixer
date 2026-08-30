@@ -1,3 +1,4 @@
+using Vam.Engine.Devices.Abstractions;
 using Vam.Engine.Diagnostics;
 using Vam.Engine.Graph;
 using Vam.Engine.Graph.Nodes;
@@ -64,7 +65,9 @@ public static class MixerDiagnostics
     {
         ClockDiagnostics clock = new()
         {
-            SourceName = engine.Clock?.PrimaryDeviceId.Value ?? string.Empty,
+            // Named, not identified. A device GUID tells an operator nothing they can act on, and
+            // "the clock is the Jabra" is the whole answer to the question they opened this to ask.
+            SourceName = ClockName(engine),
             NominalRate = 48000,
             BlockFrames = 120,
             IsTimerFallback = engine.Clock is null || engine.Clock.PrimaryDeviceId.IsNone
@@ -79,6 +82,30 @@ public static class MixerDiagnostics
         }
 
         return clock;
+    }
+
+    static string ClockName(VamEngine engine)
+    {
+        if (engine.Clock is not { } clock || clock.PrimaryDeviceId.IsNone)
+        {
+            return string.Empty;
+        }
+
+        if (engine.Backend is { } backend)
+        {
+            foreach (DeviceDirection direction in (ReadOnlySpan<DeviceDirection>)[DeviceDirection.Render, DeviceDirection.Capture])
+            {
+                foreach (AudioDeviceInfo device in backend.Enumerate(direction))
+                {
+                    if (device.Id == clock.PrimaryDeviceId)
+                    {
+                        return device.FriendlyName;
+                    }
+                }
+            }
+        }
+
+        return clock.PrimaryDeviceId.Value;
     }
 
     static CallbackDiagnostics BuildCallbacks(VamEngine engine)

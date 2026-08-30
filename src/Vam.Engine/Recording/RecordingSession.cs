@@ -32,6 +32,7 @@ public sealed class RecordingSession : IDisposable
     readonly string directory;
 
     Thread? writer;
+    bool isStopped;
 
     /// <summary>Prepares a session in a folder.</summary>
     /// <param name="directory">Where the files go.</param>
@@ -128,6 +129,13 @@ public sealed class RecordingSession : IDisposable
     /// </remarks>
     public void Stop()
     {
+        if (isStopped)
+        {
+            return;
+        }
+
+        isStopped = true;
+
         if (writer is not null)
         {
             stopping.Cancel();

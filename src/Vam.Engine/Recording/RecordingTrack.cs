@@ -28,6 +28,7 @@ public sealed class RecordingTrack : IDisposable
     readonly float[] drain;
 
     long droppedFrames;
+    bool isFinished;
 
     /// <summary>Opens a track and its file.</summary>
     /// <param name="name">What this track is, for the console and for the file name.</param>
@@ -90,6 +91,11 @@ public sealed class RecordingTrack : IDisposable
     /// <returns>Frames written this time.</returns>
     public int Drain()
     {
+        if (isFinished)
+        {
+            return 0;
+        }
+
         int total = 0;
 
         while (true)
@@ -107,8 +113,20 @@ public sealed class RecordingTrack : IDisposable
     }
 
     /// <summary>Drains what is left and closes the file with its sizes patched.</summary>
+    /// <remarks>
+    /// Safe to call twice, and it will be: closing the files runs on every path out of a session,
+    /// including a fault, and a stop followed by a dispose is the ordinary shutdown. A second call
+    /// that threw would turn a tidy exit into an unhandled exception on the way out of the process.
+    /// </remarks>
     public void Finish()
     {
+        if (isFinished)
+        {
+            return;
+        }
+
+        isFinished = true;
+
         Drain();
         writer.Finish();
     }

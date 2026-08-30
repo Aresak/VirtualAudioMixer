@@ -32,6 +32,7 @@ public sealed class VamSessionClient(
     GrpcChannel? channel;
     Mixer.MixerClient? client;
     Task? pump;
+    bool isDisposed;
 
     /// <inheritdoc />
     public ConnectionState Connection { get; private set; } = ConnectionState.Idle;
@@ -149,8 +150,20 @@ public sealed class VamSessionClient(
     }
 
     /// <summary>Stops trying, and lets go of the channel.</summary>
+    /// <remarks>
+    /// Safe to call twice, and it will be. A Blazor Server host disposes the request scope and then
+    /// the circuit scope, and a second call that threw would surface as an unhandled exception on a
+    /// request that had already finished.
+    /// </remarks>
     public async ValueTask DisposeAsync()
     {
+        if (isDisposed)
+        {
+            return;
+        }
+
+        isDisposed = true;
+
         await lifetime.CancelAsync();
 
         if (pump is not null)

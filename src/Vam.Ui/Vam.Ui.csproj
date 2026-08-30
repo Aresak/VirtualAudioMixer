@@ -30,9 +30,19 @@
   <!--
     U7. Embedded rather than satellite assemblies: the console ships two languages that are edited
     together, and a missing key has to be a visible defect rather than a silent fall back to English.
+
+    WithCulture is false because it has to be. MSBuild reads "strings.en.json" and "strings.cs.json"
+    as culture-tagged resources - .en and .cs really are culture codes - and builds satellite
+    assemblies out of them, which leaves the main assembly with no manifest resources at all and the
+    console rendering every key as its own name. Naming them explicitly is the fix.
   -->
   <ItemGroup>
-    <EmbeddedResource Include="Resources\strings.*.json" />
+    <EmbeddedResource Include="Resources/strings.en.json"
+                      LogicalName="Vam.Ui.Resources.strings.en.json"
+                      WithCulture="false" />
+    <EmbeddedResource Include="Resources/strings.cs.json"
+                      LogicalName="Vam.Ui.Resources.strings.cs.json"
+                      WithCulture="false" />
   </ItemGroup>
 
   <ItemGroup>
