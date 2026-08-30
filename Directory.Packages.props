@@ -15,6 +15,10 @@
     <PackageVersion Include="Sentry.NLog" Version="6.9.0" />
   </ItemGroup>
 
+  <ItemGroup Label="Audio devices">
+    <PackageVersion Include="NAudio.Wasapi" Version="3.0.1" />
+  </ItemGroup>
+
   <ItemGroup Label="Testing">
     <PackageVersion Include="xunit.v3" Version="4.0.0" />
   </ItemGroup>

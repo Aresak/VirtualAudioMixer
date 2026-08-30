@@ -5,7 +5,7 @@ everything. This page is the map. The short version:
 
 | Part of the repository | Licence | Why |
 |---|---|---|
-| **Engine, test utilities and engine tests** — `src/Vam.Engine`, `tests/Vam.TestKit`, `tests/Vam.Engine.Tests` — and everything not listed below | [AGPL-3.0-or-later](LICENSE) | The engine is where the value is. AGPL is the only common licence that cares about running software over a network: modify VAM and offer it as a service, and you publish the changes. |
+| **Engine, the Windows device layer, test utilities and engine tests** — `src/Vam.Engine`, `src/Vam.Engine.Windows`, `tests/Vam.TestKit`, `tests/Vam.Engine.Tests`, `tests/Vam.Engine.Windows.Tests` — and everything not listed below | [AGPL-3.0-or-later](LICENSE) | The engine is where the value is. AGPL is the only common licence that cares about running software over a network: modify VAM and offer it as a service, and you publish the changes. |
 | **Signal modifier API and modifiers written against it** | AGPL-3.0-or-later **plus a linking exception** — see the top of [LICENSE](LICENSE) | The point of the modifier API is that other people write modifiers. Without the exception, a plugin loaded into the process would be a derivative work and would have to be AGPL too. |
 | **Shared UI library and client applications** — `src/Vam.Ui`, `src/Vam.Client`, and `src/Vam.WebClient` when it exists (both are placeholder class libraries today) | [MPL-2.0](licenses/MPL-2.0.txt) | File-level copyleft: improvements to the UI come back, but the licence does not conflict with mobile app store terms the way AGPL does. |
 | **Cross-cutting primitives** — `src/Vam.Core` | [Apache-2.0](licenses/Apache-2.0.txt) | It holds the exception base every other project derives from, so it is a dependency of the AGPL engine and the MPL client alike. A copyleft licence on a type that everything references would reach places the split was drawn to keep separate. It deliberately contains nothing worth protecting. |
@@ -21,8 +21,10 @@ Every project directory carries its own `LICENSE` file, copied from
 | `src/Vam.Protocol` | [`licenses/Apache-2.0.txt`](licenses/Apache-2.0.txt) |
 | `src/Vam.Ui` | [`licenses/MPL-2.0.txt`](licenses/MPL-2.0.txt) |
 | `src/Vam.Client` | [`licenses/MPL-2.0.txt`](licenses/MPL-2.0.txt) |
+| `src/Vam.Engine.Windows` | [`licenses/AGPL-3.0.txt`](licenses/AGPL-3.0.txt) |
 | `tests/Vam.TestKit` | [`licenses/AGPL-3.0.txt`](licenses/AGPL-3.0.txt) |
 | `tests/Vam.Engine.Tests` | [`licenses/AGPL-3.0.txt`](licenses/AGPL-3.0.txt) |
+| `tests/Vam.Engine.Windows.Tests` | [`licenses/AGPL-3.0.txt`](licenses/AGPL-3.0.txt) |
 
 ### Which projects carry the modifier exception
 
@@ -32,6 +34,11 @@ write a closed-source modifier, the modifier API lives in this project, and a pe
 `LICENSE` is the file a person actually opens when deciding whether they are allowed to. A plain
 AGPL copy there would contradict the root file and the contradiction would favour the reading
 that kills the plugin ecosystem.
+
+`src/Vam.Engine.Windows` does **not** carry it either, and the reason is the same one. It is the
+WASAPI device layer; no part of the modifier API lives there, so there is no combined work for the
+exception to permit. Copying it in would advertise a permission with nothing to act on, and would
+suggest — wrongly — that a closed-source device backend is a thing the exception contemplates.
 
 The test projects do **not** carry it, deliberately. `tests/Vam.TestKit` and
 `tests/Vam.Engine.Tests` are plain AGPL. Nothing links against them from outside the repository,

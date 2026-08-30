@@ -101,6 +101,25 @@ in CI. Mark them with `[Trait("Category", TestCategories.LongRunning)]` and
 `SkipUnless = nameof(LongRunningTests.IsEnabled)`; there is a worked example in
 `tests/Vam.Engine.Tests/Harness/LongRunningCategoryTests.cs`.
 
+Tests that need a real microphone or speaker are gated separately, because a
+soak is skipped for being slow and a device test is skipped for the machine
+having nothing plugged in:
+
+```
+VAM_HARDWARE=1 dotnet test
+```
+
+or, in PowerShell:
+
+```
+$env:VAM_HARDWARE = "1"; dotnet test
+```
+
+These never run in CI — a hosted runner has no audio hardware, and a device test
+that passes there is a test that found nothing to check. Mark them with
+`[Trait("Category", TestCategories.NeedsHardware)]` and
+`SkipUnless = nameof(HardwareTests.IsEnabled)`.
+
 Anything touching the device layer or the mix graph needs a soak test, not a unit
 test. Clock drift between free-running USB devices does not show up in five
 minutes; it shows up in hour three, as a click, during a council meeting. The

@@ -3,11 +3,10 @@
 VAM builds on other people's work. This file lists it, with the attributions
 their licences require.
 
-**Status:** VAM has no implementation yet, so nothing below is vendored or
-shipped. These are the chosen dependencies from the architecture decisions, listed
-here so the obligations are known before the first line of code rather than after
-the first release. Entries move from *planned* to *shipped* as they land, and
-anything dropped comes out of this file.
+**Status:** the first dependencies now ship. Entries marked *shipped* are
+referenced by a project that builds; *planned* ones come from the architecture
+decisions and are listed so the obligations are known before the code exists
+rather than after the first release. Anything dropped comes out of this file.
 
 ---
 
@@ -40,10 +39,17 @@ played into the room.
 - Licence: BSD 3-Clause
 - Copyright (c) 2002-2008 Jean-Marc Valin; Copyright (c) 2002 Xiph.org Foundation
 
-## NAudio — *planned*
+## NAudio — *shipped*
 
-Windows audio device access — WASAPI and ASIO — behind the engine's device
-backend interface.
+Windows audio device access behind the engine's device backend interface,
+referenced by `src/Vam.Engine.Windows` only. The `NAudio.Wasapi` package rather
+than the `NAudio` metapackage: the device layer wants COM declarations, the
+device enumerator and the WASAPI clients, and none of the MIDI, WinMM or file
+readers the full package would bring with them.
+
+VAM uses NAudio's declarations and drives `IAudioCaptureClient` itself rather
+than using its `WasapiCapture` wrapper — that wrapper creates an event-argument
+object per callback, on the one thread whose timing the engine rests on.
 
 - Project: https://github.com/naudio/NAudio
 - Licence: MIT
@@ -56,6 +62,15 @@ Mediator pattern implementation used as the application-layer backbone.
 - Project: https://github.com/shinyorg/mediator
 - Licence: MIT
 - Copyright (c) Allan Ritchie and contributors
+
+## Microsoft.Extensions.Logging.Abstractions — *shipped*
+
+The `ILogger` interfaces the engine logs through. No provider is chosen at this
+layer; NLog and Sentry are wired up by the host.
+
+- Project: https://github.com/dotnet/runtime
+- Licence: MIT
+- Copyright (c) .NET Foundation and Contributors
 
 ## .NET MAUI, Blazor and the .NET runtime — *planned*
 
