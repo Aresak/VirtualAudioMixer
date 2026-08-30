@@ -121,9 +121,15 @@ public sealed class BusOutputHost(IAudioBackend backend, ILoggerFactory loggers)
                 options with { ChannelCount = Math.Max(request.ChannelCount, 1) },
                 loggers.CreateLogger<DeviceInputChannel>());
 
+            // The block, not the correction interval. CorrectionInterval is how often the drift servo
+            // runs - a quarter of a second - and passing it as a buffer duration asked every monitor
+            // for a quarter-second buffer: a quarter-second of latency in somebody's headphones, and
+            // a device asking for two hundred blocks in its first callback.
+            TimeSpan block = TimeSpan.FromSeconds(options.BlockFrames / (double)options.NominalSampleRate);
+
             IRenderStream stream = backend.OpenRender(
                 request.DeviceId,
-                new RenderOptions(ShareMode.Shared, options.CorrectionInterval));
+                new RenderOptions(ShareMode.Shared, block, Math.Max(request.ChannelCount, 1)));
 
             // The delegate is created once, here, and stored. Creating one per callback would
             // allocate inside the audio path.
