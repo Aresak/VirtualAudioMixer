@@ -290,6 +290,14 @@ select, input[type=text], input[type=number] {
 select:hover, input[type=text]:hover { border-color: var(--ink-mute); }
 input.num { min-width: 0; width: 62px; text-align: right; }
 
+/* A labelled field on its own line, where a .kv row would put the label in a fixed narrow column. */
+.field { display: block; margin: 0 0 10px; }
+.field .k { display: block; margin-bottom: 5px; }
+.field input[type=text] { width: 100%; font-family: var(--f-mono); }
+
+.note.bad { border-left-color: var(--bad); color: var(--ink-dim); }
+.note.mono { font-family: var(--f-mono); word-break: break-word; }
+
 /* ---------- mixer ---------- */
 
 .mixtool {

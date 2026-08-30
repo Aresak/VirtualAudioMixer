@@ -35,9 +35,39 @@
             <div class="card">
                 <h2>@L["settings.engine"]</h2>
 
+                @*
+                    The address is editable here and nowhere else. There is no separate remote mode -
+                    the console on the mixing machine speaks the same protocol as one across the room,
+                    which is what stops the remote path rotting while nobody uses it. So pointing this
+                    console somewhere else is one field, for the few people who need it.
+                *@
+                <label class="field">
+                    <span class="k">@L["settings.address"]</span>
+                    <input type="text"
+                           value="@typed"
+                           placeholder="192.168.1.50"
+                           spellcheck="false"
+                           autocomplete="off"
+                           @onchange="OnTyped"
+                           @onkeydown="OnKey" />
+                </label>
+
+                <div class="row">
+                    <button class="btn" @onclick="Switch">@L["settings.reconnect"]</button>
+                    <span class="note">@L["settings.addressWhy"]</span>
+                </div>
+
+                @if (Connector.Problem.Length > 0)
+                {
+                    <p class="note bad">@L[Connector.Problem]</p>
+
+                    @if (Connector.ProblemDetail.Length > 0)
+                    {
+                        <p class="note mono">@Connector.ProblemDetail</p>
+                    }
+                }
+
                 <div class="kv">
-                    <span class="k">Address</span>
-                    <span class="v">@Options.Address</span>
                     <span class="k">@L["status.engine"]</span>
                     <span class="v">@Session.ServerName</span>
                     <span class="k">Protocol</span>
@@ -143,7 +173,42 @@
 </div>
 
 @code {
+    string typed = string.Empty;
+
+    /// <summary>Where the console is pointed, and what points it somewhere else.</summary>
+    [Inject]
+    public required EngineConnector Connector { get; set; }
+
     StartupOptions? Startup => Session.Console?.Startup;
+
+    /// <inheritdoc />
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+
+        typed = Options.Address;
+
+        Connector.Changed += OnConnectorChanged;
+    }
+
+    void OnConnectorChanged() => InvokeAsync(StateHasChanged);
+
+    void OnTyped(ChangeEventArgs args) => typed = args.Value?.ToString() ?? string.Empty;
+
+    Task OnKey(KeyboardEventArgs args) => args.Key == "Enter" ? Switch() : Task.CompletedTask;
+
+    async Task Switch()
+    {
+        if (await Connector.SwitchToAsync(typed))
+        {
+            // Shown back completed, so somebody who typed a bare host can see the port that was
+            // added rather than wondering whether it took.
+            typed = Options.Address;
+        }
+    }
+
+    /// <inheritdoc />
+    protected override void Dispose(bool disposing) => Connector.Changed -= OnConnectorChanged;
 
     async Task SetStartup(bool loadLast, bool autoRecord) =>
         await Session.ApplyAsync(new Command
