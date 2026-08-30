@@ -32,6 +32,16 @@ public sealed class ModifierRegistry
     {
         ModifierRegistry registry = new();
 
+        // The order they are usually chained in, which is also the order EPIC-05 argues for:
+        // high-pass, gate, denoise, equaliser, adaptive gain, compressor. The VAD taps before the
+        // denoise and is not a link, so it is not here.
+        registry.Register("vam.highpass", static () => new HighPassModifier());
+        registry.Register("vam.gate", static () => new GateModifier());
+        registry.Register("vam.denoise", static () => new DenoiseModifier());
+        registry.Register("vam.equaliser", static () => new EqualiserModifier());
+        registry.Register("vam.adaptivegain", static () => new AdaptiveGainModifier());
+        registry.Register("vam.compressor", static () => new CompressorModifier());
+        registry.Register("vam.limiter", static () => new LimiterModifier());
         registry.Register("vam.gain", static () => new GainModifier());
 
         return registry;
