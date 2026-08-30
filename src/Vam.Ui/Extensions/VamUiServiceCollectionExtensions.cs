@@ -38,6 +38,10 @@ public static class VamUiServiceCollectionExtensions
         // Stateless, and asked once at startup by every console that opens.
         services.AddSingleton<EngineProbe>();
 
+        // Singleton on purpose: a host holding one instance and a console holding another is a
+        // handshake with nobody on the other end. There is one window.
+        services.AddSingleton<ShutdownPrompt>();
+
         // Scoped, not singleton: in a Blazor Server host every browser tab is its own circuit, and
         // one shared session would mean one tab's meter handler being replaced by the next tab's.
         // The engine does not mind; it is built to have several consoles looking at it.
