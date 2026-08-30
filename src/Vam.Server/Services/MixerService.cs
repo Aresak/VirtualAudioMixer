@@ -230,6 +230,91 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
         }
     }
 
+    /// <summary>
+    /// Adds a bus and opens the device behind it, if it names one.
+    /// </summary>
+    /// <remarks>
+    /// Both halves, always together. A new bus with an output device named but no device thread
+    /// opened mixes into a ring nobody drains: silent, with no error anywhere to explain it.
+    /// </remarks>
+    CommandReply AddBus(AddBus request)
+    {
+        if (engine.Graph is not { } graph)
+        {
+            return Refuse("The engine is not running.");
+        }
+
+        graph.AddBus(new BusConfig
+        {
+            Name = request.Name,
+            Role = Enum.TryParse(request.Role, ignoreCase: true, out BusRole role) ? role : BusRole.Output,
+            ChannelCount = Math.Max(request.ChannelCount, 1),
+            OutputDeviceId = new AudioDeviceId(request.OutputDeviceId)
+        });
+
+        engine.RebindBusOutputs();
+
+        return Accept();
+    }
+
+    /// <summary>Removes a bus and closes the device it was playing to.</summary>
+    CommandReply RemoveBus(RemoveBus request)
+    {
+        if (engine.Graph is not { } graph || !graph.RemoveBus(request.BusIndex))
+        {
+            return Refuse($"There is no bus {request.BusIndex}.");
+        }
+
+        // Closed, not merely unbound. A render stream left open on a bus that no longer exists is a
+        // device an operator cannot use for anything else until the engine restarts.
+        engine.RebindBusOutputs();
+
+        return Accept();
+    }
+
+    /// <summary>
+    /// Points a bus at a different endpoint, and re-opens the device thread behind it. D7.
+    /// </summary>
+    /// <remarks>
+    /// Both halves matter. Changing the configuration without re-binding leaves the bus playing to
+    /// the device it used to have — worse than silence, because it is audio arriving somewhere
+    /// nobody is expecting it.
+    /// </remarks>
+    CommandReply AimBus(SetBusOutputDevice request)
+    {
+        if (engine.Graph is not { } graph
+            || request.BusIndex < 0
+            || request.BusIndex >= graph.Config.Buses.Count)
+        {
+            return Refuse($"There is no bus {request.BusIndex}.");
+        }
+
+        graph.Config.Buses[request.BusIndex] = graph.Config.Buses[request.BusIndex] with
+        {
+            OutputDeviceId = new AudioDeviceId(request.DeviceId)
+        };
+
+        graph.Recompile();
+        engine.RebindBusOutputs();
+
+        return Accept();
+    }
+
+    /// <summary>Points a strip at a different capture endpoint, and opens it.</summary>
+    CommandReply AimChannel(SetChannelDevice request)
+    {
+        if (engine.Graph is not { } graph
+            || request.ChannelIndex < 0
+            || request.ChannelIndex >= graph.Config.Channels.Count)
+        {
+            return Refuse($"There is no strip {request.ChannelIndex}.");
+        }
+
+        return engine.RetargetChannel(request.ChannelIndex, new AudioDeviceId(request.DeviceId))
+            ? Accept()
+            : Refuse("The engine is not running.");
+    }
+
     CommandReply? DispatchEngine(Command request)
     {
         switch (request.KindCase)
@@ -249,6 +334,18 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
                 return engine.Graph is { } addGraph
                     ? ChainCommands.Add(addGraph, engine.Modifiers, request.AddModifier)
                     : Refuse("The engine is not running.");
+
+            case Command.KindOneofCase.AddBus:
+                return AddBus(request.AddBus);
+
+            case Command.KindOneofCase.RemoveBus:
+                return RemoveBus(request.RemoveBus);
+
+            case Command.KindOneofCase.SetBusOutputDevice:
+                return AimBus(request.SetBusOutputDevice);
+
+            case Command.KindOneofCase.SetChannelDevice:
+                return AimChannel(request.SetChannelDevice);
 
             case Command.KindOneofCase.ClearClip:
                 // F1. The one command that touches the meters rather than the graph.
@@ -333,21 +430,19 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
             case Command.KindOneofCase.SetSend:
                 return ApplySend(graph, request.SetSend);
 
-            case Command.KindOneofCase.AddBus:
-                graph.AddBus(new BusConfig
+            case Command.KindOneofCase.SetBusColour:
+                if (request.SetBusColour.BusIndex < 0 || request.SetBusColour.BusIndex >= graph.Config.Buses.Count)
                 {
-                    Name = request.AddBus.Name,
-                    Role = Enum.TryParse(request.AddBus.Role, ignoreCase: true, out BusRole role) ? role : BusRole.Output,
-                    ChannelCount = Math.Max(request.AddBus.ChannelCount, 1),
-                    OutputDeviceId = new Vam.Engine.Devices.Abstractions.AudioDeviceId(request.AddBus.OutputDeviceId)
-                });
+                    return Refuse($"There is no bus {request.SetBusColour.BusIndex}.");
+                }
+
+                graph.Config.Buses[request.SetBusColour.BusIndex] =
+                    graph.Config.Buses[request.SetBusColour.BusIndex] with { Colour = request.SetBusColour.Colour };
+
+                graph.Recompile();
 
                 return Accept();
 
-            case Command.KindOneofCase.RemoveBus:
-                return graph.RemoveBus(request.RemoveBus.BusIndex)
-                    ? Accept()
-                    : Refuse($"There is no bus {request.RemoveBus.BusIndex}.");
 
             case Command.KindOneofCase.SetAutomix:
                 graph.Config.IsAutomixBypassed = request.SetAutomix.Bypassed;

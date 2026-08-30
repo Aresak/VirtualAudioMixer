@@ -49,6 +49,11 @@ public sealed class AutomixNode(GraphLayout layout, AutomixState state, int samp
     /// <summary>What the automixer is doing, for the console.</summary>
     public AutomixState State => state;
 
+    /// <summary>
+    /// The most C4 will add back, in decibels. Eight equally-open microphones.
+    /// </summary>
+    public const double MaximumNomGainDb = 9.0;
+
     /// <inheritdoc />
     public override void Reset()
     {
@@ -128,7 +133,8 @@ public sealed class AutomixNode(GraphLayout layout, AutomixState state, int samp
     {
         float attack = Coefficient(parameters.ResponseMilliseconds / AttackDivisor);
         float release = Coefficient(parameters.ResponseMilliseconds);
-        float sumOfSquares = 0f;
+        float sumOfSquares = SumOfSquaredShares(parameters, total);
+        float nomDb = NomGainDb(sumOfSquares);
 
         for (int channel = 0; channel < detectors.Length; channel++)
         {
@@ -145,10 +151,11 @@ public sealed class AutomixNode(GraphLayout layout, AutomixState state, int samp
 
             float share = total > 0f ? detectors[channel] / total : 0f;
 
-            sumOfSquares += share * share;
-
+            // C4. The NOM compensation is added before the floor is applied, not after, so the depth
+            // floor stays a floor. A channel held down at the floor being lifted back above it
+            // because four other microphones opened would make the depth control mean nothing.
             float targetDb = share > 0f
-                ? Math.Max(parameters.DepthDb, (float)(20.0 * Math.Log10(share)))
+                ? Math.Max(parameters.DepthDb, (float)(20.0 * Math.Log10(share)) + nomDb)
                 : parameters.DepthDb;
 
             // Rising uses the fast coefficient, falling the slow one. Getting this the wrong way
@@ -163,6 +170,69 @@ public sealed class AutomixNode(GraphLayout layout, AutomixState state, int samp
         }
 
         state.RecordOpenMicrophones(sumOfSquares);
+    }
+
+    /// <summary>
+    /// How much of the sharing each participating strip holds, squared and summed.
+    /// </summary>
+    /// <remarks>
+    /// The reciprocal of this is the number of open microphones, continuously rather than as a
+    /// count over a threshold. Two people each holding half of the gain reads as two; one person
+    /// holding all of it reads as one.
+    /// </remarks>
+    float SumOfSquaredShares(AutomixParams parameters, float total)
+    {
+        float sum = 0f;
+
+        for (int channel = 0; channel < detectors.Length; channel++)
+        {
+            if (channel >= parameters.Channels.Length || !parameters.Channels[channel].Participates)
+            {
+                continue;
+            }
+
+            float share = total > 0f ? detectors[channel] / total : 0f;
+
+            sum += share * share;
+        }
+
+        return sum;
+    }
+
+    /// <summary>
+    /// C4. What to add back as more microphones open.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Gain sharing normalises the shares to one, which holds the bus constant only for sources that
+    /// sum coherently. Four microphones picking up the same voice from different distances do not:
+    /// the high end sums incoherently and the bus falls by three decibels for every doubling. Ten
+    /// times the logarithm of the open count adds back exactly that much, which is why the number is
+    /// ten and not twenty.
+    /// </para>
+    /// <para>
+    /// <b>Capped.</b> Eight equally-open microphones is already nine decibels, and past that the room
+    /// is the problem rather than the gain — an uncapped compensation would keep lifting a room full
+    /// of open microphones until the limiter was doing all the work.
+    /// </para>
+    /// </remarks>
+    static float NomGainDb(float sumOfSquaredShares)
+    {
+        if (sumOfSquaredShares <= 0f)
+        {
+            return 0f;
+        }
+
+        float openMicrophones = 1f / sumOfSquaredShares;
+
+        // One microphone needs no compensation, and a fractional count below one is arithmetic
+        // noise rather than a room with less than one microphone in it.
+        if (openMicrophones <= 1f)
+        {
+            return 0f;
+        }
+
+        return (float)Math.Min(10.0 * Math.Log10(openMicrophones), MaximumNomGainDb);
     }
 
     void Scale(ref RenderContext context, int channel, float gain)

@@ -204,6 +204,9 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
             }
         }
 
+        // E3's second half: the stream bus, finished, beside the raw inputs.
+        AddBusRecordingTap(config, layout, recording, nodes);
+
         // After the buses are summed, so what a bus meter shows is what the bus is actually
         // carrying rather than what went into it.
         nodes.Add(new MeterNode(layout, new MeterCells(config.Channels.Count), new MeterCells(config.Buses.Count)));
@@ -471,6 +474,43 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
                 layout.ChannelWidth(channel),
                 blockFrames));
         }
+    }
+
+    /// <summary>
+    /// Taps the stream bus, after everything that shapes it. E3.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The inputs are recorded raw so a session can be rebuilt; the stream bus is recorded
+    /// <b>finished</b>, because it is the thing that actually went out. For a public body those are
+    /// two different records and both are wanted: one to reconstruct what was said, one to show what
+    /// was broadcast.
+    /// </para>
+    /// <para>
+    /// Added after the bus chains and before the outputs, so what is on disk is what left the
+    /// building — limiter included.
+    /// </para>
+    /// </remarks>
+    void AddBusRecordingTap(GraphConfig config, GraphLayout layout, RecordingSession? recording, List<AudioNode> nodes)
+    {
+        if (recording is null || config.Buses.Count == 0)
+        {
+            return;
+        }
+
+        int track = config.Channels.Count;
+        int bus = Math.Clamp(config.PrimaryBusIndex, 0, config.Buses.Count - 1);
+
+        if (track >= recording.Tracks.Count)
+        {
+            return;
+        }
+
+        nodes.Add(new RecordingTapNode(
+            recording.Tracks[track],
+            layout.BusPlane(bus),
+            layout.BusWidth(bus),
+            blockFrames));
     }
 
     static AutomixParams BuildAutomix(GraphConfig config)

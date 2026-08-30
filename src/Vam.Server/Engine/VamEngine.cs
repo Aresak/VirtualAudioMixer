@@ -121,6 +121,25 @@ public sealed class VamEngine : IDisposable
     /// </remarks>
     public double Load { get; private set; }
 
+    /// <summary>
+    /// What mutes a strip whose device has failed. I1.
+    /// </summary>
+    /// <remarks>
+    /// The graph has always honoured the faulted flag; nothing set it. This is what arms the single
+    /// most important behaviour in the project — an error inside one strip never reaching the mix.
+    /// </remarks>
+    public FaultWatch? Faults { get; private set; }
+
+    /// <summary>
+    /// The render devices the secondary buses play to. D7.
+    /// </summary>
+    /// <remarks>
+    /// The primary bus goes out through the master clock. Everything else — every monitor, every
+    /// extra output — needs its own device thread, and this is what opens them. Without it a bus
+    /// with an output configured fills a ring nobody drains and is simply silent.
+    /// </remarks>
+    public BusOutputHost? BusOutputs { get; private set; }
+
     /// <summary>The chain presets this engine knows about. B0d and B12.</summary>
     public ChainPresetStore Presets { get; }
 
@@ -197,6 +216,11 @@ public sealed class VamEngine : IDisposable
         Clock.SetConsumer(RenderAndMeasure);
         Clock.Poll();
 
+        BusOutputs = new BusOutputHost(backend, loggers);
+        Faults = new FaultWatch(Graph, Channels, loggers.CreateLogger<FaultWatch>());
+
+        BindBusOutputs(config);
+
         dropoutPump = new DropoutPump(Dropouts, loggers.CreateLogger<DropoutPump>());
         dropoutPump.SetNames([.. config.Channels.Select(channel => channel.Name)]);
 
@@ -254,6 +278,8 @@ public sealed class VamEngine : IDisposable
 
         Recording?.Stop();
         Clock?.Stop();
+        BusOutputs?.Dispose();
+        BusOutputs = null;
         Supervisor?.Dispose();
 
         // Only the one this engine opened. A backend somebody handed in belongs to them, and
@@ -467,6 +493,21 @@ public sealed class VamEngine : IDisposable
             });
         }
 
+        // E3. The stream bus, finished, beside the raw inputs — two different records and a public
+        // body wants both: one to reconstruct what was said, one to show what was broadcast. Added
+        // last, so its index is the channel count, which is where the compiler looks for it.
+        if (config.Buses.Count > 0)
+        {
+            int primary = Math.Clamp(config.PrimaryBusIndex, 0, config.Buses.Count - 1);
+
+            Recording.AddTrack($"{config.Buses[primary].Name} (bus)", new RecordingFormat
+            {
+                SampleRate = options.SampleRate,
+                ChannelCount = Math.Max(config.Buses[primary].ChannelCount, 1),
+                BlockFrames = options.BlockFrames
+            });
+        }
+
         DiskVerdict verdict = Recording.Start(options.ExpectedSessionDuration);
 
         if (!verdict.CanStart)
@@ -555,6 +596,96 @@ public sealed class VamEngine : IDisposable
         logger.LogInformation("Denoise is RNNoise, through the native library.");
     }
 
+    /// <summary>
+    /// Opens a device for every bus that names one, and hands the graph the rings. D7 and E2.
+    /// </summary>
+    /// <remarks>
+    /// Called at startup and after every change to the buses, because a bus can be added, removed or
+    /// re-aimed while the meeting runs. The primary bus is skipped: it is the master clock's, and
+    /// opening it twice would be two threads playing to one endpoint.
+    /// </remarks>
+    /// <summary>
+    /// Points a strip at a different capture endpoint and opens it.
+    /// </summary>
+    /// <remarks>
+    /// A microphone that came back on a different endpoint, or an operator who assigned the wrong
+    /// one, has to be fixable in place. Deleting the strip and building it again would take its
+    /// sends, its chain and its name with it.
+    /// </remarks>
+    /// <param name="channelIndex">Which strip.</param>
+    /// <param name="deviceId">Its new endpoint.</param>
+    /// <returns>Whether there was a graph to change.</returns>
+    public bool RetargetChannel(int channelIndex, AudioDeviceId deviceId)
+    {
+        if (Graph is not { } graph || channelIndex < 0 || channelIndex >= graph.Config.Channels.Count)
+        {
+            return false;
+        }
+
+        ChannelConfig channel = graph.Config.Channels[channelIndex] with { DeviceId = deviceId };
+
+        graph.Config.Channels[channelIndex] = channel;
+
+        Track(channel, channelIndex);
+        graph.Recompile();
+
+        return true;
+    }
+
+    /// <summary>
+    /// Re-opens the bus outputs after the buses changed. D7.
+    /// </summary>
+    /// <remarks>
+    /// Called by the control surface after anything that adds, removes or re-aims a bus. A bus whose
+    /// output was changed and not re-bound would keep playing to the device it used to have, which
+    /// is worse than silence: it is audio arriving somewhere nobody expects it.
+    /// </remarks>
+    public void RebindBusOutputs()
+    {
+        if (Graph is { } graph)
+        {
+            BindBusOutputs(graph.Config);
+        }
+    }
+
+    void BindBusOutputs(GraphConfig config)
+    {
+        if (Graph is null || BusOutputs is null)
+        {
+            return;
+        }
+
+        List<BusOutputRequest> wanted = [];
+
+        for (int bus = 0; bus < config.Buses.Count; bus++)
+        {
+            if (bus == config.PrimaryBusIndex || config.Buses[bus].OutputDeviceId.IsNone)
+            {
+                continue;
+            }
+
+            wanted.Add(new BusOutputRequest(bus, config.Buses[bus].OutputDeviceId, config.Buses[bus].ChannelCount));
+        }
+
+        BusOutputs.Reconcile(wanted, new DeviceInputChannelOptions
+        {
+            NominalSampleRate = options.SampleRate,
+            ChannelCount = 2,
+            BlockFrames = options.BlockFrames,
+            RingCapacityFrames = options.SampleRate / 8,
+            TargetFillFrames = options.SampleRate / 40,
+            CorrectionInterval = options.CorrectionInterval,
+            Dropouts = Dropouts
+        });
+
+        for (int bus = 0; bus < config.Buses.Count; bus++)
+        {
+            Graph.BindBusOutput(bus, BusOutputs.ChannelOf(bus));
+        }
+
+        Graph.Recompile();
+    }
+
     void OnOverran(object? sender, ModifierOverrun overrun)
     {
         // On the control thread: the guard runs there, not in the callback that noticed.
@@ -595,6 +726,10 @@ public sealed class VamEngine : IDisposable
 
             Supervisor?.Poll(interval);
             Clock?.Poll();
+
+            // I1, before the graph pumps, so a strip whose device died this tick is already silent
+            // in the snapshot the next block renders from.
+            Faults?.Poll();
             Graph?.Pump();
             Graph?.GuardCostBudget();
 
@@ -617,6 +752,11 @@ public sealed class VamEngine : IDisposable
             if (sinceCorrection >= options.CorrectionInterval)
             {
                 Channels.UpdateCorrections(sinceCorrection);
+
+                // A monitor's device has its own clock and drifts against the graph exactly as an
+                // input does. Left uncorrected its ring empties, and somebody's headphones start
+                // clicking an hour in.
+                BusOutputs?.UpdateCorrections(sinceCorrection);
                 RecordDrift(sinceCorrection);
                 sinceCorrection = TimeSpan.Zero;
             }

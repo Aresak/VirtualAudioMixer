@@ -35,8 +35,42 @@ public sealed class RecordingLoggerFactory : ILoggerFactory
     /// <summary>Whether anything written so far contains <paramref name="fragment"/>.</summary>
     /// <param name="fragment">Text to look for.</param>
     /// <returns>Whether it appeared.</returns>
+    /// <summary>How many entries mention a fragment.</summary>
+    /// <remarks>
+    /// For the tests that care about folding. A device that has failed fails on every tick, and
+    /// "did it say so" is a weaker question than "did it say so once".
+    /// </remarks>
+    /// <param name="fragment">What to look for.</param>
+    /// <returns>The count.</returns>
+    public int CountMentioning(string fragment) =>
+        entries.Count(entry => entry.Message.Contains(fragment, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>A typed logger over the same pool.</summary>
+    /// <typeparam name="T">Whose logger it is.</typeparam>
+    /// <returns>The logger.</returns>
+    public ILogger<T> CreateTyped<T>() => new Typed<T>(this);
+
     public bool Mentions(string fragment) =>
         entries.Any(entry => entry.Message.Contains(fragment, StringComparison.Ordinal));
+
+    /// <summary>Adapts the pooled logger to the typed interface.</summary>
+    sealed class Typed<T>(RecordingLoggerFactory factory) : ILogger<T>
+    {
+        readonly ILogger inner = factory.CreateLogger(typeof(T).Name);
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => inner.BeginScope(state);
+
+        public bool IsEnabled(LogLevel logLevel) => inner.IsEnabled(logLevel);
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter) =>
+            inner.Log(logLevel, eventId, state, exception, formatter);
+    }
 
     sealed class PooledLogger(List<LogRecord> entries) : ILogger
     {

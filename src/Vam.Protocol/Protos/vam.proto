@@ -216,6 +216,9 @@ message Command {
     SetBusRole set_bus_role = 22;
     SetAutomixWeight set_automix_weight = 23;
     SetPan set_pan = 28;
+    SetBusColour set_bus_colour = 29;
+    SetBusOutputDevice set_bus_output_device = 30;
+    SetChannelDevice set_channel_device = 31;
     ClearClip clear_clip = 24;
     SaveChainPreset save_chain_preset = 25;
     ApplyChainPreset apply_chain_preset = 26;
@@ -259,6 +262,14 @@ message SetRecording { bool recording = 1; string directory = 2; }
 // whether it needs an output device - so changing it is one command rather than rebuilding the bus.
 message SetBusRole { int32 bus_index = 1; string role = 2; }
 message SetBusName { int32 bus_index = 1; string name = 2; }
+message SetBusColour { int32 bus_index = 1; string colour = 2; }
+// D7. Any bus to any endpoint, changed while the session runs. Without this a bus's device could
+// only be chosen when it was created, which makes a mis-assigned monitor unfixable without
+// deleting it and starting again.
+message SetBusOutputDevice { int32 bus_index = 1; string device_id = 2; }
+// A strip's device, for the same reason. A microphone that came back on a different endpoint, or an
+// operator who assigned the wrong one, must be fixable in place.
+message SetChannelDevice { int32 channel_index = 1; string device_id = 2; }
 // C1. How much louder this microphone reads than the others for the same voice. A lectern somebody
 // leans into and a table microphone a metre away are not comparable without it, and the automixer
 // would hand the gain to the closer one every time.
