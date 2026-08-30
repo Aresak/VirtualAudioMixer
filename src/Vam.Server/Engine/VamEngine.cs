@@ -533,13 +533,24 @@ public sealed class VamEngine : IDisposable
         }
     }
 
-    void Track(ChannelConfig channel, int index) =>
+    void Track(ChannelConfig channel, int index)
+    {
+        // The device's count, not the strip's. A ring narrower than the stream feeding it takes the
+        // first half of every buffer and reads interleaved channels as consecutive frames: half the
+        // audio thrown away and the rest played at half rate, an octave down, with left and right
+        // alternating. It sounds like a slowed-down recording through a broken speaker, which is
+        // exactly what it is.
+        //
+        // Folding a stereo microphone down to a mono strip is the graph's job, and ChannelFlags
+        // .MonoFold is how the strip asks for it. That fold needs both channels to arrive first.
+        int width = CaptureWidthOf(channel);
+
         Supervisor!.Track(
             channel.DeviceId,
             new DeviceInputChannelOptions
             {
                 NominalSampleRate = options.SampleRate,
-                ChannelCount = Math.Max(channel.ChannelCount, 1),
+                ChannelCount = width,
                 BlockFrames = options.BlockFrames,
                 RingCapacityFrames = options.SampleRate / 8,
                 TargetFillFrames = options.SampleRate / 40,
@@ -547,7 +558,30 @@ public sealed class VamEngine : IDisposable
                 Dropouts = Dropouts,
                 EndpointIndex = index
             },
-            new CaptureOptions(ShareMode.Shared, TimeSpan.FromMilliseconds(20), Math.Max(channel.ChannelCount, 1)));
+            new CaptureOptions(ShareMode.Shared, TimeSpan.FromMilliseconds(20), width));
+    }
+
+    /// <summary>How many channels a strip's device actually produces.</summary>
+    /// <remarks>
+    /// Falls back to the strip's own width when the device is not present. A strip whose microphone
+    /// is unplugged has to be trackable anyway - that is how it comes back when somebody plugs it in
+    /// - and the supervisor rebuilds nothing on the way.
+    /// </remarks>
+    int CaptureWidthOf(ChannelConfig channel)
+    {
+        if (backend is { } devices)
+        {
+            foreach (AudioDeviceInfo device in devices.Enumerate(DeviceDirection.Capture))
+            {
+                if (device.Id == channel.DeviceId)
+                {
+                    return Math.Max(device.ChannelCount, 1);
+                }
+            }
+        }
+
+        return Math.Max(channel.ChannelCount, 1);
+    }
 
     /// <summary>
     /// Starts recording now, into a folder of its own. J1.
@@ -830,11 +864,27 @@ public sealed class VamEngine : IDisposable
         }
 
         List<BusOutputRequest> wanted = [];
+        AudioDeviceId primary = PrimaryOutputDeviceOf(config);
 
         for (int bus = 0; bus < config.Buses.Count; bus++)
         {
             if (bus == config.PrimaryBusIndex || config.Buses[bus].OutputDeviceId.IsNone)
             {
+                continue;
+            }
+
+            // The device, not just the bus index. The primary bus goes out through the clock, so a
+            // monitor pointed at the same endpoint opens a second stream on it: Windows mixes the
+            // two, each drifting on its own correction, and what comes out is the main mix and the
+            // monitor combing against each other. It also means switching that monitor off changes
+            // nothing audible, because the main mix was always the louder half of it.
+            if (config.Buses[bus].OutputDeviceId == primary)
+            {
+                logger.LogWarning(
+                    "Bus {Bus} is aimed at the device the main output already uses, so it is left "
+                    + "unopened. Two streams on one endpoint is not a monitor; it is the same sound twice.",
+                    bus);
+
                 continue;
             }
 

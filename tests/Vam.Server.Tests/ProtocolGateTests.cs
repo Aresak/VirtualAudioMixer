@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Vam.Engine.Devices;
 using Vam.Engine.Devices.Abstractions;
 using Vam.Protocol;
 using Vam.Protocol.V1;
@@ -47,7 +48,9 @@ public class ProtocolGateTests : IAsyncLifetime
     /// <inheritdoc />
     public async ValueTask InitializeAsync()
     {
-        devices.AddDevice(DeviceDirection.Capture, new NullDeviceOptions("Mayor 180 degrees", Signal: NullSignal.Tone));
+        // Two channels, like every real microphone on the machine this was found on. A speakerphone,
+        // a headset and most USB microphones present a stereo endpoint whatever is behind it.
+        devices.AddDevice(DeviceDirection.Capture, new NullDeviceOptions("Mayor 180 degrees", ChannelCount: 2, Signal: NullSignal.Tone));
 
         // One piece of hardware with a microphone and a speaker, the way a speakerphone is. Sending
         // its own microphone to its own speaker is the loop mix-minus exists to refuse.
@@ -110,6 +113,28 @@ public class ProtocolGateTests : IAsyncLifetime
         // change and stayed frozen until the engine was restarted - while the audio itself carried on
         // perfectly, which is the worst way for this to fail.
         Assert.True(await SawALevelAsync(live), "The meters stopped when the graph was rebuilt.");
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void AStereoMicrophoneIsReadAsStereo()
+    {
+        // The ring's width has to be the stream's width. Narrower and Write takes the first half of
+        // every buffer and reads interleaved channels as consecutive frames: half the audio thrown
+        // away, the rest at half rate an octave down with left and right alternating. It is audible
+        // immediately and it is not obvious what it is - it sounds like a bad sample rate.
+        //
+        // Folding stereo down to a mono strip is the graph's job. The fold needs both channels first.
+        IReadOnlyList<AudioDeviceInfo> present = devices.Enumerate(DeviceDirection.Capture);
+
+        Assert.Contains(present, device => device.ChannelCount == 2);
+
+        foreach (DeviceInputChannel channel in engine!.Channels.Channels)
+        {
+            AudioDeviceInfo device = present.Single(candidate => candidate.Id == channel.DeviceId);
+
+            Assert.Equal(device.ChannelCount, channel.ChannelCount);
+        }
     }
 
     [Fact]
