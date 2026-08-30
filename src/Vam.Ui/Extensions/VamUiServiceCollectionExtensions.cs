@@ -35,6 +35,9 @@ public static class VamUiServiceCollectionExtensions
         services.AddSingleton(options);
         services.AddSingleton<IPlatformServices, TPlatform>();
 
+        // Stateless, and asked once at startup by every console that opens.
+        services.AddSingleton<EngineProbe>();
+
         // Scoped, not singleton: in a Blazor Server host every browser tab is its own circuit, and
         // one shared session would mean one tab's meter handler being replaced by the next tab's.
         // The engine does not mind; it is built to have several consoles looking at it.
@@ -42,6 +45,10 @@ public static class VamUiServiceCollectionExtensions
         services.AddScoped<IVamSession>(provider => provider.GetRequiredService<VamSessionClient>());
         services.AddScoped<ShellState>();
         services.AddScoped<VamLocalizer>();
+
+        // Scoped with the session it connects, and for the same reason: two browser tabs are two
+        // consoles, and one of them being pointed somewhere does not move the other.
+        services.AddScoped<EngineConnector>();
 
         return services;
     }
