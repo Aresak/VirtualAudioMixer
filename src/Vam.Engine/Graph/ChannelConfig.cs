@@ -51,6 +51,15 @@ public sealed record ChannelConfig
     public List<ModifierSetting> Chain { get; init; } = [];
 
     /// <summary>
+    /// The preset this chain came from, or empty. B12.
+    /// </summary>
+    /// <remarks>
+    /// Remembered so the console can say when the live chain has drifted away from it. An operator
+    /// about to save over a preset needs to know whether what they are saving is what they think.
+    /// </remarks>
+    public string PresetName { get; init; } = string.Empty;
+
+    /// <summary>
     /// Whether this strip takes part in gain sharing. C2.
     /// </summary>
     /// <remarks>

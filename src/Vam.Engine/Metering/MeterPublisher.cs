@@ -63,6 +63,20 @@ public sealed class MeterPublisher
         Array.Fill(smoothedRms, SilenceDb);
     }
 
+    /// <summary>
+    /// Puts a clip indicator out. F1.
+    /// </summary>
+    /// <param name="channelIndex">Which strip, or -1 for every strip and every bus.</param>
+    public void ClearClip(int channelIndex)
+    {
+        channelCells.ClearClip(channelIndex);
+
+        if (channelIndex < 0)
+        {
+            busCells.ClearClip(-1);
+        }
+    }
+
     /// <summary>The strips, as of the last frame.</summary>
     public ReadOnlySpan<MeterReading> Channels => channels;
 
@@ -89,14 +103,20 @@ public sealed class MeterPublisher
             // low one does not.
             bool isDucked = gainDb <= depthDb + 1.0;
 
-            channels[index] = new MeterReading(peakDb, rmsDb, gainDb, share, isDucked);
+            channels[index] = new MeterReading(
+                peakDb,
+                rmsDb,
+                gainDb,
+                share,
+                isDucked,
+                channelCells.HasClipped(index));
         }
 
         for (int index = 0; index < buses.Length; index++)
         {
             (double peakDb, double rmsDb) = Read(busCells, index, channels.Length + index, elapsed);
 
-            buses[index] = new MeterReading(peakDb, rmsDb, 0.0, 0.0, false);
+            buses[index] = new MeterReading(peakDb, rmsDb, 0.0, 0.0, false, busCells.HasClipped(index));
         }
     }
 

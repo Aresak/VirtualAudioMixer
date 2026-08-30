@@ -26,6 +26,7 @@ const FLAG_SOLOED = 2;
 const FLAG_FAULTED = 4;
 const FLAG_DUCKED = 8;
 const FLAG_ABSENT = 16;
+const FLAG_CLIPPED = 32;
 
 // Peak hold. A peak that vanished in forty milliseconds is a peak nobody saw.
 const HOLD_MS = 1200;
@@ -163,6 +164,14 @@ function drawMeter(canvas, peakDb, rmsDb, hold, flags) {
 
         context.fillStyle = hold >= 0 ? '#e0503c' : 'rgba(228,232,234,0.85)';
         context.fillRect(0, Math.max(0, height - held - ratio), width, Math.max(1, ratio * 1.5));
+    }
+
+    // F1. Latched, and drawn as a solid cap at the top rather than as a colour somewhere in the bar.
+    // A clip is one block in four hundred; an operator watching sixteen strips has no chance of
+    // catching it as it happens, so it stays lit until they clear it.
+    if ((flags & FLAG_CLIPPED) !== 0) {
+        context.fillStyle = '#e0503c';
+        context.fillRect(0, 0, width, Math.max(3, ratio * 3));
     }
 }
 

@@ -30,5 +30,15 @@ public enum MeterFlags : byte
     Ducked = 8,
 
     /// <summary>Its device is not present.</summary>
-    Absent = 16
+    Absent = 16,
+
+    /// <summary>
+    /// It has reached full scale since the indicator was last cleared. F1.
+    /// </summary>
+    /// <remarks>
+    /// Latched. A clip is one block in four hundred, so an operator watching sixteen strips has
+    /// about two milliseconds to catch it — which means they never would. It stays lit until somebody
+    /// clears it, and clearing it is how they say they have seen it.
+    /// </remarks>
+    Clipped = 32
 }

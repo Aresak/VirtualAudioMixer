@@ -233,5 +233,15 @@
   "help.theme": "Deliberately not a choice. A bright screen next to a camera operator in a dim chamber is a problem, and a console that followed a system theme would become one without anybody choosing it.",
   "help.ballistics": "Peak rises fast and falls slowly, which is what you want for spotting an overshoot. The average is drawn under it as the body of the bar, because it is what the level sounded like.",
   "help.loadLast": "The console an operator spent a meeting setting up is the one that comes back. It is saved on the way out rather than only when somebody asks.",
-  "automix.openWhy": "Derived from how the gain is actually shared, not from counting microphones over a threshold. Two people each holding half of it reads as two."
+  "automix.openWhy": "Derived from how the gain is actually shared, not from counting microphones over a threshold. Two people each holding half of it reads as two.",
+  "strip.clip": "CLIP",
+  "help.clip": "This channel reached full scale. Click to clear it once you have seen it.",
+  "send.level": "level",
+  "eq.curve": "Equaliser response",
+  "preset.title": "Chain preset",
+  "preset.apply": "Apply",
+  "preset.save": "Save",
+  "preset.saveAs": "Save as…",
+  "preset.deleteWhy": "Delete the preset {0}? The chains that came from it keep working — they just stop having somewhere to be restored from.",
+  "help.presetModified": "The live chain has been changed since this preset was applied."
 }

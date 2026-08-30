@@ -41,6 +41,12 @@
                 </div>
             </div>
 
+            <h2>@L["preset.title"]</h2>
+
+            <div class="card">
+                <PresetBar Target="@(new ChainTarget { Index = bus.Index, IsBus = true })" />
+            </div>
+
             <h2>@L["strip.chain"] <span class="chip">@L["mixer.reorder"]</span></h2>
 
             @*

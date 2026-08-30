@@ -816,3 +816,26 @@ input[type=checkbox] { accent-color: var(--brass); width: 15px; height: 15px; }
   pointer-events: none;
   z-index: 3;
 }
+
+/* U18. Fixed at its viewBox size so a pointer offset is a user unit — see EqualiserCurve. */
+.eqcurve {
+  width: 360px;
+  height: 140px;
+  display: block;
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  touch-action: none;
+  margin-bottom: 8px;
+}
+
+/* F1. The value row doubles as the clip indicator, because that is where an eye already goes to read
+   the level — and a clip that needed its own lamp somewhere else is a clip nobody looks for. */
+.val { cursor: default; }
+.val.clip {
+  background: var(--bad);
+  color: #fff;
+  font-family: var(--f-cond);
+  letter-spacing: .14em;
+  cursor: pointer;
+}

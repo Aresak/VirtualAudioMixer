@@ -39,6 +39,10 @@ service Mixer {
   // Every modifier this engine has, and what each of them takes. The console cannot know: a build
   // with a third-party modifier dropped in has ones this client has never heard of.
   rpc ListModifiers(Empty) returns (ModifierCatalogue);
+
+  // B12. The chain presets this engine has. Kept by the engine rather than by each console, so a
+  // preset saved at the desk is there on the tablet.
+  rpc ListChainPresets(Empty) returns (ChainPresetList);
 }
 
 message Empty {}
@@ -104,6 +108,12 @@ message ChannelState {
   repeated ModifierState chain = 17;
   // U5. Set by the operator, kept by the engine, so every console shows the same room the same way.
   string colour = 18;
+  // B12. Which preset this chain came from, and whether it has been changed since. An operator who
+  // has drifted away from a preset needs to know before they save over it.
+  string preset_name = 19;
+  bool is_preset_modified = 20;
+  // D2. The send level for each bus, so the console can show and change it without a second call.
+  repeated double send_levels_db = 21;
 }
 
 message ModifierState {
@@ -202,6 +212,10 @@ message Command {
     SetBusName set_bus_name = 21;
     SetBusRole set_bus_role = 22;
     SetAutomixWeight set_automix_weight = 23;
+    ClearClip clear_clip = 24;
+    SaveChainPreset save_chain_preset = 25;
+    ApplyChainPreset apply_chain_preset = 26;
+    DeleteChainPreset delete_chain_preset = 27;
   }
 }
 
@@ -244,6 +258,14 @@ message SetBusName { int32 bus_index = 1; string name = 2; }
 // leans into and a table microphone a metre away are not comparable without it, and the automixer
 // would hand the gain to the closer one every time.
 message SetAutomixWeight { int32 channel_index = 1; double weight = 2; }
+// F1. Puts a latched clip indicator out. An operator action and never automatic: a clip light that
+// cleared itself would have nothing to say by the time anybody looked at it.
+message ClearClip { int32 channel_index = 1; }
+// B0d and B12. A preset is a whole chain, not a set of numbers - "Jabra shared" and "Studio 180
+// degrees" are genuinely different objects rather than the same one at different settings.
+message SaveChainPreset { ChainTarget target = 1; string name = 2; }
+message ApplyChainPreset { ChainTarget target = 1; string name = 2; }
+message DeleteChainPreset { string name = 1; }
 
 message DeviceList {
   repeated DeviceInfo devices = 1;
@@ -260,6 +282,16 @@ message DeviceInfo {
   // Whether a strip is already using it. Two strips on one endpoint is legal and occasionally
   // wanted, so this informs rather than forbids.
   bool is_in_use = 7;
+}
+
+message ChainPresetList {
+  repeated ChainPresetSummary presets = 1;
+}
+
+message ChainPresetSummary {
+  string name = 1;
+  int32 link_count = 2;
+  repeated string modifier_ids = 3;
 }
 
 message ModifierCatalogue {

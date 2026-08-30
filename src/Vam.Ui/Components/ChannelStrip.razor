@@ -87,7 +87,16 @@
         </div>
     </div>
 
-    <div class="val">@FaderScale.Format(Channel.FaderDb) dB</div>
+    @*
+        F1. The value row doubles as the clip indicator, because that is where an eye already goes to
+        read the level. Clicking it clears the latch, which is also how an operator says they saw it.
+    *@
+    <div class="val @(HasClipped ? "clip" : null)"
+         role="button" tabindex="0"
+         title="@(HasClipped ? L["help.clip"] : null)"
+         @onclick="ClearClip">
+        @(HasClipped ? L["strip.clip"] : FaderScale.Format(Channel.FaderDb) + " dB")
+    </div>
 
     <div class="chainbar" @onclick="Open" title="@ChainTitle">
         @if (Channel.Chain.Count == 0)
@@ -238,6 +247,25 @@
         Math.Clamp((Math.Clamp(decibels, -60, 6) + 60) / 66.0, 0, 1) * 100;
 
     int FaderPosition => (int)Math.Round(FaderScale.ToPosition(Channel.FaderDb) * 1000);
+
+    // Read from the shell rather than from a meter frame: the frames never reach the render tree, so
+    // the canvas tells the shell when a strip latches and the shell is what a component may read.
+    bool HasClipped => Shell.IsClipped(Channel.Index);
+
+    async Task ClearClip()
+    {
+        if (!HasClipped)
+        {
+            return;
+        }
+
+        Shell.ClearClip(Channel.Index);
+
+        await Session.ApplyAsync(new Command
+        {
+            ClearClip = new ClearClip { ChannelIndex = Channel.Index }
+        });
+    }
 
     void Open() => Shell.OpenChannel(Channel.Index);
 

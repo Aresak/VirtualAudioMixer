@@ -54,4 +54,7 @@ public sealed record BusConfig
     /// </para>
     /// </remarks>
     public List<ModifierSetting> Chain { get; init; } = [];
+
+    /// <summary>The preset this chain came from, or empty. B12.</summary>
+    public string PresetName { get; init; } = string.Empty;
 }

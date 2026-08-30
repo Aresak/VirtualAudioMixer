@@ -31,4 +31,22 @@ public sealed record ModifierSetting
 
     /// <summary>Parameter values, keyed by parameter identifier. Anything absent takes its default.</summary>
     public Dictionary<string, float> Values { get; init; } = [];
+
+    /// <summary>
+    /// A detached copy, with its own identity and its own values.
+    /// </summary>
+    /// <remarks>
+    /// The record's own `with` copies the dictionary by reference, which is right for a snapshot and
+    /// wrong for a preset: a preset sharing a values dictionary with the live strip it was saved from
+    /// would follow every knob somebody turned afterwards. A new link identity, because two chains
+    /// must never claim the same link — that is what the compiler uses to decide it can keep a
+    /// modifier instance and its filter history.
+    /// </remarks>
+    /// <returns>The copy.</returns>
+    public ModifierSetting Copy() => new()
+    {
+        ModifierId = ModifierId,
+        IsBypassed = IsBypassed,
+        Values = new Dictionary<string, float>(Values)
+    };
 }

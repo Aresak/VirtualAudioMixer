@@ -18,9 +18,20 @@ namespace Vam.Engine.Metering;
 /// </remarks>
 public sealed class MeterCells
 {
+    /// <summary>
+    /// Full scale. Anything at or above it has clipped.
+    /// </summary>
+    /// <remarks>
+    /// The samples are floats, so a value above one is representable and perfectly audible right up
+    /// until something converts it to an integer for a file or a device. Latching at exactly one is
+    /// the last moment the console can still warn about it.
+    /// </remarks>
+    public const float FullScale = 1.0f;
+
     readonly float[] peaks;
     readonly double[] sumsOfSquares;
     readonly long[] frames;
+    readonly bool[] clipped;
 
     /// <summary>Sizes the cells for a console.</summary>
     /// <param name="count">Strips or buses, whichever this set covers.</param>
@@ -31,6 +42,7 @@ public sealed class MeterCells
         peaks = new float[count];
         sumsOfSquares = new double[count];
         frames = new long[count];
+        clipped = new bool[count];
     }
 
     /// <summary>How many cells there are.</summary>
@@ -50,6 +62,15 @@ public sealed class MeterCells
             peaks[index] = peak;
         }
 
+        // F1. Latched, not sampled. A clip is one block out of four hundred, so a meter that only
+        // showed it while it was happening would show it to nobody - an operator watching sixteen
+        // strips has a two-and-a-half millisecond window to catch it in. It stays lit until somebody
+        // clears it, which is also how they say they have seen it.
+        if (peak >= FullScale)
+        {
+            clipped[index] = true;
+        }
+
         sumsOfSquares[index] += sumOfSquares;
         frames[index] += frameCount;
     }
@@ -59,6 +80,31 @@ public sealed class MeterCells
     /// </summary>
     /// <param name="index">Which cell.</param>
     /// <returns>The peak and the mean square since the last time it was taken.</returns>
+    /// <summary>Whether this cell has clipped since it was last cleared. F1.</summary>
+    /// <param name="index">Which cell.</param>
+    /// <returns>True once it has, until cleared.</returns>
+    public bool HasClipped(int index) => clipped[index];
+
+    /// <summary>Puts the clip indicator out.</summary>
+    /// <remarks>
+    /// An operator action, never automatic. A clip light that cleared itself would be one that had
+    /// nothing to say by the time anybody looked at it.
+    /// </remarks>
+    /// <param name="index">Which cell, or -1 for all of them.</param>
+    public void ClearClip(int index)
+    {
+        if (index < 0)
+        {
+            Array.Clear(clipped);
+            return;
+        }
+
+        if (index < clipped.Length)
+        {
+            clipped[index] = false;
+        }
+    }
+
     public (float Peak, double MeanSquare) Take(int index)
     {
         float peak = peaks[index];
@@ -78,5 +124,6 @@ public sealed class MeterCells
         Array.Clear(peaks);
         Array.Clear(sumsOfSquares);
         Array.Clear(frames);
+        Array.Clear(clipped);
     }
 }

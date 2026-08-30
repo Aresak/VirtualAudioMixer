@@ -65,6 +65,7 @@ public sealed class VamEngine : IDisposable
         this.loggers = loggers;
 
         supplied = backend;
+        Presets = new ChainPresetStore(options.PresetPath);
 
         logger = loggers.CreateLogger<VamEngine>();
         store = new ConsoleStore(loggers.CreateLogger<ConsoleStore>());
@@ -117,6 +118,9 @@ public sealed class VamEngine : IDisposable
     /// operator would learn to ignore it. Read once a second by the control loop.
     /// </remarks>
     public double Load { get; private set; }
+
+    /// <summary>The chain presets this engine knows about. B0d and B12.</summary>
+    public ChainPresetStore Presets { get; }
 
     /// <summary>How many times one link has overrun its budget. K6.</summary>
     /// <remarks>

@@ -56,6 +56,15 @@
             }
 
             <div class="mb">
+                @*
+                    U18. An equaliser is a shape, not nine numbers. The fields stay underneath for
+                    when "exactly 4 kHz" is the point.
+                *@
+                @if (link.ModifierId.EndsWith("equaliser", StringComparison.OrdinalIgnoreCase))
+                {
+                    <EqualiserCurve Link="link" Target="Target" LinkIndex="position" />
+                }
+
                 @foreach (ParameterState parameter in link.Parameters)
                 {
                     <div class="knob">

@@ -165,6 +165,10 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
     }
 
     /// <inheritdoc />
+    public override Task<ChainPresetList> ListChainPresets(Empty request, ServerCallContext context) =>
+        Task.FromResult(PresetCommands.List(engine.Presets));
+
+    /// <inheritdoc />
     public override Task<DiagnosticsState> GetDiagnostics(Empty request, ServerCallContext context) =>
         Task.FromResult(MixerDiagnostics.Build(engine));
 
@@ -242,9 +246,28 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
                     : Refuse("The engine is not running.");
 
             case Command.KindOneofCase.AddModifier:
-                return engine.Graph is { } graph
-                    ? ChainCommands.Add(graph, engine.Modifiers, request.AddModifier)
+                return engine.Graph is { } addGraph
+                    ? ChainCommands.Add(addGraph, engine.Modifiers, request.AddModifier)
                     : Refuse("The engine is not running.");
+
+            case Command.KindOneofCase.ClearClip:
+                // F1. The one command that touches the meters rather than the graph.
+                engine.Meters?.ClearClip(request.ClearClip.ChannelIndex);
+
+                return Accept();
+
+            case Command.KindOneofCase.SaveChainPreset:
+                return engine.Graph is { } saveGraph
+                    ? PresetCommands.Save(saveGraph, engine.Presets, request.SaveChainPreset)
+                    : Refuse("The engine is not running.");
+
+            case Command.KindOneofCase.ApplyChainPreset:
+                return engine.Graph is { } applyGraph
+                    ? PresetCommands.Apply(applyGraph, engine.Presets, request.ApplyChainPreset)
+                    : Refuse("The engine is not running.");
+
+            case Command.KindOneofCase.DeleteChainPreset:
+                return PresetCommands.Delete(engine.Presets, request.DeleteChainPreset);
 
             case Command.KindOneofCase.SetRecording:
                 if (!request.SetRecording.Recording)
@@ -462,7 +485,8 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
                 reading.RmsDb,
                 reading.GainReductionDb,
                 reading.AutomixShare,
-                (byte)(reading.IsDucked ? MeterFlags.Ducked : MeterFlags.None)));
+                (byte)((reading.IsDucked ? MeterFlags.Ducked : MeterFlags.None)
+                    | (reading.HasClipped ? MeterFlags.Clipped : MeterFlags.None))));
         }
 
         for (int index = 0; index < buses; index++)
@@ -644,6 +668,52 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
         return string.Empty;
     }
 
+    /// <summary>
+    /// Fills in a strip's chain, from the compiled plan rather than from the configuration.
+    /// </summary>
+    /// <remarks>
+    /// The configuration knows which modifiers a strip has and what an operator set; only the
+    /// compiled chain knows what parameters those modifiers actually declare, and what the defaults
+    /// are for the ones nobody has touched. Reading it from the configuration alone sent a console
+    /// a chain with no parameters in it — an equaliser with no bands and a compressor with no
+    /// threshold, which is a panel an operator cannot use.
+    /// </remarks>
+    static void AddChannelChain(ChannelState state, ChannelConfig channel, GraphSnapshot snapshot, int index)
+    {
+        foreach (AudioNode node in snapshot.Plan.Nodes)
+        {
+            if (node is not ChainNode chainNode || chainNode.ChannelIndex != index)
+            {
+                continue;
+            }
+
+            ModifierChain chain = chainNode.Chain;
+            ChainParams parameters = snapshot.ChainOf(index);
+
+            for (int link = 0; link < chain.Count; link++)
+            {
+                state.Chain.Add(BuildLink(
+                    link < channel.Chain.Count ? channel.Chain[link] : null,
+                    chain,
+                    link,
+                    parameters.IsBypassed(link)));
+            }
+        }
+    }
+
+    static double LevelOf(GraphConfig config, int channelIndex, int busIndex)
+    {
+        foreach (SendConfig send in config.Sends)
+        {
+            if (send.ChannelIndex == channelIndex && send.BusIndex == busIndex)
+            {
+                return send.LevelDb;
+            }
+        }
+
+        return 0;
+    }
+
     /// <summary>The handful of numbers the status bar shows. U1.</summary>
     /// <remarks>
     /// Carried with the console rather than behind GetDiagnostics: the status bar is on every view,
@@ -682,8 +752,21 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
             ParticipatesInAutomix = channel.ParticipatesInAutomix,
             AutomixWeight = channel.AutomixWeight,
             Colour = channel.Colour,
+            PresetName = channel.PresetName,
+
+            // B12. An operator about to save over a preset needs to know whether what they are
+            // saving is what they think.
+            IsPresetModified = engine.Presets.IsModified(channel.PresetName, channel.Chain),
             DeviceState = "unknown"
         };
+
+        // D2. The per-pair send level, so the console can show and change it without a second call.
+        GraphSnapshot sends = engine.Graph!.Publisher.Current;
+
+        for (int bus = 0; bus < sends.Sends.BusCount; bus++)
+        {
+            state.SendLevelsDb.Add(LevelOf(config, index, bus));
+        }
 
         // The name the operating system gives the endpoint, beside the name the operator gave the
         // strip. "Mayor" and "Trust USB Microphone" are both worth having on a strip that has
@@ -709,16 +792,7 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
             state.DeviceState = telemetry.State.ToString();
         }
 
-        foreach (Vam.Engine.Modifiers.ModifierSetting link in channel.Chain)
-        {
-            state.Chain.Add(new ModifierState
-            {
-                LinkId = link.LinkId,
-                ModifierId = link.ModifierId,
-                Name = link.ModifierId,
-                IsBypassed = link.IsBypassed
-            });
-        }
+        AddChannelChain(state, channel, sends, index);
 
         return state;
     }

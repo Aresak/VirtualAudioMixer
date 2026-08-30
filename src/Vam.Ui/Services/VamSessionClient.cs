@@ -62,6 +62,9 @@ public sealed class VamSessionClient(
     public IReadOnlyList<ModifierDescriptorState> Modifiers { get; private set; } = [];
 
     /// <inheritdoc />
+    public IReadOnlyList<ChainPresetSummary> Presets { get; private set; } = [];
+
+    /// <inheritdoc />
     public event Action? Changed;
 
     /// <inheritdoc />
@@ -124,6 +127,27 @@ public sealed class VamSessionClient(
         catch (RpcException failure)
         {
             logger.LogWarning(failure, "Could not read the console back from the engine.");
+        }
+    }
+
+    /// <inheritdoc />
+    public async ValueTask RefreshPresetsAsync(CancellationToken cancellationToken = default)
+    {
+        Mixer.MixerClient? current = client;
+
+        if (current is null)
+        {
+            return;
+        }
+
+        try
+        {
+            Presets = (await current.ListChainPresetsAsync(new Empty(), cancellationToken: cancellationToken)).Presets;
+            Changed?.Invoke();
+        }
+        catch (RpcException failure)
+        {
+            logger.LogWarning(failure, "Could not read the preset library back.");
         }
     }
 
@@ -256,6 +280,10 @@ public sealed class VamSessionClient(
         // asked for again every time an overlay opens.
         Devices = (await client.ListDevicesAsync(new Empty(), cancellationToken: cancellationToken)).Devices;
         Modifiers = (await client.ListModifiersAsync(new Empty(), cancellationToken: cancellationToken)).Modifiers;
+
+        // Presets change while a session runs, unlike the other two, so this one is also re-read
+        // whenever the console saves or deletes one.
+        Presets = (await client.ListChainPresetsAsync(new Empty(), cancellationToken: cancellationToken)).Presets;
 
         Set(ConnectionState.Connected, string.Empty);
 

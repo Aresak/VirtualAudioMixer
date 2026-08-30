@@ -99,6 +99,11 @@
 </div>
 
 @code {
+    /// <summary>Where the flag byte sits in a strip's ten. See MeterFrameCodec.</summary>
+    const int FlagOffset = 8;
+
+    readonly HashSet<int> latched = [];
+
     IJSObjectReference? meters;
     byte[] scratch = [];
     int shape = -1;
@@ -195,7 +200,36 @@
         frameChannels = channelCount;
         frameBuses = busCount;
 
+        DetectClipping(payload, channelCount);
+
         _ = PushAsync();
+    }
+
+    /// <summary>
+    /// Reads the latched clip flags out of the frame on its way past. F1.
+    /// </summary>
+    /// <remarks>
+    /// One byte per strip and a set comparison, and the shell only redraws when the set changed —
+    /// which for a clip is a handful of times in a meeting. Everything else in the frame goes to the
+    /// canvas and never touches the render tree.
+    /// </remarks>
+    /// <param name="payload">The packed frame.</param>
+    /// <param name="channelCount">Strips in it.</param>
+    void DetectClipping(ReadOnlySpan<byte> payload, int channelCount)
+    {
+        latched.Clear();
+
+        for (int index = 0; index < channelCount; index++)
+        {
+            int at = (index * MeterFrameCodec.ChannelBytes) + FlagOffset;
+
+            if (at < payload.Length && (payload[at] & (byte)MeterFlags.Clipped) != 0)
+            {
+                latched.Add(index);
+            }
+        }
+
+        _ = InvokeAsync(() => Shell.SetClipped(latched));
     }
 
     async Task PushAsync()

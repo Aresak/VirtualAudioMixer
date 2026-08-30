@@ -60,6 +60,15 @@ public interface IVamSession
     /// </remarks>
     IReadOnlyList<ModifierDescriptorState> Modifiers { get; }
 
+    /// <summary>
+    /// The chain presets this engine has. B12.
+    /// </summary>
+    /// <remarks>
+    /// The engine's, not this console's. A preset saved at the operator's desk has to be there on
+    /// the tablet, and one that lived in a client would vanish when somebody reinstalled a browser.
+    /// </remarks>
+    IReadOnlyList<ChainPresetSummary> Presets { get; }
+
     /// <summary>Raised when the console state or the connection changed and the UI should redraw.</summary>
     /// <remarks>Never raised for a meter frame.</remarks>
     event Action? Changed;
@@ -85,6 +94,10 @@ public interface IVamSession
     /// <summary>Asks the engine for the whole console again.</summary>
     /// <param name="cancellationToken">Gives up.</param>
     ValueTask RefreshAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Reads the preset library back, after one was saved or deleted.</summary>
+    /// <param name="cancellationToken">Gives up.</param>
+    ValueTask RefreshPresetsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Asks for K1 to K7.

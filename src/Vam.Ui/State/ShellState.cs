@@ -24,6 +24,8 @@ public sealed class ShellState
     bool isMonitorBarOpen = true;
     bool isReorderArmed;
 
+    readonly HashSet<int> clipped = [];
+
     /// <summary>Raised when something the shell draws has changed.</summary>
     public event Action? Changed;
 
@@ -85,6 +87,44 @@ public sealed class ShellState
     {
         get => isReorderArmed;
         set => Set(ref isReorderArmed, value);
+    }
+
+    /// <summary>
+    /// Whether a strip's clip indicator is latched. F1.
+    /// </summary>
+    /// <remarks>
+    /// Kept here rather than read from a meter frame, because meter frames never reach a component.
+    /// The mixer view decodes the flag on its way past and updates this only when it changes, which
+    /// for a clip is a handful of times in a meeting rather than twenty-five times a second.
+    /// </remarks>
+    /// <param name="channelIndex">Which strip.</param>
+    /// <returns>Whether it has clipped since it was last cleared.</returns>
+    public bool IsClipped(int channelIndex) => clipped.Contains(channelIndex);
+
+    /// <summary>Records what the engine says has clipped, and redraws only if it changed.</summary>
+    /// <param name="latched">The strips currently latched.</param>
+    public void SetClipped(IReadOnlySet<int> latched)
+    {
+        ArgumentNullException.ThrowIfNull(latched);
+
+        if (clipped.SetEquals(latched))
+        {
+            return;
+        }
+
+        clipped.Clear();
+        clipped.UnionWith(latched);
+        Changed?.Invoke();
+    }
+
+    /// <summary>Puts one strip's indicator out locally, so the console responds before the engine replies.</summary>
+    /// <param name="channelIndex">Which strip.</param>
+    public void ClearClip(int channelIndex)
+    {
+        if (clipped.Remove(channelIndex))
+        {
+            Changed?.Invoke();
+        }
     }
 
     /// <summary>Opens the channel overlay on one strip.</summary>

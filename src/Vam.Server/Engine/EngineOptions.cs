@@ -30,6 +30,18 @@ public sealed record EngineOptions
             "VAM",
             "console.json");
 
+    /// <summary>Where the chain presets are saved. B12.</summary>
+    /// <remarks>
+    /// Beside the console rather than inside it. A preset outlives the console it was made on, and
+    /// an operator moving a setup to another machine wants their presets to come along without
+    /// dragging that machine's device assignments with them.
+    /// </remarks>
+    public string PresetPath { get; init; } =
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "VAM",
+            "presets.json");
+
     /// <summary>Where recordings go.</summary>
     public string RecordingDirectory { get; init; } =
         Path.Combine(

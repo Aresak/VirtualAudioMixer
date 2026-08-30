@@ -233,5 +233,15 @@
   "help.theme": "Záměrně to není volba. Jasná obrazovka vedle kameramana v přítmí sálu je problém a konzole, která by se řídila systémovým motivem, by se jím stala, aniž by to kdokoli zvolil.",
   "help.ballistics": "Špička stoupá rychle a klesá pomalu, což je to, co chceš pro zachycení překmitu. Průměr se kreslí pod ní jako tělo sloupce, protože ten odpovídá tomu, jak to znělo.",
   "help.loadLast": "Vrátí se ta konzole, kterou operátor celou schůzi nastavoval. Ukládá se při odchodu, ne až když si o to někdo řekne.",
-  "automix.openWhy": "Odvozeno z toho, jak se zesílení opravdu dělí, ne z počítání mikrofonů nad prahem. Dva lidé, každý s polovinou, se čtou jako dva."
+  "automix.openWhy": "Odvozeno z toho, jak se zesílení opravdu dělí, ne z počítání mikrofonů nad prahem. Dva lidé, každý s polovinou, se čtou jako dva.",
+  "strip.clip": "CLIP",
+  "help.clip": "Tenhle kanál dosáhl plné škály. Kliknutím to zhasneš, až to uvidíš.",
+  "send.level": "úroveň",
+  "eq.curve": "Odezva ekvalizéru",
+  "preset.title": "Předvolba řetězce",
+  "preset.apply": "Použít",
+  "preset.save": "Uložit",
+  "preset.saveAs": "Uložit jako…",
+  "preset.deleteWhy": "Smazat předvolbu {0}? Řetězce, které z ní vznikly, fungují dál — jen už nebudou mít odkud se obnovit.",
+  "help.presetModified": "Živý řetězec se od použití téhle předvolby změnil."
 }

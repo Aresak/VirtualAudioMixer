@@ -12,9 +12,11 @@ namespace Vam.Engine.Metering;
 /// <param name="GainReductionDb">What the chain and the automixer are taking away. Zero or negative.</param>
 /// <param name="AutomixShare">How much of the automixer's gain this strip is holding.</param>
 /// <param name="IsDucked">Whether the automixer is holding it at or near the depth floor.</param>
+/// <param name="HasClipped">Whether it has reached full scale since the indicator was last cleared. F1.</param>
 public readonly record struct MeterReading(
     double PeakDb,
     double RmsDb,
     double GainReductionDb,
     double AutomixShare,
-    bool IsDucked);
+    bool IsDucked,
+    bool HasClipped = false);
