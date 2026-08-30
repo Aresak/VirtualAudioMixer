@@ -28,6 +28,7 @@ only repeats what must never be missed.
 | UI mockup — the design of record | `_MockUp/vam-console.html` |
 | Audio path boundary | `docs/audio-path.md` |
 | Task definitions | GitHub issues on this repository, and the vault. Ask before starting a task you cannot read |
+| Where reasoning is written down | The Obsidian vault, `Projects/Virtual Audio Mixer/` — `Decisions/` and `_AI/`. See `AGENTS.md` |
 
 ## Project layout
 
