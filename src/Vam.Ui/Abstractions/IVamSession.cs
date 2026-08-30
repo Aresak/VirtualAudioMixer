@@ -82,6 +82,16 @@ public interface IVamSession
     /// <param name="cancellationToken">Gives up.</param>
     ValueTask ConnectAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>Points this console at a different engine, without restarting it.</summary>
+    /// <remarks>
+    /// There is no separate remote mode — the console on the mixing machine speaks the same protocol
+    /// as one across the room, which is what stops the remote path rotting while nobody uses it. So
+    /// moving from one engine to another is a change of address and nothing else.
+    /// </remarks>
+    /// <param name="address">An absolute http or https address.</param>
+    /// <param name="cancellationToken">Abandons the wait, not the change.</param>
+    ValueTask ReconnectAsync(string address, CancellationToken cancellationToken = default);
+
     /// <summary>Sends one change.</summary>
     /// <param name="command">What to change.</param>
     /// <param name="cancellationToken">Gives up.</param>

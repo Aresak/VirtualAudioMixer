@@ -29,7 +29,18 @@ public sealed class VamSessionClient(
     readonly List<EngineEvent> events = [];
     readonly CancellationTokenSource lifetime = new();
 
+    // Guards the swap below, and nothing else. Cancelling a disposed source throws, so the attempt
+    // being replaced and the attempt being cancelled must not be able to happen at once.
+    readonly Lock attemptGate = new();
+
+    CancellationTokenSource? attempt;
     GrpcChannel? channel;
+
+    // Set by a re-point, read when the attempt it cancelled falls over. A flag rather than an
+    // exception type, because gRPC reports a cancelled call as an RpcException carrying
+    // StatusCode.Cancelled - not as an OperationCanceledException - and catching that by type would
+    // put "call canceled by the client" in the status bar as though something had gone wrong.
+    volatile bool repointRequested;
     Mixer.MixerClient? client;
     Task? pump;
     bool isDisposed;
@@ -76,6 +87,31 @@ public sealed class VamSessionClient(
         pump ??= Task.Run(() => RunAsync(lifetime.Token), CancellationToken.None);
 
         return ValueTask.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public async ValueTask ReconnectAsync(string address, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(address);
+
+        options.Address = address;
+        repointRequested = true;
+
+        // Taken rather than borrowed: whichever of this and the attempt's own ending gets it first
+        // owns disposing it, so a cancel can never land on a source the loop has already let go of.
+        CancellationTokenSource? current = Take();
+
+        if (current is not null)
+        {
+            // Cancelled rather than left to time out. The loop notices, sees that this was not the
+            // console shutting down, and dials again -- reading the new address on the way past,
+            // because that is where SessionAsync gets it from every time.
+            await current.CancelAsync().ConfigureAwait(false);
+
+            current.Dispose();
+        }
+
+        await ConnectAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -214,37 +250,84 @@ public sealed class VamSessionClient(
 
     async Task RunAsync(CancellationToken cancellationToken)
     {
-        TimeSpan delay = options.ReconnectDelay;
+        TimeSpan delay = TimeSpan.Zero;
 
         while (!cancellationToken.IsCancellationRequested)
         {
+            repointRequested = false;
+
+            CancellationToken attemptToken = BeginAttempt(cancellationToken);
+
             try
             {
-                await SessionAsync(cancellationToken);
-                delay = options.ReconnectDelay;
+                // The wait comes before the attempt rather than after it, so a re-point cancels the
+                // waiting as well as the dialling. A console left against an engine that is not
+                // running backs off to fifteen seconds, and somebody who has just typed the right
+                // address should not be made to sit out the rest of a wait the wrong one earned.
+                await Task.Delay(delay, attemptToken);
+                await SessionAsync(attemptToken);
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            catch (Exception) when (cancellationToken.IsCancellationRequested)
             {
                 return;
+            }
+            catch (Exception failure) when (repointRequested)
+            {
+                logger.LogDebug(failure, "The console was pointed at {Address} mid-call.", options.Address);
+
+                delay = TimeSpan.Zero;
             }
             catch (Exception failure)
             {
+                // Read before Set, which is about to overwrite it. A connection that worked and then
+                // dropped starts the backoff from the bottom again: it is evidence the engine is
+                // reachable, which a dial that never got an answer is not.
+                delay = Connection == ConnectionState.Connected ? options.ReconnectDelay : Grow(delay);
+
                 logger.LogInformation(failure, "The engine connection dropped. Trying again in {Delay}.", delay);
                 Set(ConnectionState.Reconnecting, failure.Message);
             }
-
-            try
+            finally
             {
-                await Task.Delay(delay, cancellationToken);
+                EndAttempt();
             }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
+        }
+    }
 
-            // Backed off, so a console left open against an engine that is not running does not
-            // spend an afternoon dialling once a second.
-            delay = TimeSpan.FromTicks(Math.Min(delay.Ticks * 2, options.MaximumReconnectDelay.Ticks));
+    /// <summary>
+    /// The next backoff, so a console left open against nothing does not dial once a second all
+    /// afternoon.
+    /// </summary>
+    TimeSpan Grow(TimeSpan delay) =>
+        delay == TimeSpan.Zero
+            ? options.ReconnectDelay
+            : TimeSpan.FromTicks(Math.Min(delay.Ticks * 2, options.MaximumReconnectDelay.Ticks));
+
+    CancellationToken BeginAttempt(CancellationToken lifetimeToken)
+    {
+        CancellationTokenSource current = CancellationTokenSource.CreateLinkedTokenSource(lifetimeToken);
+
+        lock (attemptGate)
+        {
+            attempt = current;
+        }
+
+        return current.Token;
+    }
+
+    // Disposed outside the lock, and only by whoever took it: a linked source holds a registration
+    // on the lifetime token, and one per attempt would accumulate across an afternoon of retrying.
+    void EndAttempt() => Take()?.Dispose();
+
+    CancellationTokenSource? Take()
+    {
+        lock (attemptGate)
+        {
+            CancellationTokenSource? current = attempt;
+
+            attempt = null;
+
+            return current;
         }
     }
 
