@@ -19,6 +19,16 @@ public sealed record ChannelConfig
     /// <summary>What to call it on the console.</summary>
     public required string Name { get; init; }
 
+    /// <summary>
+    /// The colour its strip is topped with. U5.
+    /// </summary>
+    /// <remarks>
+    /// Kept by the engine rather than by each console, so two operators watching the same meeting
+    /// see the same room. A colour that lived in the client would mean the strip an operator calls
+    /// "the green one" is a different strip on the tablet next to them.
+    /// </remarks>
+    public string Colour { get; init; } = string.Empty;
+
     /// <summary>Channels the strip carries after any fold.</summary>
     public int ChannelCount { get; init; } = 1;
 

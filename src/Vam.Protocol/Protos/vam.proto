@@ -26,6 +26,19 @@ service Mixer {
 
   // Devices arriving and leaving, faults, modifiers switched out for overrunning.
   rpc StreamEvents(Empty) returns (stream EngineEvent);
+
+  // What the endpoints on the engine's machine are. A console on a laptop cannot enumerate the
+  // sound cards of the machine wired to the microphones, and asking it to would make the remote
+  // case quietly different from the local one.
+  rpc ListDevices(Empty) returns (DeviceList);
+
+  // K1 to K7, in one reply. Polled by the diagnostics view while it is open and by nothing else:
+  // an operator running a meeting is not paying for a drift history nobody is looking at.
+  rpc GetDiagnostics(Empty) returns (DiagnosticsState);
+
+  // Every modifier this engine has, and what each of them takes. The console cannot know: a build
+  // with a third-party modifier dropped in has ones this client has never heard of.
+  rpc ListModifiers(Empty) returns (ModifierCatalogue);
 }
 
 message Empty {}
@@ -74,6 +87,8 @@ message ChannelState {
   // Present, absent, faulted.
   string device_state = 16;
   repeated ModifierState chain = 17;
+  // U5. Set by the operator, kept by the engine, so every console shows the same room the same way.
+  string colour = 18;
 }
 
 message ModifierState {
@@ -104,6 +119,10 @@ message BusState {
   double gain_db = 5;
   bool is_muted = 6;
   string output_device_id = 7;
+  string colour = 8;
+  // Which strips this bus refuses, and why. D4 works it out from the declared pairing rather than
+  // taking it as configuration, and the console shows the answer rather than offering the question.
+  repeated int32 excluded_channels = 9;
 }
 
 message SendState {
@@ -145,6 +164,16 @@ message Command {
     SetAutomix set_automix = 9;
     SetModifierBypass set_modifier_bypass = 10;
     SetModifierParameter set_modifier_parameter = 11;
+    SetChannelName set_channel_name = 12;
+    SetChannelColour set_channel_colour = 13;
+    AddChannel add_channel = 14;
+    RemoveChannel remove_channel = 15;
+    MoveChannel move_channel = 16;
+    AddModifier add_modifier = 17;
+    RemoveModifier remove_modifier = 18;
+    MoveModifier move_modifier = 19;
+    SetRecording set_recording = 20;
+    SetBusName set_bus_name = 21;
   }
 }
 
@@ -159,6 +188,126 @@ message RemoveBus { int32 bus_index = 1; }
 message SetAutomix { bool bypassed = 1; double depth_db = 2; double response_ms = 3; }
 message SetModifierBypass { int32 channel_index = 1; int32 link_index = 2; bool bypassed = 3; }
 message SetModifierParameter { int32 channel_index = 1; int32 link_index = 2; string parameter_id = 3; double value = 4; }
+
+message SetChannelName { int32 channel_index = 1; string name = 2; }
+message SetChannelColour { int32 channel_index = 1; string colour = 2; }
+message AddChannel { string name = 1; string device_id = 2; int32 channel_count = 3; bool participates_in_automix = 4; }
+message RemoveChannel { int32 channel_index = 1; }
+// U13. From and to rather than a whole order, so two consoles reordering at once cannot silently
+// undo each other's work by each sending the list they started from.
+message MoveChannel { int32 from_index = 1; int32 to_index = 2; }
+message AddModifier { int32 channel_index = 1; string modifier_id = 2; int32 at_index = 3; }
+message RemoveModifier { int32 channel_index = 1; int32 link_index = 2; }
+message MoveModifier { int32 channel_index = 1; int32 from_index = 2; int32 to_index = 3; }
+message SetRecording { bool recording = 1; string directory = 2; }
+message SetBusName { int32 bus_index = 1; string name = 2; }
+
+message DeviceList {
+  repeated DeviceInfo devices = 1;
+}
+
+message DeviceInfo {
+  string id = 1;
+  string name = 2;
+  // capture or render.
+  string direction = 3;
+  int32 channel_count = 4;
+  int32 sample_rate = 5;
+  bool is_present = 6;
+  // Whether a strip is already using it. Two strips on one endpoint is legal and occasionally
+  // wanted, so this informs rather than forbids.
+  bool is_in_use = 7;
+}
+
+message ModifierCatalogue {
+  repeated ModifierDescriptorState modifiers = 1;
+}
+
+message ModifierDescriptorState {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  repeated ParameterState parameters = 4;
+}
+
+message DiagnosticsState {
+  ClockDiagnostics clock = 1;
+  repeated DriftPoint drift = 2;
+  repeated DropoutEntry dropouts = 3;
+  CallbackDiagnostics callbacks = 4;
+  AllocationDiagnostics allocations = 5;
+  repeated ModifierCostState costs = 6;
+  repeated LogLine log = 7;
+}
+
+// K1.
+message ClockDiagnostics {
+  string source_name = 1;
+  double nominal_rate = 2;
+  double measured_rate = 3;
+  int32 block_frames = 4;
+  // True when no output device is left and a timer is keeping the graph running. The session
+  // survives; it is no longer being clocked by anything that plays sound, and that is worth saying.
+  bool is_timer_fallback = 5;
+}
+
+// K2. One point per device per sample interval.
+message DriftPoint {
+  int32 channel_index = 1;
+  int64 timestamp_ticks = 2;
+  double drift_ppm = 3;
+  int32 fill_frames = 4;
+  double correction_ppm = 5;
+}
+
+// K3. A list, not a counter: a hundred dropouts in one bad minute and a hundred spread over three
+// hours have completely different causes, and a number cannot tell them apart.
+message DropoutEntry {
+  int64 timestamp_ticks = 1;
+  string endpoint = 2;
+  string kind = 3;
+  int32 frames = 4;
+}
+
+// K4.
+message CallbackDiagnostics {
+  // Buckets, in fractions of a block. The shape matters more than the mean: a callback that is
+  // usually fine and occasionally twice the budget is a different problem from one that is always
+  // near the edge, and an average hides exactly that.
+  repeated int64 buckets = 1;
+  double bucket_width_fraction = 2;
+  double worst_fraction = 3;
+  int64 overruns = 4;
+}
+
+// K5. The first row reads zero, and if it ever does not, that is the bug.
+message AllocationDiagnostics {
+  int64 audio_thread_bytes = 1;
+  int64 gen0_collections = 2;
+  int64 gen1_collections = 3;
+  int64 gen2_collections = 4;
+  int64 total_managed_bytes = 5;
+  double longest_pause_ms = 6;
+}
+
+// K6.
+message ModifierCostState {
+  int32 channel_index = 1;
+  int32 link_index = 2;
+  string modifier_id = 3;
+  double average_fraction = 4;
+  double worst_fraction = 5;
+  int64 overruns = 6;
+  bool is_switched_out = 7;
+}
+
+// K7.
+message LogLine {
+  int64 timestamp_ticks = 1;
+  string level = 2;
+  string logger = 3;
+  string message = 4;
+}
 
 message CommandReply {
   bool accepted = 1;

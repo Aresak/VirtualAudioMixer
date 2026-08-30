@@ -189,6 +189,82 @@ public sealed class GraphController
         return config.Channels.Count - 1;
     }
 
+    /// <summary>Removes a strip, and every send that came from it. U17.</summary>
+    /// <param name="channelIndex">Which strip.</param>
+    /// <returns>Whether it was there.</returns>
+    public bool RemoveChannel(int channelIndex)
+    {
+        if (channelIndex < 0 || channelIndex >= config.Channels.Count)
+        {
+            return false;
+        }
+
+        config.Channels.RemoveAt(channelIndex);
+        config.Sends.RemoveAll(send => send.ChannelIndex == channelIndex);
+
+        // Sends above the gap shuffle down with it, for the same reason bus removal does it: an
+        // index left pointing at its old neighbour silently re-aims a send at the wrong microphone.
+        for (int index = 0; index < config.Sends.Count; index++)
+        {
+            SendConfig send = config.Sends[index];
+
+            if (send.ChannelIndex > channelIndex)
+            {
+                config.Sends[index] = send with { ChannelIndex = send.ChannelIndex - 1 };
+            }
+        }
+
+        Recompile();
+
+        return true;
+    }
+
+    /// <summary>
+    /// Moves a strip. U13.
+    /// </summary>
+    /// <remarks>
+    /// Every send moves with it. The alternative is an operator dragging the mayor's microphone one
+    /// place to the left and discovering it now feeds the wrong monitor, which is the kind of
+    /// surprise that happens exactly once and is never forgiven.
+    /// </remarks>
+    /// <param name="fromIndex">Where it is.</param>
+    /// <param name="toIndex">Where it should go.</param>
+    /// <returns>Whether both indices were real.</returns>
+    public bool MoveChannel(int fromIndex, int toIndex)
+    {
+        int count = config.Channels.Count;
+
+        if (fromIndex < 0 || fromIndex >= count || toIndex < 0 || toIndex >= count)
+        {
+            return false;
+        }
+
+        if (fromIndex == toIndex)
+        {
+            return true;
+        }
+
+        ChannelConfig moving = config.Channels[fromIndex];
+
+        config.Channels.RemoveAt(fromIndex);
+        config.Channels.Insert(toIndex, moving);
+
+        for (int index = 0; index < config.Sends.Count; index++)
+        {
+            SendConfig send = config.Sends[index];
+            int moved = Reindex(send.ChannelIndex, fromIndex, toIndex);
+
+            if (moved != send.ChannelIndex)
+            {
+                config.Sends[index] = send with { ChannelIndex = moved };
+            }
+        }
+
+        Recompile();
+
+        return true;
+    }
+
     /// <summary>
     /// Adds a bus at runtime. D1.
     /// </summary>
@@ -247,6 +323,31 @@ public sealed class GraphController
         Recompile();
 
         return true;
+    }
+
+    /// <summary>Where an index ends up after one element moved.</summary>
+    /// <param name="index">The index to translate.</param>
+    /// <param name="fromIndex">Where the moving element was.</param>
+    /// <param name="toIndex">Where it went.</param>
+    /// <returns>The index in the new order.</returns>
+    static int Reindex(int index, int fromIndex, int toIndex)
+    {
+        if (index == fromIndex)
+        {
+            return toIndex;
+        }
+
+        if (fromIndex < toIndex && index > fromIndex && index <= toIndex)
+        {
+            return index - 1;
+        }
+
+        if (fromIndex > toIndex && index >= toIndex && index < fromIndex)
+        {
+            return index + 1;
+        }
+
+        return index;
     }
 
     /// <summary>
