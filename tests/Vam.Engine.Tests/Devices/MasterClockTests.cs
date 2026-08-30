@@ -164,6 +164,77 @@ public class MasterClockTests
         }
     }
 
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void ADeviceThatAsksForSeveralBlocksAtOnceGetsSeveralBlocks()
+    {
+        using NullAudioBackend backend = new();
+        using Fixture fixture = new(backend);
+
+        DeviceInputChannel input = fixture.AddInput("Lectern");
+
+        Fill(input, Blocks * 4);
+        fixture.StartPrimary("Interface");
+
+        int before = input.FillFrames;
+        const int Burst = BlockFrames * 4;
+
+        // What WASAPI does before a stream starts: it hands over the whole endpoint buffer, which in
+        // shared mode is several blocks. The graph is built for exactly one, and asking it for four
+        // at once used to read past its arena and throw - on the audio thread, inside the device's
+        // own Start, where the only visible effect was the device being rejected as a clock.
+        fixture.Primary.PumpFrames(Burst);
+
+        Assert.Equal(4, fixture.Clock.BlocksRendered);
+
+        // Four blocks of audio really left the rings, rather than one being rendered and the rest
+        // being silence the device then played.
+        Assert.Equal(Burst, before - input.FillFrames);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void ThePreferredDeviceKeepsTimeRatherThanWhicheverEnumeratesFirst()
+    {
+        using NullAudioBackend backend = new();
+        using Fixture fixture = new(backend);
+
+        AudioDeviceInfo first = fixture.AddOutput("HDMI display");
+        AudioDeviceInfo chosen = fixture.AddOutput("Interface");
+
+        fixture.Clock.Preferred = chosen.Id;
+
+        // Promotion order is enumeration order, which is an accident. The primary bus plays out
+        // through the clock, so the device somebody chose for it has to be the one keeping time -
+        // otherwise the console names one destination while the mix leaves through another.
+        Assert.Equal(chosen.Id, fixture.Clock.PrimaryDeviceId);
+        Assert.NotEqual(first.Id, fixture.Clock.PrimaryDeviceId);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void APreferredDeviceThatGoesAwayIsReplacedAndNotWaitedFor()
+    {
+        using NullAudioBackend backend = new();
+        using Fixture fixture = new(backend);
+
+        AudioDeviceInfo chosen = fixture.AddOutput("Interface");
+        AudioDeviceInfo other = fixture.AddOutput("Speakers");
+
+        fixture.Clock.Preferred = chosen.Id;
+        backend.RenderStreams[^1].SimulateRemoval();
+
+        fixture.Clock.Poll();
+
+        // Preference, not a requirement. A session without a timebase is worse than a session on the
+        // wrong device, so something else takes over rather than nothing.
+        Assert.Equal(other.Id, fixture.Clock.PrimaryDeviceId);
+
+        // And the preference survives it. Forgetting would mean one hiccup silently abandoning the
+        // output somebody chose, with nothing said and no way back short of restarting.
+        Assert.Equal(chosen.Id, fixture.Clock.Preferred);
+    }
+
     /// <summary>Wires a clock to a backend and a set of inputs.</summary>
     sealed class Fixture : IDisposable
     {

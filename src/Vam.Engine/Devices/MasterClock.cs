@@ -37,11 +37,17 @@ public sealed class MasterClock : IDisposable
     readonly float[] fallbackOutput;
     readonly TimeSpan blockDuration;
 
+    /// <summary>How many polls a supposedly running clock may produce nothing for.</summary>
+    const int SilentPollsBeforePromoting = 5;
+
     IRenderStream? primary;
     MixCallback? consumer;
+    AudioDeviceId preferred = AudioDeviceId.None;
     Thread? fallbackThread;
     CancellationTokenSource? fallbackStopping;
     long blocksRendered;
+    long blocksAtLastPoll;
+    int silentPolls;
 
     /// <summary>Builds a clock and everything it will ever allocate.</summary>
     /// <param name="backend">Where render devices are opened.</param>
@@ -90,6 +96,44 @@ public sealed class MasterClock : IDisposable
     /// <summary>The device currently keeping time, or none when the fallback is running.</summary>
     public AudioDeviceId PrimaryDeviceId => primary?.DeviceId ?? AudioDeviceId.None;
 
+    /// <summary>
+    /// The device that should be keeping time, when it can.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The primary bus plays out through the clock, so the clock's device <b>is</b> where the mix
+    /// goes. Left to promotion the answer is whichever render endpoint happens to enumerate first
+    /// and open — which on a laptop is as likely to be a wireless headset as the interface somebody
+    /// chose, and a wireless clock makes every microphone in the room appear to drift hundreds of
+    /// parts per million against it.
+    /// </para>
+    /// <para>
+    /// Preference, not a requirement. When it cannot be opened, or it goes away mid-meeting,
+    /// promotion still finds something else rather than leaving the session without a timebase — and
+    /// it comes back here the moment this device can be opened again.
+    /// </para>
+    /// </remarks>
+    public AudioDeviceId Preferred
+    {
+        get => preferred;
+        set
+        {
+            if (value == preferred)
+            {
+                return;
+            }
+
+            preferred = value;
+
+            // Taken now rather than at the next loss. Somebody who has just chosen where the mix
+            // goes should hear it there, not after the current device fails.
+            if (!value.IsNone && PrimaryDeviceId != value)
+            {
+                SetPrimary(value);
+            }
+        }
+    }
+
     /// <summary>Whether the engine is running on its own timer because no output remains.</summary>
     public bool IsOnFallbackTimer => fallbackThread is not null;
 
@@ -124,6 +168,12 @@ public sealed class MasterClock : IDisposable
             IRenderStream? previous = primary;
 
             primary = stream;
+
+            // Reset with the device, or the polls a dead one accumulated would condemn its
+            // replacement before it had rendered anything.
+            blocksAtLastPoll = Interlocked.Read(ref blocksRendered);
+            silentPolls = 0;
+
             stream.Start(Fill);
 
             // Stopped after the new one is running, so there is no moment with no clock at all.
@@ -153,18 +203,64 @@ public sealed class MasterClock : IDisposable
     {
         if (primary is not null && primary.State is DeviceStreamState.Running or DeviceStreamState.Stopped)
         {
-            return;
+            if (!HasStalled())
+            {
+                return;
+            }
+
+            logger.LogWarning(
+                "Master clock {DeviceId} says it is {State} but has asked for nothing. Promoting another output.",
+                primary.DeviceId,
+                primary.State);
         }
 
         if (primary is not null)
         {
-            logger.LogWarning("Master clock {DeviceId} is {State}. Promoting another output.", primary.DeviceId, primary.State);
+            if (primary.State is not (DeviceStreamState.Running or DeviceStreamState.Stopped))
+            {
+                logger.LogWarning("Master clock {DeviceId} is {State}. Promoting another output.", primary.DeviceId, primary.State);
+            }
+
+            AudioDeviceId failed = primary.DeviceId;
 
             primary.Dispose();
             primary = null;
+
+            // Excluded from this promotion only. The preference itself is kept: forgetting it would
+            // mean one hiccup silently abandoning the output somebody chose, for the rest of the
+            // session. It is tried again the next time the clock needs replacing, by which point the
+            // device may be back.
+            Promote(failed);
+
+            return;
         }
 
-        Promote();
+        Promote(AudioDeviceId.None);
+    }
+
+    /// <summary>
+    /// Whether the clock has opened a device that is not asking for anything.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The worst failure this design has, and until now nothing looked for it. An endpoint can open,
+    /// report itself Running and never fire a render callback — an HDMI display with nothing
+    /// listening does exactly this. Every input ring then fills and overruns, the meters sit still,
+    /// and no single component is in a position to say what is wrong.
+    /// </para>
+    /// <para>
+    /// Several polls rather than one, so a device that is merely slow to start is not thrown away
+    /// before it has begun.
+    /// </para>
+    /// </remarks>
+    bool HasStalled()
+    {
+        long rendered = Interlocked.Read(ref blocksRendered);
+
+        silentPolls = rendered == blocksAtLastPoll ? silentPolls + 1 : 0;
+        blocksAtLastPoll = rendered;
+
+        return silentPolls >= SilentPollsBeforePromoting;
     }
 
     /// <summary>Stops the clock, whichever way it is running.</summary>
@@ -182,11 +278,18 @@ public sealed class MasterClock : IDisposable
     /// <summary>
     /// Finds another render device to keep time with, or starts the timer if there is none.
     /// </summary>
-    void Promote()
+    void Promote(AudioDeviceId avoid)
     {
+        // The chosen one first, every time - including after a loss, so a device that comes back
+        // takes the clock back rather than leaving the session on whatever stood in for it.
+        if (!preferred.IsNone && preferred != avoid && SetPrimary(preferred))
+        {
+            return;
+        }
+
         foreach (AudioDeviceInfo candidate in backend.Enumerate(DeviceDirection.Render))
         {
-            if (SetPrimary(candidate.Id))
+            if (candidate.Id != preferred && candidate.Id != avoid && SetPrimary(candidate.Id))
             {
                 return;
             }
@@ -259,7 +362,47 @@ public sealed class MasterClock : IDisposable
     /// <summary>
     /// The render callback, and the whole point of the class. Inside the audio path.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A device may ask for more than one block. WASAPI's priming call before the stream starts
+    /// hands over the whole endpoint buffer, which in shared mode is several blocks, and the graph
+    /// is built for exactly one: its arena has one plane per stride and reading past it throws on
+    /// the audio thread, inside the device's own Start.
+    /// </para>
+    /// <para>
+    /// Rendered in block-sized pieces rather than clamped. Clamping would prime the device with a
+    /// buffer that is mostly silence and then play it, which is a gap at the start of every session
+    /// on every device whose period is larger than a block - meaning most of them.
+    /// </para>
+    /// </remarks>
     int Fill(Span<float> output, int frameCount)
+    {
+        if (frameCount <= options.BlockFrames)
+        {
+            return FillBlock(output, frameCount);
+        }
+
+        // Exact: the span is interleaved frames of one device's channel count.
+        int channels = output.Length / frameCount;
+        int done = 0;
+
+        while (done < frameCount)
+        {
+            int chunk = Math.Min(options.BlockFrames, frameCount - done);
+            int produced = FillBlock(output.Slice(done * channels, chunk * channels), chunk);
+
+            done += produced;
+
+            if (produced < chunk)
+            {
+                break;
+            }
+        }
+
+        return done;
+    }
+
+    int FillBlock(Span<float> output, int frameCount)
     {
         int deviceCount = 0;
         int offset = 0;

@@ -12,6 +12,9 @@ namespace Vam.TestKit.Devices;
 /// </remarks>
 public sealed class NullRenderStream : IRenderStream
 {
+    /// <summary>How many buffers' worth this fake will hand over in one callback.</summary>
+    const int MaxBurstBuffers = 8;
+
     readonly float[] buffer;
     readonly double effectiveSampleRate;
 
@@ -24,7 +27,9 @@ public sealed class NullRenderStream : IRenderStream
         Format = format;
 
         effectiveSampleRate = format.SampleRate * (1.0 + (options.DriftPpm / 1_000_000.0));
-        buffer = new float[format.BufferFrames * format.ChannelCount];
+        // Room for a burst. A real endpoint can ask for its whole buffer in one callback, which is
+        // several blocks; a fake sized for exactly one could never be asked to prove what happens.
+        buffer = new float[format.BufferFrames * format.ChannelCount * MaxBurstBuffers];
     }
 
     /// <inheritdoc />
@@ -73,6 +78,23 @@ public sealed class NullRenderStream : IRenderStream
 
     /// <summary>Pulls exactly one buffer, ignoring drift. What most tests want.</summary>
     public void PumpBuffer() => Pull(Format.BufferFrames);
+
+    /// <summary>
+    /// Pulls an arbitrary number of frames in one callback, the way a real endpoint does.
+    /// </summary>
+    /// <remarks>
+    /// WASAPI in shared mode asks for whatever space is free, which on the priming call before a
+    /// stream starts is the whole endpoint buffer - several blocks, not one. Without a way to say
+    /// that here, every test agrees with every other test that a callback is exactly one block, and
+    /// the one place that assumption is wrong is the one place it is never exercised.
+    /// </remarks>
+    /// <param name="frameCount">How many frames the device is asking for.</param>
+    public void PumpFrames(int frameCount)
+    {
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(frameCount, Format.BufferFrames * MaxBurstBuffers);
+
+        Pull(frameCount);
+    }
 
     /// <summary>
     /// Pulls whatever the device would have consumed in <paramref name="elapsed"/>, at its real
