@@ -1,0 +1,11 @@
+# Normalise line endings on the way in, so a file written by a tool that emits LF and a file
+# written by an editor that emits CRLF are the same file. Without this every such write shows up
+# as a modification that carries no change.
+* text=auto
+
+# Anything whose bytes matter. A licence with its line endings rewritten is a modified licence.
+*.png binary
+*.jpg binary
+*.ico binary
+*.wav binary
+*.flac binary
