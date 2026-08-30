@@ -24,11 +24,12 @@ public static class MauiProgram
 
         builder.Services.AddMauiBlazorWebView();
 
-        // Where the engine is. A setting even for the desktop client, because an operator running the
-        // console on a laptop and the engine on the machine wired to the microphones is the normal
-        // case rather than an advanced one.
-        builder.Services.AddVamUi<DesktopPlatformServices>(options =>
-            options.Address = Preferences.Default.Get("vam.engine", "http://localhost:5211"));
+        // Where the engine is is not decided here. The console looks for one, and asks only if it
+        // finds none: an operator running the console on a laptop and the engine on the machine
+        // wired to the microphones is a normal case rather than an advanced one, but so is both on
+        // one machine, and only one of those should involve a question.
+        builder.Services.AddSingleton<EngineLauncher>();
+        builder.Services.AddVamUi<DesktopPlatformServices>();
 
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();

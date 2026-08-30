@@ -18,8 +18,10 @@ namespace Vam.Client;
 /// this machine, because the folder a recording goes into belongs to the engine's disk.
 /// </para>
 /// </remarks>
-public sealed class DesktopPlatformServices : IPlatformServices
+public sealed class DesktopPlatformServices(EngineLauncher launcher) : IPlatformServices
 {
+    const string RememberedEngineKey = "vam.engine";
+
     /// <inheritdoc />
     public string ClientName => "VAM Desktop Console";
 
@@ -49,5 +51,34 @@ public sealed class DesktopPlatformServices : IPlatformServices
         StorageFolder? folder = await picker.PickSingleFolderAsync().AsTask(cancellationToken);
 
         return folder?.Path;
+    }
+
+    /// <inheritdoc />
+    /// <remarks>The engine ships beside this application, so this host can.</remarks>
+    public bool CanStartEngine => true;
+
+    /// <inheritdoc />
+    public ValueTask<string?> StartEngineAsync(string address, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return ValueTask.FromResult(launcher.Start(address));
+    }
+
+    /// <inheritdoc />
+    public string? RememberedEngine
+    {
+        get => Preferences.Default.Get<string?>(RememberedEngineKey, null);
+        set
+        {
+            if (value is null)
+            {
+                Preferences.Default.Remove(RememberedEngineKey);
+
+                return;
+            }
+
+            Preferences.Default.Set(RememberedEngineKey, value);
+        }
     }
 }

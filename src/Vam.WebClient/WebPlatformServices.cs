@@ -21,4 +21,28 @@ public sealed class WebPlatformServices : IPlatformServices
     /// <inheritdoc />
     public ValueTask<string?> PickFolderAsync(string title, CancellationToken cancellationToken = default) =>
         ValueTask.FromResult<string?>(null);
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// It could start a process, and it must not. This host runs wherever the page is served from,
+    /// which is not necessarily — and for a console reached over the network, not usually — the
+    /// machine with the microphones in it. An engine started here would be an engine with no inputs,
+    /// and every browser that loaded the page could start another.
+    /// </remarks>
+    public bool CanStartEngine => false;
+
+    /// <inheritdoc />
+    public ValueTask<string?> StartEngineAsync(string address, CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult<string?>("A web console cannot start an engine. Start one on the machine with the microphones.");
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// This host is configured rather than asked, and one process serves every browser: a remembered
+    /// address here would be one operator's choice arriving in somebody else's console.
+    /// </remarks>
+    public string? RememberedEngine
+    {
+        get => null;
+        set { }
+    }
 }
