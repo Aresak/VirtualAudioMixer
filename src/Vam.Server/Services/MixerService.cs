@@ -1,4 +1,6 @@
 using Grpc.Core;
+using Shiny.Mediator;
+using Vam.Server.Mediator;
 using Vam.Engine.Devices;
 using Vam.Engine.Devices.Abstractions;
 using Vam.Engine.Recording;
@@ -30,7 +32,7 @@ namespace Vam.Server.Services;
 /// which would be impossible if both shared one.
 /// </para>
 /// </remarks>
-public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger) : Mixer.MixerBase
+public sealed class MixerService(VamEngine engine, IMediator mediator, ILogger<MixerService> logger) : Mixer.MixerBase
 {
     /// <summary>What this build speaks.</summary>
     public const int ProtocolVersion = 1;
@@ -68,24 +70,41 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
         Task.FromResult(BuildConsole());
 
     /// <inheritdoc />
-    public override Task<CommandReply> Apply(Command request, ServerCallContext context)
+    /// <remarks>
+    /// <para>
+    /// A translation and a send, and nothing else. This method used to be a switch over thirty
+    /// commands with the work inline; the work is in handlers now and the transport's whole job is
+    /// to turn one wire message into the contract it stands for.
+    /// </para>
+    /// <para>
+    /// That is what makes the second transport nearly free — a WebSocket adapter writes a
+    /// translator and stops, because everything below this line has never heard of gRPC.
+    /// </para>
+    /// </remarks>
+    public override async Task<CommandReply> Apply(Command request, ServerCallContext context)
     {
-        if (engine.Graph is null)
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (CommandTranslator.Translate(request) is not IRequest<CommandReply> contract)
         {
-            return Task.FromResult(Refuse("The engine is not running."));
+            return Refuse("The command carried nothing this engine knows.");
         }
 
         try
         {
-            // Three commands change what the engine owns rather than what the graph holds - a device
-            // to open, a modifier to build, a file to create - so they are answered here where the
-            // engine is, and everything else goes to the graph.
-            return Task.FromResult(DispatchEngine(request) ?? Dispatch(engine.Graph, request));
+            (IMediatorContext _, CommandReply reply) = await mediator
+                .Request(contract, context?.CancellationToken ?? CancellationToken.None)
+                .ConfigureAwait(false);
+
+            return reply;
         }
         catch (Exception error)
         {
-            logger.LogError(error, "A command failed.");
-            return Task.FromResult(Refuse(error.Message));
+            // A command that threw must not take the transport with it. The session continues, the
+            // console is told in words, and the stack trace goes where a stack trace belongs.
+            logger.LogError(error, "{Operation} failed.", contract.GetType().Name);
+
+            return Refuse(error.Message);
         }
     }
 
@@ -230,351 +249,9 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
         }
     }
 
-    /// <summary>
-    /// Adds a bus and opens the device behind it, if it names one.
-    /// </summary>
-    /// <remarks>
-    /// Both halves, always together. A new bus with an output device named but no device thread
-    /// opened mixes into a ring nobody drains: silent, with no error anywhere to explain it.
-    /// </remarks>
-    CommandReply AddBus(AddBus request)
-    {
-        if (engine.Graph is not { } graph)
-        {
-            return Refuse("The engine is not running.");
-        }
-
-        graph.AddBus(new BusConfig
-        {
-            Name = request.Name,
-            Role = Enum.TryParse(request.Role, ignoreCase: true, out BusRole role) ? role : BusRole.Output,
-            ChannelCount = Math.Max(request.ChannelCount, 1),
-            OutputDeviceId = new AudioDeviceId(request.OutputDeviceId)
-        });
-
-        engine.RebindBusOutputs();
-
-        return Accept();
-    }
-
-    /// <summary>Removes a bus and closes the device it was playing to.</summary>
-    CommandReply RemoveBus(RemoveBus request)
-    {
-        if (engine.Graph is not { } graph || !graph.RemoveBus(request.BusIndex))
-        {
-            return Refuse($"There is no bus {request.BusIndex}.");
-        }
-
-        // Closed, not merely unbound. A render stream left open on a bus that no longer exists is a
-        // device an operator cannot use for anything else until the engine restarts.
-        engine.RebindBusOutputs();
-
-        return Accept();
-    }
-
-    /// <summary>
-    /// Points a bus at a different endpoint, and re-opens the device thread behind it. D7.
-    /// </summary>
-    /// <remarks>
-    /// Both halves matter. Changing the configuration without re-binding leaves the bus playing to
-    /// the device it used to have — worse than silence, because it is audio arriving somewhere
-    /// nobody is expecting it.
-    /// </remarks>
-    CommandReply AimBus(SetBusOutputDevice request)
-    {
-        if (engine.Graph is not { } graph
-            || request.BusIndex < 0
-            || request.BusIndex >= graph.Config.Buses.Count)
-        {
-            return Refuse($"There is no bus {request.BusIndex}.");
-        }
-
-        graph.Config.Buses[request.BusIndex] = graph.Config.Buses[request.BusIndex] with
-        {
-            OutputDeviceId = new AudioDeviceId(request.DeviceId)
-        };
-
-        graph.Recompile();
-        engine.RebindBusOutputs();
-
-        return Accept();
-    }
-
-    /// <summary>Points a strip at a different capture endpoint, and opens it.</summary>
-    CommandReply AimChannel(SetChannelDevice request)
-    {
-        if (engine.Graph is not { } graph
-            || request.ChannelIndex < 0
-            || request.ChannelIndex >= graph.Config.Channels.Count)
-        {
-            return Refuse($"There is no strip {request.ChannelIndex}.");
-        }
-
-        return engine.RetargetChannel(request.ChannelIndex, new AudioDeviceId(request.DeviceId))
-            ? Accept()
-            : Refuse("The engine is not running.");
-    }
-
-    CommandReply? DispatchEngine(Command request)
-    {
-        switch (request.KindCase)
-        {
-            case Command.KindOneofCase.AddChannel:
-                return engine.AddChannel(new Vam.Engine.Graph.ChannelConfig
-                {
-                    DeviceId = new AudioDeviceId(request.AddChannel.DeviceId),
-                    Name = request.AddChannel.Name,
-                    ChannelCount = Math.Max(request.AddChannel.ChannelCount, 1),
-                    ParticipatesInAutomix = request.AddChannel.ParticipatesInAutomix
-                }) >= 0
-                    ? Accept()
-                    : Refuse("The engine is not running.");
-
-            case Command.KindOneofCase.AddModifier:
-                return engine.Graph is { } addGraph
-                    ? ChainCommands.Add(addGraph, engine.Modifiers, request.AddModifier)
-                    : Refuse("The engine is not running.");
-
-            case Command.KindOneofCase.AddBus:
-                return AddBus(request.AddBus);
-
-            case Command.KindOneofCase.RemoveBus:
-                return RemoveBus(request.RemoveBus);
-
-            case Command.KindOneofCase.SetBusOutputDevice:
-                return AimBus(request.SetBusOutputDevice);
-
-            case Command.KindOneofCase.SetChannelDevice:
-                return AimChannel(request.SetChannelDevice);
-
-            case Command.KindOneofCase.SetStartupOptions:
-                engine.SetStartup(
-                    request.SetStartupOptions.LoadLastConsole,
-                    request.SetStartupOptions.RecordAutomatically);
-
-                return Accept();
-
-            case Command.KindOneofCase.ClearClip:
-                // F1. The one command that touches the meters rather than the graph.
-                engine.Meters?.ClearClip(request.ClearClip.ChannelIndex);
-
-                return Accept();
-
-            case Command.KindOneofCase.SaveChainPreset:
-                return engine.Graph is { } saveGraph
-                    ? PresetCommands.Save(saveGraph, engine.Presets, request.SaveChainPreset)
-                    : Refuse("The engine is not running.");
-
-            case Command.KindOneofCase.ApplyChainPreset:
-                return engine.Graph is { } applyGraph
-                    ? PresetCommands.Apply(applyGraph, engine.Presets, request.ApplyChainPreset)
-                    : Refuse("The engine is not running.");
-
-            case Command.KindOneofCase.DeleteChainPreset:
-                return PresetCommands.Delete(engine.Presets, request.DeleteChainPreset);
-
-            case Command.KindOneofCase.SetRecording:
-                if (!request.SetRecording.Recording)
-                {
-                    return engine.StopRecording() ? Accept() : Refuse("Nothing was recording.");
-                }
-
-                DiskVerdict verdict = engine.StartRecording(
-                    string.IsNullOrWhiteSpace(request.SetRecording.Directory) ? null : request.SetRecording.Directory);
-
-                // The disk's answer, in the disk's own words. "Recording did not start" tells an
-                // operator nothing they can act on; "there is room for forty minutes" does.
-                return verdict.CanStart ? Accept() : Refuse(verdict.Description);
-
-            default:
-                return null;
-        }
-    }
-
     static CommandReply Refuse(string reason) => new() { Accepted = false, Reason = reason };
 
     static CommandReply Accept() => new() { Accepted = true, Reason = string.Empty };
-
-    static CommandReply Dispatch(GraphController graph, Command request)
-    {
-        switch (request.KindCase)
-        {
-            case Command.KindOneofCase.SetFader:
-                graph.Submit(GraphCommand.SetFader(request.SetFader.ChannelIndex, request.SetFader.Decibels));
-                break;
-
-            case Command.KindOneofCase.SetTrim:
-                graph.Submit(GraphCommand.SetTrim(request.SetTrim.ChannelIndex, request.SetTrim.Decibels));
-                break;
-
-            case Command.KindOneofCase.SetFlag:
-                // Whether a strip takes part in gain sharing is not one of the audio thread's flag
-                // bits - it decides what the compiler builds, not what the mix does - so it is set
-                // by rewriting the strip. It arrives here because to an operator it is the same
-                // kind of thing as mute: a switch on a channel.
-                if (string.Equals(request.SetFlag.Flag, "ParticipatesInAutomix", StringComparison.OrdinalIgnoreCase))
-                {
-                    return Rewrite(graph, request.SetFlag.ChannelIndex,
-                        channel => channel with { ParticipatesInAutomix = request.SetFlag.Enabled });
-                }
-
-                if (!Enum.TryParse(request.SetFlag.Flag, ignoreCase: true, out ChannelFlags flag))
-                {
-                    return Refuse($"There is no flag called '{request.SetFlag.Flag}'.");
-                }
-
-                graph.Submit(GraphCommand.SetFlag(request.SetFlag.ChannelIndex, flag, request.SetFlag.Enabled));
-                break;
-
-            case Command.KindOneofCase.SetBusGain:
-                graph.Submit(GraphCommand.SetBusGain(request.SetBusGain.BusIndex, request.SetBusGain.Decibels));
-                break;
-
-            case Command.KindOneofCase.SetBusMuted:
-                graph.Submit(GraphCommand.SetBusMuted(request.SetBusMuted.BusIndex, request.SetBusMuted.Muted));
-                break;
-
-            case Command.KindOneofCase.SetSend:
-                return ApplySend(graph, request.SetSend);
-
-            case Command.KindOneofCase.SetBusColour:
-                if (request.SetBusColour.BusIndex < 0 || request.SetBusColour.BusIndex >= graph.Config.Buses.Count)
-                {
-                    return Refuse($"There is no bus {request.SetBusColour.BusIndex}.");
-                }
-
-                graph.Config.Buses[request.SetBusColour.BusIndex] =
-                    graph.Config.Buses[request.SetBusColour.BusIndex] with { Colour = request.SetBusColour.Colour };
-
-                graph.Recompile();
-
-                return Accept();
-
-
-            case Command.KindOneofCase.SetAutomix:
-                graph.Config.IsAutomixBypassed = request.SetAutomix.Bypassed;
-                graph.Config.AutomixDepthDb = request.SetAutomix.DepthDb;
-                graph.Config.AutomixResponseMilliseconds = request.SetAutomix.ResponseMs;
-                graph.Submit(GraphCommand.SetFader(0, graph.Config.Channels.Count > 0 ? graph.Config.Channels[0].FaderDb : 0));
-                break;
-
-            case Command.KindOneofCase.SetModifierBypass:
-                return ChainCommands.SetBypass(graph, request.SetModifierBypass);
-
-            case Command.KindOneofCase.SetModifierParameter:
-                return ChainCommands.SetParameter(graph, request.SetModifierParameter);
-
-            case Command.KindOneofCase.SetChannelName:
-                return Rewrite(graph, request.SetChannelName.ChannelIndex,
-                    channel => channel with { Name = request.SetChannelName.Name });
-
-            case Command.KindOneofCase.SetPan:
-                return Rewrite(graph, request.SetPan.ChannelIndex,
-                    channel => channel with { Pan = Math.Clamp(request.SetPan.Pan, -1.0, 1.0) });
-
-            case Command.KindOneofCase.SetAutomixWeight:
-                return Rewrite(graph, request.SetAutomixWeight.ChannelIndex,
-                    channel => channel with { AutomixWeight = (float)request.SetAutomixWeight.Weight });
-
-            case Command.KindOneofCase.SetChannelColour:
-                return Rewrite(graph, request.SetChannelColour.ChannelIndex,
-                    channel => channel with { Colour = request.SetChannelColour.Colour });
-
-            case Command.KindOneofCase.RemoveChannel:
-                return graph.RemoveChannel(request.RemoveChannel.ChannelIndex)
-                    ? Accept()
-                    : Refuse($"There is no strip {request.RemoveChannel.ChannelIndex}.");
-
-            case Command.KindOneofCase.MoveChannel:
-                return graph.MoveChannel(request.MoveChannel.FromIndex, request.MoveChannel.ToIndex)
-                    ? Accept()
-                    : Refuse("A strip cannot be moved to a place that is not there.");
-
-            case Command.KindOneofCase.SetBusName:
-                if (request.SetBusName.BusIndex < 0 || request.SetBusName.BusIndex >= graph.Config.Buses.Count)
-                {
-                    return Refuse($"There is no bus {request.SetBusName.BusIndex}.");
-                }
-
-                graph.Config.Buses[request.SetBusName.BusIndex] =
-                    graph.Config.Buses[request.SetBusName.BusIndex] with { Name = request.SetBusName.Name };
-
-                graph.Recompile();
-
-                return Accept();
-
-            case Command.KindOneofCase.RemoveModifier:
-                return ChainCommands.Remove(graph, request.RemoveModifier);
-
-            case Command.KindOneofCase.MoveModifier:
-                return ChainCommands.Move(graph, request.MoveModifier);
-
-            case Command.KindOneofCase.SetBusRole:
-                if (request.SetBusRole.BusIndex < 0 || request.SetBusRole.BusIndex >= graph.Config.Buses.Count)
-                {
-                    return Refuse($"There is no bus {request.SetBusRole.BusIndex}.");
-                }
-
-                if (!Enum.TryParse(request.SetBusRole.Role, ignoreCase: true, out BusRole newRole))
-                {
-                    return Refuse($"There is no bus role called '{request.SetBusRole.Role}'.");
-                }
-
-                graph.Config.Buses[request.SetBusRole.BusIndex] =
-                    graph.Config.Buses[request.SetBusRole.BusIndex] with { Role = newRole };
-
-                graph.Recompile();
-
-                return Accept();
-
-            default:
-                return Refuse("The command carried nothing.");
-        }
-
-        graph.Pump();
-
-        return Accept();
-    }
-
-    /// <summary>Rewrites one strip's configuration and recompiles.</summary>
-    /// <remarks>
-    /// <see cref="ChannelConfig"/> is a record with init-only properties, so a change is a new one
-    /// put back in place. That is what makes a half-applied strip impossible: either the whole thing
-    /// went in or none of it did.
-    /// </remarks>
-    static CommandReply Rewrite(GraphController graph, int index, Func<ChannelConfig, ChannelConfig> change)
-    {
-        if (index < 0 || index >= graph.Config.Channels.Count)
-        {
-            return Refuse($"There is no strip {index}.");
-        }
-
-        graph.Config.Channels[index] = change(graph.Config.Channels[index]);
-        graph.Recompile();
-
-        return Accept();
-    }
-
-    static CommandReply ApplySend(GraphController graph, SetSend request)
-    {
-        GraphSnapshot before = graph.Publisher.Current;
-
-        if (request.ChannelIndex < before.Sends.ChannelCount
-            && request.BusIndex < before.Sends.BusCount
-            && before.Sends.StateOf(request.ChannelIndex, request.BusIndex) == EngineSendState.ExcludedMixMinus)
-        {
-            // Said out loud rather than silently doing nothing. An operator clicking a send that
-            // does not respond needs to know it is mix-minus and not a broken button.
-            return Refuse(
-                "That send is excluded by mix-minus: the bus feeds the device this microphone belongs to, "
-                + "and sending it there would play somebody their own voice, late.");
-        }
-
-        graph.Submit(GraphCommand.SetSend(request.ChannelIndex, request.BusIndex, request.On, request.Decibels));
-        graph.Pump();
-
-        return Accept();
-    }
 
     static MeterFrame BuildFrame(MeterPublisher meters)
     {

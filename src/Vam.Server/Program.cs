@@ -1,4 +1,5 @@
 using Vam.Server.Engine;
+using Vam.Server.Mediator;
 using Vam.Server.Logging;
 using Vam.Server.Services;
 
@@ -28,6 +29,11 @@ EngineLogging.Configure(
     builder.Configuration["Vam:SentryDsn"]);
 
 builder.Services.AddGrpc();
+
+// G2. Every operator action is a contract, every handler owns one kind of thing, and validation,
+// performance logging and refusal logging are middleware rather than the same three lines copied
+// into thirty places. It owns everything above the snapshot swap and nothing below it.
+builder.Services.AddVamMediator();
 
 builder.Services.AddSingleton(new EngineOptions());
 builder.Services.AddSingleton<VamEngine>();

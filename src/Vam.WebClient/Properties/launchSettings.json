@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "Vam.WebClient": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:58198;http://localhost:58200"
+    }
+  }
+}

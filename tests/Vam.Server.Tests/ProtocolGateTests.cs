@@ -10,6 +10,7 @@ using Vam.Engine.Devices.Abstractions;
 using Vam.Protocol;
 using Vam.Protocol.V1;
 using Vam.Server.Engine;
+using Vam.Server.Mediator;
 using Vam.Server.Services;
 using Vam.TestKit.Devices;
 using Vam.TestKit.Harness;
@@ -57,6 +58,10 @@ public class ProtocolGateTests : IAsyncLifetime
             options.ListenLocalhost(port, listener => listener.Protocols = HttpProtocols.Http2));
 
         builder.Services.AddGrpc();
+
+        // The same registration the real host uses. A test host that wired the handlers up its own
+        // way would be testing an arrangement nobody ships.
+        builder.Services.AddVamMediator();
         builder.Services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
 
         engine = new VamEngine(

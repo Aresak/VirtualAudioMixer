@@ -17,6 +17,16 @@
     <PackageReference Include="Grpc.AspNetCore" />
     <PackageReference Include="NLog.Extensions.Logging" />
     <PackageReference Include="Sentry.NLog" />
+
+    <!--
+      G2. The application-layer backbone: every operator action is a contract, every engine
+      notification is an event, and the cross-cutting concerns are middleware rather than the same
+      three lines copied into thirty handlers.
+
+      It never touches the audio path. Not once - it allocates, resolves from DI, walks a middleware
+      pipeline and awaits, and all four are forbidden below the snapshot swap. See the decision note.
+    -->
+    <PackageReference Include="Shiny.Mediator" />
   </ItemGroup>
 
   <ItemGroup>

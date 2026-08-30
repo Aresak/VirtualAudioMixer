@@ -26,6 +26,10 @@
     <PackageVersion Include="Grpc.AspNetCore" Version="2.83.0" />
   </ItemGroup>
 
+  <ItemGroup Label="Application">
+    <PackageVersion Include="Shiny.Mediator" Version="6.8.0" />
+  </ItemGroup>
+
   <ItemGroup Label="Client">
     <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.0" />
     <PackageVersion Include="Microsoft.Maui.Controls" Version="10.0.20" />
