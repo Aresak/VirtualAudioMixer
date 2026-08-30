@@ -16,6 +16,14 @@ namespace Vam.Ui.Components;
 /// <summary>The code behind <c>ChainEditor.razor</c>.</summary>
 public partial class ChainEditor
 {
+    /// <summary>Below this, nothing audible is leaving a link.</summary>
+    /// <remarks>
+    /// Not silence in the arithmetic sense. A link whose output sits ninety decibels down is passing
+    /// dither and nothing else, and calling that "working" is the console agreeing with itself
+    /// rather than reporting the room.
+    /// </remarks>
+    const double SilenceDb = -90.0;
+
     string adding = string.Empty;
     int dragging = -1;
 
@@ -156,4 +164,11 @@ public partial class ChainEditor
 
         adding = string.Empty;
     }
+
+    /// <summary>Whether this link is passing anything on.</summary>
+    /// <remarks>
+    /// A bypassed link is not silent — it is not doing anything, which the chip beside it already
+    /// says. This is for a link that is running and leaving nothing behind.
+    /// </remarks>
+    static bool IsSilent(ModifierState link) => !link.IsBypassed && link.LevelDb <= SilenceDb;
 }

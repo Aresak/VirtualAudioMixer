@@ -136,6 +136,13 @@ message ModifierState {
   repeated ParameterState parameters = 5;
   // What it is costing, as a fraction of a block.
   double cost_fraction = 6;
+
+  // What is leaving this link, in dBFS, and whether it is doing anything at all. A denoise set hard
+  // enough can remove everything a microphone sent, and the strip meter reads the input rather than
+  // the chain - so without this the console shows a signal jumping about while nothing reaches the
+  // mix, and has no way to say which link took it.
+  double level_db = 7;
+  bool is_active = 8;
 }
 
 message ParameterState {
