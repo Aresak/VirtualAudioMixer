@@ -1,0 +1,183 @@
+syntax = "proto3";
+
+package vam.v1;
+
+option csharp_namespace = "Vam.Protocol.V1";
+
+// The control surface for a VAM engine.
+//
+// Everything a console can do goes through here, including the one running on the same machine.
+// That is deliberate: if the local client used a private path, the remote path would be the one
+// nobody exercised until somebody needed it during a meeting.
+service Mixer {
+  // Agreed before anything else. An old client meeting a new server has to fail with a sentence a
+  // person can read, not by subtly misbehaving three commands later.
+  rpc Hello(HelloRequest) returns (HelloReply);
+
+  // The whole console as it stands.
+  rpc GetConsole(Empty) returns (ConsoleState);
+
+  // One change. Applied on the control thread and published as a snapshot.
+  rpc Apply(Command) returns (CommandReply);
+
+  // Levels, at meter rate, on its own stream. A client that cannot keep up throttles its meters
+  // rather than its faders, which is why this is not multiplexed with the commands.
+  rpc StreamMeters(Empty) returns (stream MeterFrame);
+
+  // Devices arriving and leaving, faults, modifiers switched out for overrunning.
+  rpc StreamEvents(Empty) returns (stream EngineEvent);
+}
+
+message Empty {}
+
+message HelloRequest {
+  // What the client speaks.
+  int32 protocol_version = 1;
+  string client_name = 2;
+}
+
+message HelloReply {
+  bool accepted = 1;
+  int32 protocol_version = 2;
+  string server_name = 3;
+  // Why not, when it was refused. Written for a person rather than for a log.
+  string reason = 4;
+  int32 sample_rate = 5;
+  int32 block_frames = 6;
+}
+
+message ConsoleState {
+  repeated ChannelState channels = 1;
+  repeated BusState buses = 2;
+  repeated SendState sends = 3;
+  AutomixState automix = 4;
+  RecordingState recording = 5;
+}
+
+message ChannelState {
+  int32 index = 1;
+  string name = 2;
+  string device_id = 3;
+  string device_name = 4;
+  int32 channel_count = 5;
+  double trim_db = 6;
+  double fader_db = 7;
+  bool is_muted = 8;
+  bool is_soloed = 9;
+  bool is_polarity_inverted = 10;
+  bool is_mono_fold = 11;
+  bool participates_in_automix = 12;
+  double automix_weight = 13;
+  // What the device is really running at, and how far that is from what it claims.
+  double measured_sample_rate = 14;
+  double drift_ppm = 15;
+  // Present, absent, faulted.
+  string device_state = 16;
+  repeated ModifierState chain = 17;
+}
+
+message ModifierState {
+  string link_id = 1;
+  string modifier_id = 2;
+  string name = 3;
+  bool is_bypassed = 4;
+  repeated ParameterState parameters = 5;
+  // What it is costing, as a fraction of a block.
+  double cost_fraction = 6;
+}
+
+message ParameterState {
+  string id = 1;
+  string name = 2;
+  string unit = 3;
+  double value = 4;
+  double minimum = 5;
+  double maximum = 6;
+}
+
+message BusState {
+  int32 index = 1;
+  string name = 2;
+  // output, monitor or stream.
+  string role = 3;
+  int32 channel_count = 4;
+  double gain_db = 5;
+  bool is_muted = 6;
+  string output_device_id = 7;
+}
+
+message SendState {
+  int32 channel_index = 1;
+  int32 bus_index = 2;
+  // off, on, or excluded_mix_minus. The last cannot be changed, and the server says why.
+  string state = 3;
+  double level_db = 4;
+}
+
+message AutomixState {
+  bool is_bypassed = 1;
+  double depth_db = 2;
+  double response_ms = 3;
+  // Continuous, from the participation ratio rather than a count above a threshold.
+  double open_microphones = 4;
+  repeated double shares = 5;
+  repeated double gains_db = 6;
+}
+
+message RecordingState {
+  bool is_recording = 1;
+  string directory = 2;
+  int64 frames_written = 3;
+  int64 dropped_frames = 4;
+  int64 free_bytes = 5;
+}
+
+message Command {
+  oneof kind {
+    SetFader set_fader = 1;
+    SetTrim set_trim = 2;
+    SetFlag set_flag = 3;
+    SetBusGain set_bus_gain = 4;
+    SetBusMuted set_bus_muted = 5;
+    SetSend set_send = 6;
+    AddBus add_bus = 7;
+    RemoveBus remove_bus = 8;
+    SetAutomix set_automix = 9;
+    SetModifierBypass set_modifier_bypass = 10;
+    SetModifierParameter set_modifier_parameter = 11;
+  }
+}
+
+message SetFader { int32 channel_index = 1; double decibels = 2; }
+message SetTrim { int32 channel_index = 1; double decibels = 2; }
+message SetFlag { int32 channel_index = 1; string flag = 2; bool enabled = 3; }
+message SetBusGain { int32 bus_index = 1; double decibels = 2; }
+message SetBusMuted { int32 bus_index = 1; bool muted = 2; }
+message SetSend { int32 channel_index = 1; int32 bus_index = 2; bool on = 3; double decibels = 4; }
+message AddBus { string name = 1; string role = 2; int32 channel_count = 3; string output_device_id = 4; }
+message RemoveBus { int32 bus_index = 1; }
+message SetAutomix { bool bypassed = 1; double depth_db = 2; double response_ms = 3; }
+message SetModifierBypass { int32 channel_index = 1; int32 link_index = 2; bool bypassed = 3; }
+message SetModifierParameter { int32 channel_index = 1; int32 link_index = 2; string parameter_id = 3; double value = 4; }
+
+message CommandReply {
+  bool accepted = 1;
+  // Why not. A refused mix-minus send says so here rather than silently doing nothing.
+  string reason = 2;
+}
+
+message MeterFrame {
+  int64 timestamp_ticks = 1;
+  // Packed rather than one message per meter: five channels and five buses at twenty-five frames a
+  // second is a great many small messages otherwise.
+  bytes payload = 2;
+  int32 channel_count = 3;
+  int32 bus_count = 4;
+}
+
+message EngineEvent {
+  int64 timestamp_ticks = 1;
+  string kind = 2;
+  string subject = 3;
+  string message = 4;
+}

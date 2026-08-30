@@ -19,6 +19,13 @@
     <PackageVersion Include="NAudio.Wasapi" Version="3.0.1" />
   </ItemGroup>
 
+  <ItemGroup Label="Protocol and transport">
+    <PackageVersion Include="Google.Protobuf" Version="3.36.0" />
+    <PackageVersion Include="Grpc.Tools" Version="2.83.0" />
+    <PackageVersion Include="Grpc.Net.Client" Version="2.83.0" />
+    <PackageVersion Include="Grpc.AspNetCore" Version="2.83.0" />
+  </ItemGroup>
+
   <ItemGroup Label="Testing">
     <PackageVersion Include="xunit.v3" Version="4.0.0" />
   </ItemGroup>

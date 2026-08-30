@@ -3,6 +3,7 @@ using Vam.Engine.Devices;
 using Vam.Engine.Devices.Abstractions;
 using Vam.Engine.Graph.Extensions;
 using Vam.Engine.Graph.Nodes;
+using Vam.Engine.Metering;
 using Vam.Engine.Modifiers;
 using Vam.Engine.Recording;
 using Vam.Modifiers.Abstractions;
@@ -190,6 +191,10 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
         {
             nodes.Add(new BusMixNode(layout, bus, config.Channels.Count, smoothing));
         }
+
+        // After the buses are summed, so what a bus meter shows is what the bus is actually
+        // carrying rather than what went into it.
+        nodes.Add(new MeterNode(layout, new MeterCells(config.Channels.Count), new MeterCells(config.Buses.Count)));
 
         if (config.Buses.Count > 0)
         {

@@ -40,14 +40,16 @@ when the project changes shape, so a row can be trusted rather than read as inte
 | `src/Vam.Engine` | The device abstraction, ring buffer, device registry, drift estimator, resampler, fill servo and per-device input channel. Platform-free, and a test enforces it | The mix graph and DSP, in EPIC-03 onwards | AGPL-3.0-or-later **plus the modifier exception** |
 | `src/Vam.Engine.Windows` | WASAPI capture and render, driving the clients directly, plus device notifications | Later ASIO and RNNoise interop | AGPL-3.0-or-later |
 | `src/Vam.Modifiers.Abstractions` | The modifier ABI: `Modifier`, its context, its descriptors. **References nothing** | The same, permanently — every addition is a rebuild for every existing modifier | AGPL-3.0-or-later **plus the modifier exception** |
-| `src/Vam.Protocol` | Nothing — a placeholder class | `.proto` contracts and generated gRPC code, in EPIC-08 | Apache-2.0 |
+| `src/Vam.Protocol` | The `.proto` contracts, the generated gRPC client and server, and the meter frame codec | The same, versioned | Apache-2.0 |
+| `src/Vam.Server` | The headless engine host and its gRPC service. Owns the devices, the graph, the clock and the recording | The same, plus whatever EPIC-12 adds | AGPL-3.0-or-later |
 | `src/Vam.Ui` | Nothing — a placeholder class. Not a Razor SDK project yet | The shared Razor component library, in EPIC-09 | MPL-2.0 |
 | `src/Vam.Client` | Nothing — a placeholder class. Not a MAUI project yet | The MAUI Blazor Hybrid host, in EPIC-09 | MPL-2.0 |
 | `tests/Vam.TestKit` | `AllocationAssert`, the test category policy, `NullAudioBackend`, the drift simulation and a recording logger | The full soak fixtures, in EPIC-12 | AGPL-3.0-or-later |
 | `tests/Vam.Engine.Tests` | The allocation gate and its proof, the device-layer suite and the eight-hour drift soak | DSP and automix tests | AGPL-3.0-or-later |
-| `tests/Vam.Engine.Windows.Tests` | Sample-format conversion, and the capture tests that need real devices | The render and hotplug tests | AGPL-3.0-or-later |
+| `tests/Vam.Engine.Windows.Tests` | Sample-format conversion, and the capture and render tests that need real devices | The hotplug tests | AGPL-3.0-or-later |
+| `tests/Vam.Server.Tests` | EPIC-08's gate: the whole mixer driven over real gRPC with no UI | Protocol and persistence tests | AGPL-3.0-or-later |
 
-Not created yet: `src/Vam.Server` (EPIC-08) and `src/Vam.WebClient` (EPIC-09).
+Not created yet: `src/Vam.WebClient` (EPIC-09).
 
 ## Commands
 

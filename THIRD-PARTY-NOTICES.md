@@ -55,6 +55,15 @@ object per callback, on the one thread whose timing the engine rests on.
 - Licence: MIT
 - Copyright (c) Mark Heath and contributors
 
+## gRPC for .NET and Google.Protobuf — *shipped*
+
+The control protocol's transport and its wire format. `Grpc.Tools` generates the client and the
+server from `src/Vam.Protocol/Protos/vam.proto` at build time and ships nothing itself.
+
+- Project: https://github.com/grpc/grpc-dotnet · https://github.com/protocolbuffers/protobuf
+- Licence: Apache-2.0 (gRPC), BSD 3-Clause (Protobuf)
+- Copyright (c) The gRPC Authors; Copyright (c) Google Inc.
+
 ## Shiny.Mediator — *planned*
 
 Mediator pattern implementation used as the application-layer backbone.
