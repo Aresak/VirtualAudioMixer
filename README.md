@@ -63,6 +63,36 @@ There is a **Feature IDs** toggle that stamps catalogue IDs onto the components.
 
 It is a drawing of a native application that happens to be drawn in HTML.
 
+## Running it
+
+Two processes. The engine owns the meeting; the console is a view over it and can
+be closed without stopping anything.
+
+```bash
+dotnet run --project src/Vam.Server
+```
+
+```bash
+dotnet run --project src/Vam.WebClient
+```
+
+The console is then at `http://localhost:5220` and the engine at `5211`. The
+desktop client — `src/Vam.Client` — is the same console in a window and talks to
+the engine over exactly the same protocol.
+
+**Nothing else is required to start.** The engine opens whatever capture devices
+are present, builds a console from them and begins.
+
+### Two optional pieces, and what you lose without each
+
+| | Without it | Where to get it |
+|---|---|---|
+| **A virtual audio driver** (VB-Cable, Voicemeeter, VAC) | The stream bus has nowhere to go, so OBS cannot capture it. Everything else works | The engine names what is missing and where at startup |
+| **`rnnoise.dll`** | The denoise is a managed spectral suppressor instead — audibly the lesser of the two | [`docs/denoise.md`](docs/denoise.md), which explains why there is no download link |
+
+The engine says which of these it found, every start, in one line each. It never
+refuses to run because something optional is absent — a meeting has to start.
+
 ## Platforms
 
 Windows first. macOS planned. No native Linux client for now, though a browser

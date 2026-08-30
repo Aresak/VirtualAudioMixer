@@ -636,7 +636,10 @@ public sealed class VamEngine : IDisposable
         {
             logger.LogInformation(
                 "RNNoise is not installed, so the denoise is the managed spectral suppressor. "
-                + "Drop rnnoise.dll beside the engine to use RNNoise instead.");
+                + "That works and it is the lesser of the two. RNNoise is BSD-licensed and is not "
+                + "shipped with VAM; putting a 64-bit rnnoise.dll beside this executable is the whole "
+                + "installation. See docs/denoise.md, which explains where to get one and why there "
+                + "is no download link.");
 
             return;
         }
