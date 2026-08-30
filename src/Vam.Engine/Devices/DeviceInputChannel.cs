@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Vam.Engine.Devices.Abstractions;
 using Vam.Engine.Devices.Clock;
+using Vam.Engine.Diagnostics;
 
 namespace Vam.Engine.Devices;
 
@@ -52,6 +53,8 @@ public sealed class DeviceInputChannel
     readonly FillServo servo;
     readonly ILogger<DeviceInputChannel> logger;
     readonly float[] pending;
+    readonly DropoutLog? dropouts;
+    readonly int endpointIndex;
     readonly int channelCount;
     readonly int nominalRateHz;
     readonly int maxInputFrames;
@@ -84,6 +87,9 @@ public sealed class DeviceInputChannel
 
         DeviceId = deviceId;
         this.logger = logger;
+
+        dropouts = options.Dropouts;
+        endpointIndex = options.EndpointIndex;
 
         channelCount = options.ChannelCount;
         nominalRateHz = options.NominalSampleRate;
@@ -152,8 +158,13 @@ public sealed class DeviceInputChannel
     /// </remarks>
     /// <param name="samples">Interleaved samples, valid only for this call.</param>
     /// <param name="frameCount">Frames in the buffer.</param>
-    public void Write(ReadOnlySpan<float> samples, int frameCount) =>
-        ring.TryWrite(samples[..(frameCount * channelCount)]);
+    public void Write(ReadOnlySpan<float> samples, int frameCount)
+    {
+        if (!ring.TryWrite(samples[..(frameCount * channelCount)]))
+        {
+            dropouts?.Record(endpointIndex, DropoutKind.CaptureOverrun, frameCount, ring.FillFrames);
+        }
+    }
 
     /// <summary>
     /// Produces the mix graph's next block, resampled onto the master clock.
@@ -201,6 +212,11 @@ public sealed class DeviceInputChannel
         {
             destination[(produced * channelCount)..].Clear();
             underrunCount += wanted - produced;
+
+            // A note, not a log call. Writing a structured record into a pre-allocated ring is
+            // something the audio thread may do; formatting a sentence is not, and doing it at the
+            // moment something is already going wrong is how one dropout becomes several.
+            dropouts?.Record(endpointIndex, DropoutKind.CaptureUnderrun, wanted - produced, ring.FillFrames);
         }
 
         return produced;
@@ -347,6 +363,8 @@ public sealed class DeviceInputChannel
         }
 
         loggedClampCount = servo.ClampCount;
+
+        dropouts?.Record(endpointIndex, DropoutKind.CorrectionClamped, 0, (float)servo.CorrectionPpm);
 
         logger.LogWarning(
             "Drift correction for {DeviceId} reached its {LimitPpm} ppm limit with the ring {FillFrames} frames "

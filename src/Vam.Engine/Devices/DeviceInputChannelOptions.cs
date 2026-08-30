@@ -1,3 +1,5 @@
+using Vam.Engine.Diagnostics;
+
 namespace Vam.Engine.Devices;
 
 /// <summary>
@@ -42,4 +44,16 @@ public sealed record DeviceInputChannelOptions
     /// the estimator's history, so it has to be roughly honest.
     /// </summary>
     public TimeSpan CorrectionInterval { get; init; } = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>
+    /// Where to note a dropout, or null to only count them. I2.
+    /// </summary>
+    /// <remarks>
+    /// A counter says a hundred and four dropouts happened. A list says whether they were one bad
+    /// minute or spread across three hours, and those have completely different causes.
+    /// </remarks>
+    public DropoutLog? Dropouts { get; init; }
+
+    /// <summary>Which endpoint this is, so a note in the log can be resolved back to a name.</summary>
+    public int EndpointIndex { get; init; }
 }

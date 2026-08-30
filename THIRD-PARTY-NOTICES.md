@@ -64,6 +64,25 @@ server from `src/Vam.Protocol/Protos/vam.proto` at build time and ships nothing 
 - Licence: Apache-2.0 (gRPC), BSD 3-Clause (Protobuf)
 - Copyright (c) The gRPC Authors; Copyright (c) Google Inc.
 
+## NLog — *shipped*
+
+The logging pipeline behind `ILogger` in the server: a rotated file, the in-memory tail the
+diagnostics view reads, and the Sentry sink when a key is configured.
+
+- Project: https://github.com/NLog/NLog
+- Licence: BSD 3-Clause
+- Copyright (c) 2004-2024 Jaroslaw Kowalski, Kim Christensen, Julian Verdurmen
+
+## Sentry — *shipped*
+
+Error reporting, and disabled entirely when no key is present. Nothing that identifies a person is
+sent: no audio, no file contents, and personal information the SDK would otherwise attach by default
+is switched off.
+
+- Project: https://github.com/getsentry/sentry-dotnet
+- Licence: MIT
+- Copyright (c) Sentry
+
 ## Shiny.Mediator — *planned*
 
 Mediator pattern implementation used as the application-layer backbone.

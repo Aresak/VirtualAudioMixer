@@ -3,6 +3,7 @@ using Vam.Engine.Automix;
 using Vam.Engine.Configuration;
 using Vam.Engine.Devices;
 using Vam.Engine.Devices.Abstractions;
+using Vam.Engine.Diagnostics;
 using Vam.Engine.Graph;
 using Vam.Engine.Graph.Nodes;
 using Vam.Engine.Metering;
@@ -37,6 +38,7 @@ public sealed class VamEngine : IDisposable
     readonly CancellationTokenSource stopping = new();
 
     IAudioBackend? backend;
+    DropoutPump? dropoutPump;
     Thread? control;
     TimeSpan sinceCorrection;
     TimeSpan sinceMeters;
@@ -66,6 +68,7 @@ public sealed class VamEngine : IDisposable
 
         Channels = new DeviceInputChannelRegistry();
         Modifiers = ModifierRegistry.CreateDefault();
+        Dropouts = new DropoutLog();
     }
 
     /// <summary>The live input channels, for telemetry.</summary>
@@ -73,6 +76,9 @@ public sealed class VamEngine : IDisposable
 
     /// <summary>What modifiers exist.</summary>
     public ModifierRegistry Modifiers { get; }
+
+    /// <summary>Where the audio threads note things going wrong. I2.</summary>
+    public DropoutLog Dropouts { get; }
 
     /// <summary>The console. Commands go here.</summary>
     public GraphController? Graph { get; private set; }
@@ -131,6 +137,9 @@ public sealed class VamEngine : IDisposable
         Clock.SetConsumer(Graph.Render);
         Clock.Poll();
 
+        dropoutPump = new DropoutPump(Dropouts, loggers.CreateLogger<DropoutPump>());
+        dropoutPump.SetNames([.. config.Channels.Select(channel => channel.Name)]);
+
         Meters = BuildMeterPublisher();
         VirtualEndpoints = VirtualEndpointReport.From(backend);
 
@@ -177,6 +186,9 @@ public sealed class VamEngine : IDisposable
             // meeting setting a console up should not lose it because the machine was shut down.
             store.Save(options.ConsolePath, Graph.Config);
         }
+
+        dropoutPump?.Pump();
+        dropoutPump?.Flush();
 
         Recording?.Stop();
         Clock?.Stop();
@@ -289,7 +301,9 @@ public sealed class VamEngine : IDisposable
                     BlockFrames = options.BlockFrames,
                     RingCapacityFrames = options.SampleRate / 8,
                     TargetFillFrames = options.SampleRate / 40,
-                    CorrectionInterval = options.CorrectionInterval
+                    CorrectionInterval = options.CorrectionInterval,
+                    Dropouts = Dropouts,
+                    EndpointIndex = config.Channels.IndexOf(channel)
                 },
                 new CaptureOptions(ShareMode.Shared, TimeSpan.FromMilliseconds(20), Math.Max(channel.ChannelCount, 1)));
         }
@@ -361,6 +375,10 @@ public sealed class VamEngine : IDisposable
             Clock?.Poll();
             Graph?.Pump();
             Graph?.GuardCostBudget();
+
+            // The other half of the arrangement: the audio threads wrote numbers, and this is where
+            // they become sentences somebody can read afterwards.
+            dropoutPump?.Pump();
 
             sinceCorrection += interval;
             sinceMeters += interval;

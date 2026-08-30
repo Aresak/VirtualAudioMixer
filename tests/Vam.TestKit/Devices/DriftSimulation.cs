@@ -28,6 +28,7 @@ public sealed class DriftSimulation : IDisposable
     readonly NullAudioBackend backend = new();
     readonly List<NullCaptureStream> streams = [];
     readonly List<DeviceInputChannel> channels = [];
+    readonly List<bool> present = [];
     readonly DeviceInputChannelRegistry registry = new();
     readonly float[] block;
     readonly int blockFrames;
@@ -106,6 +107,7 @@ public sealed class DriftSimulation : IDisposable
 
         streams.Add((NullCaptureStream)stream);
         channels.Add(channel);
+        present.Add(true);
         registry.Add(channel);
 
         return channel;
@@ -159,6 +161,38 @@ public sealed class DriftSimulation : IDisposable
         }
     }
 
+    /// <summary>
+    /// Takes a device away mid-run, the way an unplugged cable would. I5.
+    /// </summary>
+    /// <remarks>
+    /// Injectable rather than only observable, because the supervisor's whole state machine is the
+    /// part with the bugs in it and a soak that never loses a device never runs any of it.
+    /// </remarks>
+    /// <param name="index">Which device, in the order they were added.</param>
+    public void RemoveDevice(int index)
+    {
+        present[index] = false;
+        streams[index].SimulateRemoval();
+        channels[index].State = DeviceStreamState.Absent;
+    }
+
+    /// <summary>
+    /// Puts a device back, with its buffers and its drift estimate cleared as a real one would be.
+    /// </summary>
+    /// <param name="index">Which device.</param>
+    public void RestoreDevice(int index)
+    {
+        channels[index].Reset();
+        streams[index].Start(channels[index].Write);
+        channels[index].State = DeviceStreamState.Running;
+        present[index] = true;
+    }
+
+    /// <summary>Whether a device is currently plugged in, as far as this run is concerned.</summary>
+    /// <param name="index">Which device.</param>
+    /// <returns>Whether it is present.</returns>
+    public bool IsPresent(int index) => present[index];
+
     /// <summary>The emptiest ring right now.</summary>
     /// <returns>Its fill in frames, or zero when there are no devices.</returns>
     public int LowestFill()
@@ -185,7 +219,10 @@ public sealed class DriftSimulation : IDisposable
     {
         for (int index = 0; index < streams.Count; index++)
         {
-            streams[index].Pump(step);
+            if (present[index])
+            {
+                streams[index].Pump(step);
+            }
         }
     }
 }
