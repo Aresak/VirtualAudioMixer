@@ -235,8 +235,16 @@ message Command {
     SaveChainPreset save_chain_preset = 25;
     ApplyChainPreset apply_chain_preset = 26;
     DeleteChainPreset delete_chain_preset = 27;
+    Shutdown shutdown = 33;
   }
 }
+
+// Stops the engine. Asked for rather than done to it: the process saves the console, closes the
+// recording files and lets go of the devices, none of which happens if something kills it instead.
+//
+// A console does not decide this on its own. A session outlives every console by design - G1 - so
+// the only thing that should end one is a person saying so.
+message Shutdown { string reason = 1; }
 
 message SetFader { int32 channel_index = 1; double decibels = 2; }
 message SetTrim { int32 channel_index = 1; double decibels = 2; }

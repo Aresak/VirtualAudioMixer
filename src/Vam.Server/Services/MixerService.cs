@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Hosting;
 using Grpc.Core;
 using Shiny.Mediator;
 using Vam.Server.Mediator;
@@ -32,7 +33,11 @@ namespace Vam.Server.Services;
 /// which would be impossible if both shared one.
 /// </para>
 /// </remarks>
-public sealed class MixerService(VamEngine engine, IMediator mediator, ILogger<MixerService> logger) : Mixer.MixerBase
+public sealed class MixerService(
+    VamEngine engine,
+    IMediator mediator,
+    IHostApplicationLifetime lifetime,
+    ILogger<MixerService> logger) : Mixer.MixerBase
 {
     /// <summary>What this build speaks.</summary>
     public const int ProtocolVersion = 1;
@@ -196,16 +201,38 @@ public sealed class MixerService(VamEngine engine, IMediator mediator, ILogger<M
     {
         TimeSpan interval = TimeSpan.FromSeconds(1.0 / MeterPublisher.FramesPerSecond);
 
-        while (!context.CancellationToken.IsCancellationRequested)
-        {
-            if (engine.Meters is { } meters)
-            {
-                await responses.WriteAsync(BuildFrame(meters), context.CancellationToken).ConfigureAwait(false);
-            }
+        using CancellationTokenSource stopping = Stopping(context);
 
-            await Task.Delay(interval, context.CancellationToken).ConfigureAwait(false);
+        try
+        {
+            while (!stopping.Token.IsCancellationRequested)
+            {
+                if (engine.Meters is { } meters)
+                {
+                    await responses.WriteAsync(BuildFrame(meters), stopping.Token).ConfigureAwait(false);
+                }
+
+                await Task.Delay(interval, stopping.Token).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Either the console went away or the engine is stopping. Both end this stream and
+            // neither is an error.
         }
     }
+
+    /// <summary>
+    /// A token that ends a stream when the console goes away <b>or</b> the engine is stopping.
+    /// </summary>
+    /// <remarks>
+    /// A meter stream lasts as long as a meeting, so it never ends on its own. Left waiting only on
+    /// the call's own token, graceful shutdown sits on these until its timeout expires -- half a
+    /// minute between asking the engine to stop and it being gone, which makes restarting it from
+    /// the console look broken and asking it to stop look ignored.
+    /// </remarks>
+    CancellationTokenSource Stopping(ServerCallContext context) =>
+        CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken, lifetime.ApplicationStopping);
 
     /// <inheritdoc />
     public override async Task StreamEvents(Empty request, IServerStreamWriter<EngineEvent> responses, ServerCallContext context)
@@ -229,16 +256,19 @@ public sealed class MixerService(VamEngine engine, IMediator mediator, ILogger<M
             supervisor.Changed += OnDeviceChange;
         }
 
+        using CancellationTokenSource stopping = Stopping(context);
+
         try
         {
-            await foreach (EngineEvent message in queue.Reader.ReadAllAsync(context.CancellationToken).ConfigureAwait(false))
+            await foreach (EngineEvent message in queue.Reader.ReadAllAsync(stopping.Token).ConfigureAwait(false))
             {
-                await responses.WriteAsync(message, context.CancellationToken).ConfigureAwait(false);
+                await responses.WriteAsync(message, stopping.Token).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
         {
-            // The client went away. Not an error; consoles come and go and the session continues.
+            // The client went away, or the engine is stopping. Not an error; consoles come and go
+            // and the session continues without them, right up until it does not.
         }
         finally
         {

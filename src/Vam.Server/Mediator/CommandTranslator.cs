@@ -144,6 +144,9 @@ public static class CommandTranslator
                 command.SetStartupOptions.LoadLastConsole,
                 command.SetStartupOptions.RecordAutomatically),
 
+            Command.KindOneofCase.Shutdown =>
+                new ShutdownRequest(command.Shutdown.Reason),
+
             Command.KindOneofCase.ClearClip =>
                 new ClearClipRequest(command.ClearClip.ChannelIndex),
 
