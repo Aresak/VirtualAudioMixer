@@ -49,18 +49,31 @@ Building it is a maintainer's job and never a user's. Somebody who downloaded an
 `.exe` should not be installing a C toolchain, and if they end up doing that, this
 step was skipped.
 
-Under MSYS2, with the MinGW-w64 toolchain and autotools:
+There is a script. From an **x64 Native Tools Command Prompt for VS**:
 
-```bash
-git clone https://github.com/xiph/rnnoise && cd rnnoise && ./autogen.sh && ./configure --enable-shared && make
+```
+tools\build-rnnoise.cmd
 ```
 
-`autogen.sh` fetches the trained model, so it needs a network connection. Copy the
-resulting 64-bit DLL beside `Vam.Server.exe` as `rnnoise.dll`.
+It clones RNNoise, downloads the trained model, checks the model against the
+sha256 upstream publishes, and builds. The DLL lands in `artifacts\`. Copy it
+beside `Vam.Server.exe` as `rnnoise.dll`.
+
+The script uses MSVC rather than the upstream autotools build, which would mean
+installing MSYS2 and a MinGW toolchain to produce one small dependency-free DLL.
+It compiles the AVX2 and SSE4.1 paths as separate translation units and leaves the
+rest at the x64 baseline, so one DLL runs fast on a modern CPU and still loads on
+an old one — RNNoise reads CPUID at startup and picks. The
+`Compiling without any vectorization` line it prints is the scalar fallback being
+built on purpose, not a misconfiguration.
 
 Check the log on the next start. It says which suppressor it picked, every time,
 and it is the only way to be sure the DLL loaded rather than being silently the
 wrong architecture.
+
+`dotnet test` is the other check. `RnnoiseSuppressorTests` skips itself when there
+is no `rnnoise.dll` beside the test binary and runs when there is, so copying the
+DLL there too turns a packaging step into something the suite can answer.
 
 Three things a fork could change that would make it load and misbehave rather than
 fail cleanly: it wants **480-sample frames at 48 kHz**, samples at **sixteen-bit
