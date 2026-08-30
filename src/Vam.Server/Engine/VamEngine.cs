@@ -358,9 +358,32 @@ public sealed class VamEngine : IDisposable
         return null;
     }
 
+    /// <summary>The two startup behaviours an operator may change. H3 and E4.</summary>
+    public (bool LoadLastConsole, bool RecordAutomatically) Startup =>
+        (options.LoadLastConsole, options.RecordAutomatically);
+
+    /// <summary>Changes them, for the next start.</summary>
+    /// <remarks>
+    /// Neither takes effect now: one decides what happens at the next start and the other whether a
+    /// recording begins with the engine. Saying so on the view matters more than making them apply
+    /// immediately, which for "load the last console" would mean nothing at all.
+    /// </remarks>
+    /// <param name="loadLastConsole">Whether to come up in the console it went down in.</param>
+    /// <param name="recordAutomatically">Whether to start recording with the engine.</param>
+    public void SetStartup(bool loadLastConsole, bool recordAutomatically)
+    {
+        options.LoadLastConsole = loadLastConsole;
+        options.RecordAutomatically = recordAutomatically;
+
+        logger.LogInformation(
+            "Startup: load last console {Load}, record automatically {Record}. Both take effect at the next start.",
+            loadLastConsole,
+            recordAutomatically);
+    }
+
     GraphConfig LoadOrDiscover(IAudioBackend devices)
     {
-        GraphConfig config = store.Load(options.ConsolePath);
+        GraphConfig config = options.LoadLastConsole ? store.Load(options.ConsolePath) : new GraphConfig();
 
         if (config.Channels.Count > 0)
         {

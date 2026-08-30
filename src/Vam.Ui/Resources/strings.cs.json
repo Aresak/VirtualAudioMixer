@@ -229,7 +229,7 @@
   "settings.meterRate": "Obnovování měřáků",
   "settings.loadLast": "Načíst poslední konfiguraci při startu",
   "settings.autoRecord": "Začít nahrávat s enginem",
-  "settings.startupWhy": "Nikdo nenastavuje mixpult deset minut před relací. Engine naběhne ve stavu, ve kterém skončil, a ani jedno z tohohle zatím není přepínač.",
+  "settings.startupWhy": "Obojí se projeví až při dalším startu, ne teď — u „načíst poslední konzoli\" to ani jinak nejde. Nikdo nenastavuje mixpult deset minut před relací, takže engine naběhne ve stavu, ve kterém skončil.",
   "help.theme": "Záměrně to není volba. Jasná obrazovka vedle kameramana v přítmí sálu je problém a konzole, která by se řídila systémovým motivem, by se jím stala, aniž by to kdokoli zvolil.",
   "help.ballistics": "Špička stoupá rychle a klesá pomalu, což je to, co chceš pro zachycení překmitu. Průměr se kreslí pod ní jako tělo sloupce, protože ten odpovídá tomu, jak to znělo.",
   "help.loadLast": "Vrátí se ta konzole, kterou operátor celou schůzi nastavoval. Ukládá se při odchodu, ne až když si o to někdo řekne.",

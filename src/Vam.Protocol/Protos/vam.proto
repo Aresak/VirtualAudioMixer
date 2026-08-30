@@ -73,6 +73,12 @@ message ConsoleState {
   // GetDiagnostics: the status bar is on every view, and an operator glancing at it must not be
   // paying for a drift history nobody opened.
   EngineHealth health = 6;
+  StartupOptions startup = 7;
+}
+
+message StartupOptions {
+  bool load_last_console = 1;
+  bool record_automatically = 2;
 }
 
 message EngineHealth {
@@ -191,6 +197,8 @@ message RecordingState {
   int64 frames_written = 3;
   int64 dropped_frames = 4;
   int64 free_bytes = 5;
+  // E4. Whether the engine starts recording on its own.
+  bool starts_automatically = 6;
 }
 
 message Command {
@@ -222,6 +230,7 @@ message Command {
     SetBusColour set_bus_colour = 29;
     SetBusOutputDevice set_bus_output_device = 30;
     SetChannelDevice set_channel_device = 31;
+    SetStartupOptions set_startup_options = 32;
     ClearClip clear_clip = 24;
     SaveChainPreset save_chain_preset = 25;
     ApplyChainPreset apply_chain_preset = 26;
@@ -261,6 +270,12 @@ message AddModifier { ChainTarget target = 1; string modifier_id = 2; int32 at_i
 message RemoveModifier { ChainTarget target = 1; int32 link_index = 2; }
 message MoveModifier { ChainTarget target = 1; int32 from_index = 2; int32 to_index = 3; }
 message SetRecording { bool recording = 1; string directory = 2; }
+// H3 and E4. The two startup behaviours an operator may want to change, and nothing else — every
+// other setting on that view is deliberately not a choice.
+message SetStartupOptions {
+  bool load_last_console = 1;
+  bool record_automatically = 2;
+}
 // A bus's role changes exactly three behaviours - its default send tap, whether it obeys solo, and
 // whether it needs an output device - so changing it is one command rather than rebuilding the bus.
 message SetBusRole { int32 bus_index = 1; string role = 2; }

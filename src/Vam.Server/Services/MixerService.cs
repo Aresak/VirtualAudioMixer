@@ -347,6 +347,13 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
             case Command.KindOneofCase.SetChannelDevice:
                 return AimChannel(request.SetChannelDevice);
 
+            case Command.KindOneofCase.SetStartupOptions:
+                engine.SetStartup(
+                    request.SetStartupOptions.LoadLastConsole,
+                    request.SetStartupOptions.RecordAutomatically);
+
+                return Accept();
+
             case Command.KindOneofCase.ClearClip:
                 // F1. The one command that touches the meters rather than the graph.
                 engine.Meters?.ClearClip(request.ClearClip.ChannelIndex);
@@ -674,6 +681,11 @@ public sealed class MixerService(VamEngine engine, ILogger<MixerService> logger)
         state.Automix = BuildAutomix(config);
         state.Recording = BuildRecording();
         state.Health = BuildHealth();
+        state.Startup = new StartupOptions
+        {
+            LoadLastConsole = engine.Startup.LoadLastConsole,
+            RecordAutomatically = engine.Startup.RecordAutomatically
+        };
 
         return state;
     }

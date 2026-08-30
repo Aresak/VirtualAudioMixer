@@ -229,7 +229,7 @@
   "settings.meterRate": "Meter refresh",
   "settings.loadLast": "Load last configuration on start",
   "settings.autoRecord": "Start recording with the engine",
-  "settings.startupWhy": "Nobody configures a mixer ten minutes before a session. The engine comes up in the state it went down in, and neither of these is a switch yet.",
+  "settings.startupWhy": "Both take effect at the next start rather than now — \"load the last console\" could not mean anything else. Nobody configures a mixer ten minutes before a session, so the engine comes up in the state it went down in.",
   "help.theme": "Deliberately not a choice. A bright screen next to a camera operator in a dim chamber is a problem, and a console that followed a system theme would become one without anybody choosing it.",
   "help.ballistics": "Peak rises fast and falls slowly, which is what you want for spotting an overshoot. The average is drawn under it as the body of the bar, because it is what the level sounded like.",
   "help.loadLast": "The console an operator spent a meeting setting up is the one that comes back. It is saved on the way out rather than only when somebody asks.",

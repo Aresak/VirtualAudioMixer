@@ -79,6 +79,37 @@ public sealed class ConsoleFixture
     /// <param name="value">The value.</param>
     public void Feed(int deviceIndex, float value) => Array.Fill(deviceBuffers[deviceIndex], value);
 
+    /// <summary>
+    /// Fills one device's buffer from a function of the frame index.
+    /// </summary>
+    /// <remarks>
+    /// For anything that needs audio rather than a constant. A constant is not a signal: the
+    /// detector rejects it, the high-pass removes it entirely and a denoise sees no spectrum at all,
+    /// so a test driven on constants exercises the arithmetic and none of the decisions.
+    /// </remarks>
+    /// <summary>One device's buffer, to be written into directly.</summary>
+    /// <remarks>
+    /// For a caller that would otherwise pass a lambda per block. A closure allocated every block is
+    /// outside the audio path and still makes the collector run inside it.
+    /// </remarks>
+    /// <param name="deviceIndex">Which device.</param>
+    /// <returns>Its buffer.</returns>
+    public Span<float> DeviceBuffer(int deviceIndex) => deviceBuffers[deviceIndex];
+
+    /// <param name="deviceIndex">Which device.</param>
+    /// <param name="sample">What each frame should be.</param>
+    public void Fill(int deviceIndex, Func<int, float> sample)
+    {
+        ArgumentNullException.ThrowIfNull(sample);
+
+        float[] buffer = deviceBuffers[deviceIndex];
+
+        for (int frame = 0; frame < buffer.Length; frame++)
+        {
+            buffer[frame] = sample(frame);
+        }
+    }
+
     /// <summary>Renders one block.</summary>
     /// <param name="outputChannelCount">Channels the primary output presents.</param>
     public void Render(int outputChannelCount = 2)

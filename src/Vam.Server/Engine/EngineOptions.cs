@@ -50,7 +50,17 @@ public sealed record EngineOptions
             "recordings");
 
     /// <summary>Whether to record from the moment the engine starts. E4.</summary>
-    public bool RecordAutomatically { get; init; } = true;
+    public bool RecordAutomatically { get; set; } = true;
+
+    /// <summary>
+    /// Whether the engine comes up in the console it went down in. H3.
+    /// </summary>
+    /// <remarks>
+    /// On, and the only reason it can be turned off is a machine whose saved console names devices
+    /// that have gone: starting from what is plugged in is then faster than editing a file. Nobody
+    /// configures a mixer ten minutes before a session.
+    /// </remarks>
+    public bool LoadLastConsole { get; set; } = true;
 
     /// <summary>How long a session is assumed to run, for the disk projection.</summary>
     public TimeSpan ExpectedSessionDuration { get; init; } = TimeSpan.FromHours(4);
