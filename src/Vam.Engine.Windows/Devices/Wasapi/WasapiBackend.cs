@@ -72,10 +72,31 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
     }
 
     /// <inheritdoc />
-    /// <exception cref="NotSupportedException">Always. Render is VAM-012 and is not written yet.</exception>
-    public IRenderStream OpenRender(AudioDeviceId deviceId, RenderOptions options) =>
-        throw new NotSupportedException(
-            "WASAPI render is VAM-012 and is not implemented. Capture works; nothing plays out yet.");
+    public IRenderStream OpenRender(AudioDeviceId deviceId, RenderOptions options)
+    {
+        MMDevice device = Resolve(deviceId);
+        AudioClient client = device.CreateAudioClient();
+
+        try
+        {
+            ShareMode granted = Initialise(client, deviceId, options.ShareMode, options.BufferDuration);
+            WaveFormat format = client.MixFormat;
+
+            return new WasapiRenderStream(
+                deviceId,
+                device,
+                client,
+                new AudioStreamFormat(format.SampleRate, format.Channels, client.BufferSize, granted),
+                format,
+                logger);
+        }
+        catch
+        {
+            client.Dispose();
+            device.Dispose();
+            throw;
+        }
+    }
 
     /// <inheritdoc />
     public void Dispose() => enumerator.Dispose();
