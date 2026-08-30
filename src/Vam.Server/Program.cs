@@ -20,6 +20,15 @@ builder.WebHost.ConfigureKestrel(kestrel =>
     kestrel.ConfigureEndpointDefaults(endpoint =>
         endpoint.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http2));
 
+// The address is the engine's own, not a launch profile's. A console looking for an engine on this
+// machine has to be able to assume a port, and a port that changes depending on how the process was
+// started is not one it can assume.
+//
+// Localhost by default. An engine reachable from the network is a decision an operator makes, not
+// one this file makes for them: set Vam:Listen to http://0.0.0.0:5211 to allow consoles on other
+// machines. --urls still overrides, which is what a second engine on one machine needs.
+builder.WebHost.UseUrls(builder.Configuration["Vam:Listen"] ?? "http://localhost:5211");
+
 // One log stream feeding a rotated file, the in-memory tail the diagnostics view reads, and Sentry
 // when a key is configured. The key comes from configuration or the environment and never from
 // source. I4.
