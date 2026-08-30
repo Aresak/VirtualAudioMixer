@@ -1,0 +1,147 @@
+@inherits VamComponent
+@inject IPlatformServices Platform
+
+<div class="view">
+    <div class="pad">
+        <h1>@L["recording.title"]</h1>
+        <p class="sub">@L["recording.sub"]</p>
+
+        @if (Recording is not { } recording)
+        {
+            <p class="sub">@L["mixer.notConnected"]</p>
+        }
+        else
+        {
+            <div class="card">
+                <div class="between">
+                    <span class="row">
+                        @if (recording.IsRecording)
+                        {
+                            <span class="dot rec"></span>
+                        }
+                        <span class="lbl">@(recording.IsRecording ? L["status.recording"] : L["status.idle"])</span>
+                    </span>
+
+                    @if (recording.IsRecording)
+                    {
+                        @*
+                            U8. Stopping ends a file that cannot be resumed, so it asks first and
+                            says what will happen rather than "are you sure".
+                        *@
+                        <ConfirmButton Label="@L["recording.stop"]"
+                                       Question="@L["recording.stopWhy"]"
+                                       Confirmed="StopAsync" />
+                    }
+                    else
+                    {
+                        <button type="button"
+                                class="btn pri"
+                                @onclick="StartAsync">@L["recording.start"]</button>
+                    }
+                </div>
+
+                <div class="kv"
+                     style="margin-top:14px">
+                    <span class="k">@L["recording.folder"]</span>
+                    <span class="v">@(recording.Directory.Length > 0 ? recording.Directory : directory)</span>
+                    <span class="k">@L["recording.written"]</span>
+                    <span class="v">@Duration(recording)</span>
+                    <span class="k">@L["recording.dropped"]</span>
+                    <span class="v @(recording.DroppedFrames == 0 ? "zero" : null)">@recording.DroppedFrames</span>
+                    <span class="k">@L["recording.free"]</span>
+                    <span class="v">@Gigabytes(recording.FreeBytes)</span>
+                </div>
+            </div>
+
+            <h2>@L["recording.captured"]</h2>
+
+            <div class="grid2">
+                <div class="card">
+                    @*
+                        E3. What is captured, stated rather than assumed. The raw inputs are the
+                        record: if the automixer misbehaves during a session, the session is still
+                        recoverable afterwards, and for a public body the multitrack is the record.
+                    *@
+                    @*
+                        Stated, not offered. Both are true and neither is a switch yet, and drawing
+                        them as switches that cannot be moved would be a control that teaches an
+                        operator the console is broken.
+                    *@
+                    <div class="kv">
+                        <span class="k">
+                            @L.Format("recording.allInputs", Channels)
+                            <InlineHelp Title="@L["recording.captured"]"
+                                        Body="@L["help.rawInputs"]" />
+                        </span>
+                        <span class="v"><span class="pill ok">@L["common.on"]</span></span>
+
+                        <span class="k">
+                            @L["recording.startWithEngine"]
+                            <InlineHelp Title="@L["recording.startWithEngine"]"
+                                        Body="@L["help.autoStart"]" />
+                        </span>
+                        <span class="v"><span class="pill ok">@L["common.on"]</span></span>
+                    </div>
+
+                    <p class="note">@L["recording.fixedWhy"]</p>
+                </div>
+
+                <div class="card">
+                    @* E5. *@
+                    <b class="lbl"
+                       style="font-size:13px">@L["recording.diskGuard"]</b>
+
+                    <div class="knob"
+                         style="margin-top:12px">
+                        <div class="between">
+                            <span>@L["recording.free"]</span>
+                            <span class="mono">@Gigabytes(recording.FreeBytes)</span>
+                        </div>
+                        <div class="slider"><i style="width:@(DiskBar(recording))%"></i></div>
+                    </div>
+
+                    <p class="sub"
+                       style="margin:10px 0 0">@L["recording.guardWhy"]</p>
+
+                    <div class="row"
+                         style="margin-top:12px">
+                        <span class="pill @(HoursLeft(recording) > 4 ? "ok" : "warn")">
+                            @L.Format("recording.roomFor", HoursLeft(recording).ToString("0.0", CultureInfo.InvariantCulture))
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <h2>@L["recording.folder"]</h2>
+
+            <div class="row">
+                <input type="text"
+                       @bind="directory"
+                       aria-label="@L["recording.folder"]"
+                       style="min-width:340px" />
+
+                @if (Platform.CanPickFolders)
+                {
+                    <button type="button"
+                            class="btn"
+                            @onclick="PickAsync">…</button>
+                }
+            </div>
+
+            @if (!Platform.CanPickFolders)
+            {
+                @*
+                    A browser cannot put up a native folder dialog, and the engine's disk is not the
+                    browser's disk anyway. Saying so beats a button that would do nothing.
+                *@
+                <p class="note">@L["recording.noPicker"]</p>
+            }
+
+            @if (refusal.Length > 0)
+            {
+                <p class="note"
+                   style="border-color:var(--bad);color:var(--bad)">@refusal</p>
+            }
+        }
+    </div>
+</div>

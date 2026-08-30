@@ -1,0 +1,16 @@
+@inherits VamComponent
+
+@*
+    D2a. One row per bus, full width, with a real touch target. The five-letter buttons this replaced
+    were four millimetres square on a laptop, which is fine until somebody has to switch a feed while
+    a council is watching.
+*@
+
+<b class="@Classes"
+   role="button"
+   tabindex="0"
+   title="@Title"
+   @onclick="ToggleAsync">
+    <span>@Bus.Name</span>
+    <em>@Suffix</em>
+</b>

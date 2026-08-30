@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Vam.Core\Vam.Core.csproj" />
+    <ProjectReference Include="..\..\src\Vam.Engine\Vam.Engine.csproj" />
   </ItemGroup>
 
 </Project>

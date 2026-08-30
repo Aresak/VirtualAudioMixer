@@ -1,0 +1,236 @@
+@inherits VamComponent
+@implements IDisposable
+
+@*
+    EPIC-11. K1 to K7, in tabs.
+
+    The rule for what lives here rather than on the mixer: if seeing it every day would train you to
+    ignore it, it goes here. The tabs follow from that — six panels on one scroll would train an
+    operator to scroll past the one they came for.
+
+    Polled while this view is open and by nothing else.
+*@
+
+<div class="view">
+    <div class="pad">
+        <h1>@L["diag.title"]</h1>
+        <p class="sub">@L["diag.sub"]</p>
+
+        <div class="tabs">
+            @foreach ((DiagnosticsTab id, string key) in Tabs)
+            {
+                <button type="button"
+                        class="@(tab == id ? "on" : null)"
+                        @onclick="() => tab = id">@L[key]</button>
+            }
+        </div>
+
+        @if (report is not { } state)
+        {
+            <p class="sub">@L["mixer.notConnected"]</p>
+        }
+        else
+        {
+            <div class="tab on">
+                @switch (tab)
+                {
+                    case DiagnosticsTab.Clocks:
+                        @* K1 and K2. *@
+                        <div class="tw">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>@L["diag.device"]</th>
+                                        <th>@L["diag.direction"]</th>
+                                        <th>@L["diag.nominal"]</th>
+                                        <th>@L["diag.measured"]</th>
+                                        <th>@L["diag.driftCol"]</th>
+                                        <th>@L["diag.correction"]</th>
+                                        <th>@L["diag.fill"]</th>
+                                        <th>@L["diag.under"]</th>
+                                        <th>@L["diag.over"]</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (DeviceClock device in state.DeviceClocks)
+                                    {
+                                        <tr>
+                                            <td>@device.Name</td>
+                                            <td>@device.Direction</td>
+                                            <td class="mono">@device.NominalRate.ToString("0", CultureInfo.InvariantCulture)</td>
+                                            <td class="mono">@device.MeasuredRate.ToString("0.000", CultureInfo.InvariantCulture)</td>
+                                            <td class="mono"
+                                                style="color:@DriftColour(device.DriftPpm)">
+                                                @device.DriftPpm.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture)
+                                            </td>
+                                            <td class="mono">@device.CorrectionPpm.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture)</td>
+                                            <td class="mono">@device.FillPercentage.ToString("0", CultureInfo.InvariantCulture)%</td>
+                                            <td class="mono @(device.Underruns == 0 ? "zero" : null)">@device.Underruns</td>
+                                            <td class="mono @(device.Overruns == 0 ? "zero" : null)">@device.Overruns</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <h2>@L["diag.clock"]</h2>
+
+                        <div class="card">
+                            <div class="kv">
+                                <span class="k">@L["diag.source"]</span>
+                                <span class="v">@(state.Clock.IsTimerFallback ? L["diag.fallbackTimer"] : state.Clock.SourceName)</span>
+                                <span class="k">@L["status.block"]</span>
+                                <span class="v">@state.Clock.BlockFrames</span>
+                            </div>
+
+                            @if (state.Clock.IsTimerFallback)
+                            {
+                                <p class="note">@L["diag.fallbackWhy"]</p>
+                            }
+                        </div>
+
+                        <h2>@L["diag.drift"] <span class="chip">@L["diag.perDevice"]</span></h2>
+
+                        <DriftChart Points="state.Drift"
+                                    Names="ChannelNames" />
+                        break;
+
+                    case DiagnosticsTab.Performance:
+                        @* K4 and K5. *@
+                        <div class="grid2">
+                            <div class="card">
+                                <h2>@L["diag.callbacks"]</h2>
+                                <Histogram Buckets="state.Callbacks.Buckets"
+                                           BucketWidth="state.Callbacks.BucketWidthFraction" />
+                                <div class="kv"
+                                     style="margin-top:10px">
+                                    <span class="k">@L["diag.worst"]</span>
+                                    <span class="v">@Percent(state.Callbacks.WorstFraction)</span>
+                                    <span class="k">@L["diag.overBudget"]</span>
+                                    <span class="v @(state.Callbacks.Overruns == 0 ? "zero" : null)">@state.Callbacks.Overruns</span>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <h2>@L["diag.gc"]</h2>
+                                <div class="kv">
+                                    <span class="k">@L["diag.audioThread"]</span>
+                                    <span class="v @(state.Allocations.AudioThreadBytes == 0 ? "zero" : null)">
+                                        @state.Allocations.AudioThreadBytes B
+                                    </span>
+                                    <span class="k">Gen 0 / 1 / 2</span>
+                                    <span class="v">
+                                        @state.Allocations.Gen0Collections / @state.Allocations.Gen1Collections / @state.Allocations.Gen2Collections
+                                    </span>
+                                    <span class="k">@L["diag.managed"]</span>
+                                    <span class="v">@Megabytes(state.Allocations.TotalManagedBytes)</span>
+                                    <span class="k">@L["diag.pause"]</span>
+                                    <span class="v">@state.Allocations.LongestPauseMs.ToString("0.0", CultureInfo.InvariantCulture) ms</span>
+                                </div>
+
+                                @*
+                                    The first row is the one that matters. Rule 1 says nothing in the
+                                    audio path allocates; a test asserts it on a quiet machine and
+                                    this asserts it on a real one, for hours, with whatever a
+                                    third party dropped into the chain.
+                                *@
+                                <p class="note">@L["diag.allocWhy"]</p>
+                            </div>
+                        </div>
+
+                        <h2>@L["diag.cost"]</h2>
+
+                        <div class="tw">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>@L["common.channel"]</th>
+                                        <th>@L["diag.modifier"]</th>
+                                        <th>@L["diag.average"]</th>
+                                        <th>@L["diag.worst"]</th>
+                                        <th>@L["diag.overBudget"]</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (ModifierCostState cost in state.Costs)
+                                    {
+                                        <tr>
+                                            <td>@NameOf(cost.ChannelIndex)</td>
+                                            <td>
+                                                @cost.ModifierId
+                                                @if (cost.IsSwitchedOut)
+                                                {
+                                                    <span class="pill idle">@L["strip.bypassed"]</span>
+                                                }
+                                            </td>
+                                            <td class="mono">@Percent(cost.AverageFraction)</td>
+                                            <td class="mono">@Percent(cost.WorstFraction)</td>
+                                            <td class="mono @(cost.Overruns == 0 ? "zero" : null)">@cost.Overruns</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        break;
+
+                    case DiagnosticsTab.Dropouts:
+                        @* K3. A list, not a counter. *@
+                        @if (state.Dropouts.Count == 0)
+                        {
+                            <p class="sub">@L["diag.noDropouts"]</p>
+                        }
+                        else
+                        {
+                            <div class="tw">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>@L["diag.when"]</th>
+                                            <th>@L["diag.endpoint"]</th>
+                                            <th>@L["diag.kind"]</th>
+                                            <th>@L["diag.frames"]</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (DropoutEntry entry in state.Dropouts.AsEnumerable().Reverse())
+                                        {
+                                            <tr>
+                                                <td class="mono">@When(entry.TimestampTicks)</td>
+                                                <td>@entry.Endpoint</td>
+                                                <td><span class="pill warn">@entry.Kind</span></td>
+                                                <td class="mono">@entry.Frames</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <p class="note">@L["diag.dropoutWhy"]</p>
+                        }
+                        break;
+
+                    case DiagnosticsTab.Log:
+                        @* K7. *@
+                        <div class="row">
+                            <input type="text" @bind="filter" @bind:event="oninput"
+                                   placeholder="@L["diag.filter"]" aria-label="@L["diag.log"]" />
+                            <span class="chip">@Filtered(state).Count</span>
+                        </div>
+
+                        <div class="logbox"
+                             style="margin-top:10px">
+                            @foreach (LogLine line in Filtered(state))
+                            {
+                                <div>
+                                    <span class="t">@When(line.TimestampTicks) </span>
+                                    <span style="color:@LevelColour(line.Level)">@line.Level </span>
+                                    <span>@line.Message</span>
+                                </div>
+                            }
+                        </div>
+                        break;
+                }
+            </div>
+        }
+    </div>
+</div>

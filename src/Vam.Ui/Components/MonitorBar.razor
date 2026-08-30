@@ -1,0 +1,70 @@
+@inherits VamComponent
+
+@*
+    D5 and F7. What each pair of headphones hears, along the bottom of the mixer.
+
+    It lives here as well as on the Monitors view because during setup an operator changes it while
+    they are adjusting everything else — and walking to another view to switch a headphone feed means
+    losing sight of the meters that told you it needed switching.
+
+    Collapsible, because during a meeting it is the least useful row on the screen.
+*@
+
+<div class="monbar @(Shell.IsMonitorBarOpen ? null : "collapsed")">
+    <div class="mhead">
+        <b class="lbl"
+           style="font-size:12px;color:var(--ink-dim)">@L["mixer.monitors"]</b>
+        <span class="sub"
+              style="margin:0">@L["monitors.sub"]</span>
+        <span style="flex:1"></span>
+        <button type="button"
+                class="btn sm"
+                @onclick="() => Shell.IsMonitorBarOpen = !Shell.IsMonitorBarOpen">
+            @(Shell.IsMonitorBarOpen ? L["common.collapse"] : L["common.expand"])
+        </button>
+    </div>
+
+    @foreach (BusState monitor in Monitors)
+    {
+        <div class="monrow">
+            <span class="nm">@monitor.Name</span>
+
+            <span class="grp">
+                <span class="gl">@L["monitors.inputs"]</span>
+                @foreach (ChannelState channel in Channels)
+                {
+                    <button type="button"
+                            class="mchip @(IsOn(channel, monitor) ? "on" : null)"
+                            disabled="@IsExcluded(channel, monitor)"
+                            title="@(IsExcluded(channel, monitor) ? L["send.lockedWhy"] : channel.Name)"
+                            @onclick="() => ToggleAsync(channel, monitor)">
+                        @channel.Name
+                    </button>
+                }
+            </span>
+
+            @*
+                D9, bus-to-bus, is phase 1, so a monitor cannot yet be fed a whole bus — only the
+                inputs above. Saying so beats a row of chips that would do nothing when pressed.
+            *@
+            <span class="grp">
+                <span class="gl">@L["monitors.buses"]</span>
+                <span class="chip">@L["common.phaseOne"]</span>
+            </span>
+
+            <span style="flex:1"></span>
+            <span class="mono"
+                  style="font-size:11.5px;color:var(--ink-mute)">
+                @FaderScale.Format(monitor.GainDb) dB
+            </span>
+        </div>
+    }
+
+    @if (Monitors.Count == 0)
+    {
+        <div class="monrow">
+            <span class="sub"
+                  style="margin:0">@L["monitors.none"]</span>
+        </div>
+    }
+</div>

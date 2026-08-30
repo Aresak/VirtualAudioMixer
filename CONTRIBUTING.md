@@ -35,6 +35,58 @@ API — see the exception at the top of [LICENSE](LICENSE).
 If you would like a modifier bundled with VAM, that is welcome too, and then it
 follows the licensing below.
 
+## Packaging a release
+
+Two things a release must carry that a `dotnet build` does not produce.
+
+### `rnnoise.dll`
+
+The denoise. **VAM runs without it** — there is a managed spectral suppressor that
+takes over — but RNNoise is the better of the two and a release that omits it is a
+release that quietly ships the lesser one.
+
+Building it is a maintainer's job and never a user's. Somebody who downloaded an
+`.exe` should not be installing a C toolchain, and if they end up doing that, this
+step was skipped.
+
+There is a script. From an **x64 Native Tools Command Prompt for VS**:
+
+```
+tools\build-rnnoise.cmd
+```
+
+It clones RNNoise, downloads the trained model, checks the model against the
+sha256 upstream publishes, and builds. The DLL lands in `artifacts\`. Copy it
+beside `Vam.Server.exe` as `rnnoise.dll`.
+
+The script uses MSVC rather than the upstream autotools build, which would mean
+installing MSYS2 and a MinGW toolchain to produce one small dependency-free DLL.
+It compiles the AVX2 and SSE4.1 paths as separate translation units and leaves the
+rest at the x64 baseline, so one DLL runs fast on a modern CPU and still loads on
+an old one — RNNoise reads CPUID at startup and picks. The
+`Compiling without any vectorization` line it prints is the scalar fallback being
+built on purpose, not a misconfiguration.
+
+Check the log on the next start. It says which suppressor it picked, every time,
+and it is the only way to be sure the DLL loaded rather than being silently the
+wrong architecture.
+
+`dotnet test` is the other check. `RnnoiseSuppressorTests` skips itself when there
+is no `rnnoise.dll` beside the test binary and runs when there is, so copying the
+DLL there too turns a packaging step into something the suite can answer.
+
+Three things a fork could change that would make it load and misbehave rather than
+fail cleanly: it wants **480-sample frames at 48 kHz**, samples at **sixteen-bit
+scale rather than ±1**, and the entry points `rnnoise_create`, `rnnoise_destroy`
+and `rnnoise_process_frame`.
+
+### `THIRD-PARTY-NOTICES.md`
+
+Ships beside the binary. RNNoise is BSD-3-Clause, which permits binary
+redistribution **provided the copyright notice and disclaimer accompany it** —
+that file is where they accompany it, so leaving it out is the one packaging
+mistake here with a legal consequence rather than an audible one.
+
 ## Certificate of origin
 
 Contributions are accepted under the licence of the file you are changing — see
@@ -100,6 +152,25 @@ filter, so a plain `dotnet test` behaves the same way on your machine as it does
 in CI. Mark them with `[Trait("Category", TestCategories.LongRunning)]` and
 `SkipUnless = nameof(LongRunningTests.IsEnabled)`; there is a worked example in
 `tests/Vam.Engine.Tests/Harness/LongRunningCategoryTests.cs`.
+
+Tests that need a real microphone or speaker are gated separately, because a
+soak is skipped for being slow and a device test is skipped for the machine
+having nothing plugged in:
+
+```
+VAM_HARDWARE=1 dotnet test
+```
+
+or, in PowerShell:
+
+```
+$env:VAM_HARDWARE = "1"; dotnet test
+```
+
+These never run in CI — a hosted runner has no audio hardware, and a device test
+that passes there is a test that found nothing to check. Mark them with
+`[Trait("Category", TestCategories.NeedsHardware)]` and
+`SkipUnless = nameof(HardwareTests.IsEnabled)`.
 
 Anything touching the device layer or the mix graph needs a soak test, not a unit
 test. Clock drift between free-running USB devices does not show up in five

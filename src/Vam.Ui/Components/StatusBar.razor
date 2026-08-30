@@ -1,0 +1,82 @@
+@inherits VamComponent
+
+@*
+    U1. The things an operator glances at without stopping what they are doing: whether the console
+    is talking to an engine, how many dropouts there have been, how close the audio thread is to its
+    deadline, whether it is recording, and how long the session has been going.
+
+    The rate and the block size are deliberately not here. They are set once and never change, so a
+    number that never moves would train an operator to stop reading the bar. They live on the
+    diagnostics clock panel, which is where somebody goes to ask about them.
+*@
+
+<header class="statusbar">
+    <div class="brand"><b>@L["app.name"]</b></div>
+
+    <div class="stat"
+         title="@L["help.engine"]">
+        <span class="dot @ConnectionDotClass"></span>
+        <span class="k">@L["status.engine"]</span>
+        <span class="v">@ConnectionText</span>
+    </div>
+
+    @*
+        Zero is drawn green rather than grey. A dropout count is the one number on this bar that is
+        good news when it is nothing, and an operator should be able to confirm that from a distance.
+    *@
+    <div class="stat"
+         title="@L["help.dropouts"]">
+        <span class="k">@L["status.dropouts"]</span>
+        <span class="v @(Dropouts == 0 ? "zero" : null)">@Dropouts</span>
+    </div>
+
+    <div class="stat"
+         title="@L["help.load"]">
+        <span class="k">@L["status.load"]</span>
+        <span class="v"
+              style="color:@LoadColour">@Percent(Health?.Load ?? 0)</span>
+    </div>
+
+    <div class="stat"
+         title="@L["help.headroom"]">
+        <span class="k">@L["status.headroom"]</span>
+        <span class="v">@Percent(Health?.Headroom ?? 0)</span>
+    </div>
+
+    @if (Recording is { IsRecording: true })
+    {
+        <div class="stat">
+            <span class="dot rec"></span>
+            <span class="k">@L["status.recording"]</span>
+            <span class="v">@RecordedText</span>
+            <span class="k">·</span>
+            <span class="v">@Gigabytes(Recording.FreeBytes)</span>
+        </div>
+    }
+
+    <div class="stat">
+        <span class="k">@L["status.session"]</span>
+        <span class="v">@Uptime</span>
+    </div>
+
+    <div class="stat grow">
+        @*
+            C10. The global automix switch lives here rather than on the automix view, so it is one
+            click from any view when the automixer misbehaves mid-session — and it goes amber while
+            it is off, so nobody forgets it was switched off during setup and never switched back.
+        *@
+        <button type="button"
+                class="chip @(IsAutomixOn ? "on" : "warn")"
+                title="@L["help.automixSwitch"]"
+                @onclick="ToggleAutomixAsync">
+            @(IsAutomixOn ? L["status.automixOn"] : L["status.automixOff"])
+        </button>
+
+        @if (Session.StatusMessage.Length > 0)
+        {
+            <span class="chip bad">@Session.StatusMessage</span>
+        }
+
+        <span class="chip">@Session.ServerName</span>
+    </div>
+</header>

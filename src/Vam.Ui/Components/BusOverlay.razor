@@ -1,0 +1,123 @@
+@inherits VamComponent
+
+@if (Bus is { } bus)
+{
+    <aside class="ovl"
+           role="dialog"
+           aria-label="@bus.Name">
+        <div class="ohd">
+            <span class="nm">@bus.Name</span>
+            <span class="pill idle">@L["bus.role." + bus.Role.ToLowerInvariant()]</span>
+            <button type="button"
+                    class="btn sm"
+                    @onclick="Shell.CloseOverlay">@L["common.close"]</button>
+        </div>
+
+        <div class="obody">
+            <h2>@L["strip.name"]</h2>
+
+            <input type="text"
+                   value="@bus.Name"
+                   aria-label="@L["strip.name"]"
+                   @onchange="argument => RenameAsync(bus, argument)" />
+
+            <h2>@L["bus.output"]</h2>
+
+            <div class="card">
+                <div class="kv">
+                    <span class="k">@L["bus.role"]</span>
+                    <span class="v">
+                        <select value="@bus.Role"
+                                @onchange="argument => SetRoleAsync(bus, argument)" aria-label="@L["bus.role"]">
+                            <option value="Output">@L["bus.role.output"]</option>
+                            <option value="Monitor">@L["bus.role.monitor"]</option>
+                            <option value="Stream">@L["bus.role.stream"]</option>
+                        </select>
+                    </span>
+
+                    <span class="k">@L["bus.output"]</span>
+                    <span class="v">
+                        <select value="@bus.OutputDeviceId"
+                                aria-label="@L["bus.output"]"
+                                @onchange="argument => SetOutputAsync(bus, argument)">
+                            <option value="">@L["bus.none"]</option>
+                            @foreach (DeviceInfo device in Renders)
+                            {
+                                <option value="@device.Id">@device.Name</option>
+                            }
+                        </select>
+                    </span>
+
+                    <span class="k">@L["channel.colour"]</span>
+                    <span class="v row"
+                          style="gap:4px">
+                        @foreach (string colour in StripPalette.All)
+                        {
+                            <button type="button"
+                                    class="swatch"
+                                    style="background:@colour;width:18px;height:18px;border:1px solid @(colour == bus.Colour ? "var(--ink)" : "var(--line)")"
+                                    aria-label="@colour"
+                                    @onclick="() => SetColourAsync(bus, colour)"></button>
+                        }
+                    </span>
+
+                    <span class="k">@L["common.channel"]</span>
+                    <span class="v">@bus.ChannelCount</span>
+
+                    <span class="k">@L["bus.tap"]</span>
+                    <span class="v">@(bus.IsPreFader ? L["send.pre"] : L["send.post"])</span>
+                </div>
+            </div>
+
+            <h2>@L["preset.title"]</h2>
+
+            <div class="card">
+                <PresetBar Target="@(new ChainTarget { Index = bus.Index, IsBus = true })" />
+            </div>
+
+            <h2>@L["strip.chain"] <span class="chip">@L["mixer.reorder"]</span></h2>
+
+            @*
+                D6. The same editor a strip's chain uses, because a bus chain is a strip chain on a
+                summed signal and nothing about editing it differs.
+            *@
+            <ChainEditor Target="@(new ChainTarget { Index = bus.Index, IsBus = true })"
+                         Chain="bus.Chain"
+                         HasMandatoryLimiter="bus.HasMandatoryLimiter" />
+
+            <h2>@L["send.locked"]</h2>
+
+            @if (bus.ExcludedChannels.Count == 0)
+            {
+                <p class="sub">@L["bus.nothingExcluded"]</p>
+            }
+            else
+            {
+                @*
+                    D4. Shown, never offered. The engine works the exclusions out from the declared
+                    pairing of a capture endpoint and a render endpoint, and there is deliberately no
+                    control here that could change one: a mix-minus somebody can switch off is a
+                    mix-minus that will be switched off, once, during a live meeting.
+                *@
+                <ul style="margin:0;padding-left:18px">
+                    @foreach (int index in bus.ExcludedChannels)
+                    {
+                        <li>@NameOf(index)</li>
+                    }
+                </ul>
+
+                <p class="note">@L["send.lockedWhy"]</p>
+            }
+
+            <h2>@L["common.remove"]</h2>
+
+            @*
+                U8. Named, not "RemoveAsync". A destructive control that does not say what it will
+                destroy is one an operator confirms without reading, which is the same as not asking.
+            *@
+            <ConfirmButton Label="@L.Format("bus.remove", bus.Name)"
+                           Question="@L.Format("bus.removeWhy", bus.Name)"
+                           Confirmed="() => RemoveAsync(bus)" />
+        </div>
+    </aside>
+}

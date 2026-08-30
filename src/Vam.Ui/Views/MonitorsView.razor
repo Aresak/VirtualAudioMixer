@@ -1,0 +1,105 @@
+@inherits VamComponent
+
+@*
+    D5 and F7. One panel per monitor bus: a source grid, a level, which physical output drives it,
+    and a warning when it has none.
+
+    A monitor is a bus with the monitor role, not a monitor of the master. That is why adding one is
+    the same code path as adding any other bus, and why there is a source grid here rather than a
+    single "listen to" dropdown.
+*@
+
+<div class="view">
+    <div class="pad">
+        <h1>@L["view.monitors"]</h1>
+        <p class="sub">@L["monitors.intro"]</p>
+
+        <div class="grid2">
+            @foreach (BusState monitor in Monitors)
+            {
+                <div class="card">
+                    <div class="between">
+                        <b class="lbl"
+                           style="font-size:14px">@monitor.Name</b>
+
+                        @*
+                            Amber until an output device is assigned. A monitor bus with nowhere to
+                            go is a silent headphone feed, and a silent headphone feed is half an
+                            hour of hunting during a meeting.
+                        *@
+                        <span class="pill @(HasOutput(monitor) ? "ok" : "warn")">
+                            @(HasOutput(monitor) ? L["monitors.active"] : L["monitors.noOutput"])
+                        </span>
+                    </div>
+
+                    <div class="kv"
+                         style="margin-top:9px">
+                        <span class="k">@L["bus.output"]</span>
+                        <span class="v">
+                            <select value="@monitor.OutputDeviceId"
+                                    aria-label="@L["bus.output"]"
+                                    @onchange="argument => SetOutputAsync(monitor, argument)">
+                                <option value="">@L["bus.none"]</option>
+                                @foreach (DeviceInfo device in Renders)
+                                {
+                                    <option value="@device.Id">@device.Name</option>
+                                }
+                            </select>
+                        </span>
+                        <span class="k">@L["bus.gain"]</span>
+                        <span class="v">@FaderScale.Format(monitor.GainDb) dB</span>
+                        <span class="k">@L["bus.limiter"]</span>
+                        <span class="v">@monitor.LimiterReductionDb.ToString("0.0", CultureInfo.InvariantCulture) dB</span>
+                    </div>
+
+                    <div class="srcgroup">
+                        <span class="gl">@L["monitors.inputs"]</span>
+                        <div class="srcgrid">
+                            @foreach (ChannelState channel in Channels)
+                            {
+                                <b class="@(IsOn(channel, monitor) ? "on" : null)"
+                                   role="button" tabindex="0"
+                                   title="@(IsExcluded(channel, monitor) ? L["send.lockedWhy"] : channel.Name)"
+                                   @onclick="() => ToggleAsync(channel, monitor)">
+                                    <span class="swatch"
+                                          style="background:@Colour(channel)"></span>
+                                    @channel.Name
+                                    @if (IsExcluded(channel, monitor))
+                                    {
+                                        <span class="pill bad"
+                                              style="margin-left:auto">N−1</span>
+                                    }
+                                </b>
+                            }
+                        </div>
+                    </div>
+
+                    @*
+                        D9, bus-to-bus, is phase 1, so a monitor cannot yet be fed a whole bus. Said
+                        rather than drawn as chips that would do nothing when pressed.
+                    *@
+                    <div class="srcgroup">
+                        <span class="gl">@L["monitors.buses"]</span>
+                        <p class="sub"
+                           style="margin:0">@L["monitors.busesLater"]</p>
+                    </div>
+
+                    <div class="row"
+                         style="margin-top:11px">
+                        <span class="sub"
+                              style="margin:0;flex:1">@L["monitors.soloWins"]</span>
+                        <ConfirmButton Label="@L.Format("bus.remove", monitor.Name)"
+                                       Question="@L.Format("monitors.removeWhy", monitor.Name)"
+                                       Confirmed="() => RemoveAsync(monitor)" />
+                    </div>
+                </div>
+            }
+
+            <button type="button" class="card" style="border-style:dashed;color:var(--ink-mute);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:150px"
+                    @onclick="AddAsync">
+                <span style="font-size:28px;font-family:var(--f-cond);line-height:1">＋</span>
+                <span class="lbl">@L["monitors.add"]</span>
+            </button>
+        </div>
+    </div>
+</div>

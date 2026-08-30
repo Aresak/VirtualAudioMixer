@@ -1,0 +1,471 @@
+syntax = "proto3";
+
+package vam.v1;
+
+option csharp_namespace = "Vam.Protocol.V1";
+
+// The control surface for a VAM engine.
+//
+// Everything a console can do goes through here, including the one running on the same machine.
+// That is deliberate: if the local client used a private path, the remote path would be the one
+// nobody exercised until somebody needed it during a meeting.
+service Mixer {
+  // Agreed before anything else. An old client meeting a new server has to fail with a sentence a
+  // person can read, not by subtly misbehaving three commands later.
+  rpc Hello(HelloRequest) returns (HelloReply);
+
+  // The whole console as it stands.
+  rpc GetConsole(Empty) returns (ConsoleState);
+
+  // One change. Applied on the control thread and published as a snapshot.
+  rpc Apply(Command) returns (CommandReply);
+
+  // Levels, at meter rate, on its own stream. A client that cannot keep up throttles its meters
+  // rather than its faders, which is why this is not multiplexed with the commands.
+  rpc StreamMeters(Empty) returns (stream MeterFrame);
+
+  // Devices arriving and leaving, faults, modifiers switched out for overrunning.
+  rpc StreamEvents(Empty) returns (stream EngineEvent);
+
+  // What the endpoints on the engine's machine are. A console on a laptop cannot enumerate the
+  // sound cards of the machine wired to the microphones, and asking it to would make the remote
+  // case quietly different from the local one.
+  rpc ListDevices(Empty) returns (DeviceList);
+
+  // K1 to K7, in one reply. Polled by the diagnostics view while it is open and by nothing else:
+  // an operator running a meeting is not paying for a drift history nobody is looking at.
+  rpc GetDiagnostics(Empty) returns (DiagnosticsState);
+
+  // Every modifier this engine has, and what each of them takes. The console cannot know: a build
+  // with a third-party modifier dropped in has ones this client has never heard of.
+  rpc ListModifiers(Empty) returns (ModifierCatalogue);
+
+  // B12. The chain presets this engine has. Kept by the engine rather than by each console, so a
+  // preset saved at the desk is there on the tablet.
+  rpc ListChainPresets(Empty) returns (ChainPresetList);
+}
+
+message Empty {}
+
+message HelloRequest {
+  // What the client speaks.
+  int32 protocol_version = 1;
+  string client_name = 2;
+}
+
+message HelloReply {
+  bool accepted = 1;
+  int32 protocol_version = 2;
+  string server_name = 3;
+  // Why not, when it was refused. Written for a person rather than for a log.
+  string reason = 4;
+  int32 sample_rate = 5;
+  int32 block_frames = 6;
+}
+
+message ConsoleState {
+  repeated ChannelState channels = 1;
+  repeated BusState buses = 2;
+  repeated SendState sends = 3;
+  AutomixState automix = 4;
+  RecordingState recording = 5;
+  // U1. The handful of numbers the status bar shows, carried with the console rather than behind
+  // GetDiagnostics: the status bar is on every view, and an operator glancing at it must not be
+  // paying for a drift history nobody opened.
+  EngineHealth health = 6;
+  StartupOptions startup = 7;
+}
+
+message StartupOptions {
+  bool load_last_console = 1;
+  bool record_automatically = 2;
+}
+
+message EngineHealth {
+  // How much of the callback deadline the worst recent block used, from 0 to 1. F6.
+  double load = 1;
+  // What is left of it. The number an operator actually reads, because it is the one that runs out.
+  double headroom = 2;
+  int64 dropouts = 3;
+  // Since the engine started, not since this console connected. The engine outlives every console.
+  int64 uptime_ticks = 4;
+  bool is_timer_fallback = 5;
+}
+
+message ChannelState {
+  int32 index = 1;
+  string name = 2;
+  string device_id = 3;
+  string device_name = 4;
+  int32 channel_count = 5;
+  double trim_db = 6;
+  double fader_db = 7;
+  bool is_muted = 8;
+  bool is_soloed = 9;
+  bool is_polarity_inverted = 10;
+  // B7. Pre-fade listen. Replaces what the monitors carry with the strips being inspected, taken
+  // before the fader so a strip pulled all the way down can still be checked.
+  bool is_pre_fade_listen = 23;
+  bool is_mono_fold = 11;
+  bool participates_in_automix = 12;
+  double automix_weight = 13;
+  // What the device is really running at, and how far that is from what it claims.
+  double measured_sample_rate = 14;
+  double drift_ppm = 15;
+  // Present, absent, faulted.
+  string device_state = 16;
+  repeated ModifierState chain = 17;
+  // U5. Set by the operator, kept by the engine, so every console shows the same room the same way.
+  string colour = 18;
+  // B12. Which preset this chain came from, and whether it has been changed since. An operator who
+  // has drifted away from a preset needs to know before they save over it.
+  string preset_name = 19;
+  bool is_preset_modified = 20;
+  // D2. The send level for each bus, so the console can show and change it without a second call.
+  repeated double send_levels_db = 21;
+  // B8. Where the strip sits across a stereo bus, -1 to 1. Irrelevant for a mono stream and not
+  // irrelevant at all for a monitor somebody wears for two hours.
+  double pan = 22;
+}
+
+message ModifierState {
+  string link_id = 1;
+  string modifier_id = 2;
+  string name = 3;
+  bool is_bypassed = 4;
+  repeated ParameterState parameters = 5;
+  // What it is costing, as a fraction of a block.
+  double cost_fraction = 6;
+}
+
+message ParameterState {
+  string id = 1;
+  string name = 2;
+  string unit = 3;
+  double value = 4;
+  double minimum = 5;
+  double maximum = 6;
+}
+
+message BusState {
+  int32 index = 1;
+  string name = 2;
+  // output, monitor or stream.
+  string role = 3;
+  int32 channel_count = 4;
+  double gain_db = 5;
+  bool is_muted = 6;
+  string output_device_id = 7;
+  string colour = 8;
+  // Which strips this bus refuses, and why. D4 works it out from the declared pairing rather than
+  // taking it as configuration, and the console shows the answer rather than offering the question.
+  repeated int32 excluded_channels = 9;
+  // D6. What the bus limiter is taking off, in decibels. Zero when it is not working.
+  double limiter_reduction_db = 10;
+  repeated ModifierState chain = 13;
+  // D6. True when the engine added the limiter itself because this is a stream bus. The console
+  // shows it as a link that cannot be removed rather than hiding it, so an operator can see what is
+  // actually in the path.
+  bool has_mandatory_limiter = 14;
+  // D8. Monitor sends are pre-fader by default, so moving a fader does not change what the person
+  // in the chair hears.
+  bool is_pre_fader = 11;
+  string output_device_name = 12;
+}
+
+message SendState {
+  int32 channel_index = 1;
+  int32 bus_index = 2;
+  // off, on, or excluded_mix_minus. The last cannot be changed, and the server says why.
+  string state = 3;
+  double level_db = 4;
+}
+
+message AutomixState {
+  bool is_bypassed = 1;
+  double depth_db = 2;
+  double response_ms = 3;
+  // Continuous, from the participation ratio rather than a count above a threshold.
+  double open_microphones = 4;
+  repeated double shares = 5;
+  repeated double gains_db = 6;
+}
+
+message RecordingState {
+  bool is_recording = 1;
+  string directory = 2;
+  // How long the recording has been running, in frames. The longest track rather than the sum of
+  // them: every track is written from the same clock, so they agree, and summing would make a
+  // three-track session appear to run three times faster than the session it is part of.
+  int64 frames_written = 3;
+
+  // A total, unlike the above. A frame lost on any track is a frame lost.
+  int64 dropped_frames = 4;
+  int64 free_bytes = 5;
+  // E4. Whether the engine starts recording on its own.
+  bool starts_automatically = 6;
+}
+
+message Command {
+  oneof kind {
+    SetFader set_fader = 1;
+    SetTrim set_trim = 2;
+    SetFlag set_flag = 3;
+    SetBusGain set_bus_gain = 4;
+    SetBusMuted set_bus_muted = 5;
+    SetSend set_send = 6;
+    AddBus add_bus = 7;
+    RemoveBus remove_bus = 8;
+    SetAutomix set_automix = 9;
+    SetModifierBypass set_modifier_bypass = 10;
+    SetModifierParameter set_modifier_parameter = 11;
+    SetChannelName set_channel_name = 12;
+    SetChannelColour set_channel_colour = 13;
+    AddChannel add_channel = 14;
+    RemoveChannel remove_channel = 15;
+    MoveChannel move_channel = 16;
+    AddModifier add_modifier = 17;
+    RemoveModifier remove_modifier = 18;
+    MoveModifier move_modifier = 19;
+    SetRecording set_recording = 20;
+    SetBusName set_bus_name = 21;
+    SetBusRole set_bus_role = 22;
+    SetAutomixWeight set_automix_weight = 23;
+    SetPan set_pan = 28;
+    SetBusColour set_bus_colour = 29;
+    SetBusOutputDevice set_bus_output_device = 30;
+    SetChannelDevice set_channel_device = 31;
+    SetStartupOptions set_startup_options = 32;
+    ClearClip clear_clip = 24;
+    SaveChainPreset save_chain_preset = 25;
+    ApplyChainPreset apply_chain_preset = 26;
+    DeleteChainPreset delete_chain_preset = 27;
+    Shutdown shutdown = 33;
+  }
+}
+
+// Stops the engine. Asked for rather than done to it: the process saves the console, closes the
+// recording files and lets go of the devices, none of which happens if something kills it instead.
+//
+// A console does not decide this on its own. A session outlives every console by design - G1 - so
+// the only thing that should end one is a person saying so.
+message Shutdown { string reason = 1; }
+
+message SetFader { int32 channel_index = 1; double decibels = 2; }
+message SetTrim { int32 channel_index = 1; double decibels = 2; }
+message SetPan { int32 channel_index = 1; double pan = 2; }
+message SetFlag { int32 channel_index = 1; string flag = 2; bool enabled = 3; }
+message SetBusGain { int32 bus_index = 1; double decibels = 2; }
+message SetBusMuted { int32 bus_index = 1; bool muted = 2; }
+message SetSend { int32 channel_index = 1; int32 bus_index = 2; bool on = 3; double decibels = 4; }
+message AddBus { string name = 1; string role = 2; int32 channel_count = 3; string output_device_id = 4; }
+message RemoveBus { int32 bus_index = 1; }
+message SetAutomix { bool bypassed = 1; double depth_db = 2; double response_ms = 3; }
+// A chain belongs to a strip or to a bus, and every command that edits one says which. A single
+// index that meant a strip when positive and a bus when negative is an index somebody eventually
+// reads wrongly, and this one decides what a public stream sounds like.
+message ChainTarget {
+  int32 index = 1;
+  bool is_bus = 2;
+}
+
+message SetModifierBypass { ChainTarget target = 1; int32 link_index = 2; bool bypassed = 3; }
+message SetModifierParameter { ChainTarget target = 1; int32 link_index = 2; string parameter_id = 3; double value = 4; }
+
+message SetChannelName { int32 channel_index = 1; string name = 2; }
+message SetChannelColour { int32 channel_index = 1; string colour = 2; }
+message AddChannel { string name = 1; string device_id = 2; int32 channel_count = 3; bool participates_in_automix = 4; }
+message RemoveChannel { int32 channel_index = 1; }
+// U13. From and to rather than a whole order, so two consoles reordering at once cannot silently
+// undo each other's work by each sending the list they started from.
+message MoveChannel { int32 from_index = 1; int32 to_index = 2; }
+message AddModifier { ChainTarget target = 1; string modifier_id = 2; int32 at_index = 3; }
+message RemoveModifier { ChainTarget target = 1; int32 link_index = 2; }
+message MoveModifier { ChainTarget target = 1; int32 from_index = 2; int32 to_index = 3; }
+message SetRecording { bool recording = 1; string directory = 2; }
+// H3 and E4. The two startup behaviours an operator may want to change, and nothing else — every
+// other setting on that view is deliberately not a choice.
+message SetStartupOptions {
+  bool load_last_console = 1;
+  bool record_automatically = 2;
+}
+// A bus's role changes exactly three behaviours - its default send tap, whether it obeys solo, and
+// whether it needs an output device - so changing it is one command rather than rebuilding the bus.
+message SetBusRole { int32 bus_index = 1; string role = 2; }
+message SetBusName { int32 bus_index = 1; string name = 2; }
+message SetBusColour { int32 bus_index = 1; string colour = 2; }
+// D7. Any bus to any endpoint, changed while the session runs. Without this a bus's device could
+// only be chosen when it was created, which makes a mis-assigned monitor unfixable without
+// deleting it and starting again.
+message SetBusOutputDevice { int32 bus_index = 1; string device_id = 2; }
+// A strip's device, for the same reason. A microphone that came back on a different endpoint, or an
+// operator who assigned the wrong one, must be fixable in place.
+message SetChannelDevice { int32 channel_index = 1; string device_id = 2; }
+// C1. How much louder this microphone reads than the others for the same voice. A lectern somebody
+// leans into and a table microphone a metre away are not comparable without it, and the automixer
+// would hand the gain to the closer one every time.
+message SetAutomixWeight { int32 channel_index = 1; double weight = 2; }
+// F1. Puts a latched clip indicator out. An operator action and never automatic: a clip light that
+// cleared itself would have nothing to say by the time anybody looked at it.
+message ClearClip { int32 channel_index = 1; }
+// B0d and B12. A preset is a whole chain, not a set of numbers - "Jabra shared" and "Studio 180
+// degrees" are genuinely different objects rather than the same one at different settings.
+message SaveChainPreset { ChainTarget target = 1; string name = 2; }
+message ApplyChainPreset { ChainTarget target = 1; string name = 2; }
+message DeleteChainPreset { string name = 1; }
+
+message DeviceList {
+  repeated DeviceInfo devices = 1;
+}
+
+message DeviceInfo {
+  string id = 1;
+  string name = 2;
+  // capture or render.
+  string direction = 3;
+  int32 channel_count = 4;
+  int32 sample_rate = 5;
+  bool is_present = 6;
+  // Whether a strip is already using it. Two strips on one endpoint is legal and occasionally
+  // wanted, so this informs rather than forbids.
+  bool is_in_use = 7;
+}
+
+message ChainPresetList {
+  repeated ChainPresetSummary presets = 1;
+}
+
+message ChainPresetSummary {
+  string name = 1;
+  int32 link_count = 2;
+  repeated string modifier_ids = 3;
+}
+
+message ModifierCatalogue {
+  repeated ModifierDescriptorState modifiers = 1;
+}
+
+message ModifierDescriptorState {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  repeated ParameterState parameters = 4;
+}
+
+message DiagnosticsState {
+  ClockDiagnostics clock = 1;
+  repeated DriftPoint drift = 2;
+  repeated DropoutEntry dropouts = 3;
+  CallbackDiagnostics callbacks = 4;
+  AllocationDiagnostics allocations = 5;
+  repeated ModifierCostState costs = 6;
+  repeated LogLine log = 7;
+  // K1's table. One row per device rather than one clock, because the question this panel answers is
+  // which device is the one that is wrong, and a single measured rate cannot say.
+  repeated DeviceClock device_clocks = 8;
+}
+
+message DeviceClock {
+  int32 channel_index = 1;
+  string name = 2;
+  string direction = 3;
+  double nominal_rate = 4;
+  double measured_rate = 5;
+  double drift_ppm = 6;
+  double correction_ppm = 7;
+  double fill_percentage = 8;
+  int64 underruns = 9;
+  int64 overruns = 10;
+  string state = 11;
+}
+
+// K1.
+message ClockDiagnostics {
+  string source_name = 1;
+  double nominal_rate = 2;
+  double measured_rate = 3;
+  int32 block_frames = 4;
+  // True when no output device is left and a timer is keeping the graph running. The session
+  // survives; it is no longer being clocked by anything that plays sound, and that is worth saying.
+  bool is_timer_fallback = 5;
+}
+
+// K2. One point per device per sample interval.
+message DriftPoint {
+  int32 channel_index = 1;
+  int64 timestamp_ticks = 2;
+  double drift_ppm = 3;
+  int32 fill_frames = 4;
+  double correction_ppm = 5;
+}
+
+// K3. A list, not a counter: a hundred dropouts in one bad minute and a hundred spread over three
+// hours have completely different causes, and a number cannot tell them apart.
+message DropoutEntry {
+  int64 timestamp_ticks = 1;
+  string endpoint = 2;
+  string kind = 3;
+  int32 frames = 4;
+}
+
+// K4.
+message CallbackDiagnostics {
+  // Buckets, in fractions of a block. The shape matters more than the mean: a callback that is
+  // usually fine and occasionally twice the budget is a different problem from one that is always
+  // near the edge, and an average hides exactly that.
+  repeated int64 buckets = 1;
+  double bucket_width_fraction = 2;
+  double worst_fraction = 3;
+  int64 overruns = 4;
+}
+
+// K5. The first row reads zero, and if it ever does not, that is the bug.
+message AllocationDiagnostics {
+  int64 audio_thread_bytes = 1;
+  int64 gen0_collections = 2;
+  int64 gen1_collections = 3;
+  int64 gen2_collections = 4;
+  int64 total_managed_bytes = 5;
+  double longest_pause_ms = 6;
+}
+
+// K6.
+message ModifierCostState {
+  int32 channel_index = 1;
+  int32 link_index = 2;
+  string modifier_id = 3;
+  double average_fraction = 4;
+  double worst_fraction = 5;
+  int64 overruns = 6;
+  bool is_switched_out = 7;
+}
+
+// K7.
+message LogLine {
+  int64 timestamp_ticks = 1;
+  string level = 2;
+  string logger = 3;
+  string message = 4;
+}
+
+message CommandReply {
+  bool accepted = 1;
+  // Why not. A refused mix-minus send says so here rather than silently doing nothing.
+  string reason = 2;
+}
+
+message MeterFrame {
+  int64 timestamp_ticks = 1;
+  // Packed rather than one message per meter: five channels and five buses at twenty-five frames a
+  // second is a great many small messages otherwise.
+  bytes payload = 2;
+  int32 channel_count = 3;
+  int32 bus_count = 4;
+}
+
+message EngineEvent {
+  int64 timestamp_ticks = 1;
+  string kind = 2;
+  string subject = 3;
+  string message = 4;
+}

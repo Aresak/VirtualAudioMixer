@@ -1,3 +1,41 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <!--
+    MPL-2.0, like the console it hosts.
+
+    The desktop client, and a host and nothing more: a startup file, one platform-services class and
+    the page the console is rendered into. Every view, view model and service in the product lives in
+    Vam.Ui, and a .razor file here is a defect.
+
+    It holds no engine. Even on the machine wired to the microphones it speaks gRPC to Vam.Server,
+    because a local client using a private path would leave the remote path as the one nobody
+    exercised until somebody needed it during a meeting - and because G1 has the session outliving
+    every console, which cannot be true of a console that is the session.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <UseMaui>true</UseMaui>
+    <SingleProject>true</SingleProject>
+    <RootNamespace>Vam.Client</RootNamespace>
+
+    <ApplicationTitle>VAM</ApplicationTitle>
+    <ApplicationId>cz.vam.console</ApplicationId>
+    <ApplicationDisplayVersion>0.1</ApplicationDisplayVersion>
+    <ApplicationVersion>1</ApplicationVersion>
+
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <WindowsPackageType>None</WindowsPackageType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Maui.Controls" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Vam.Ui\Vam.Ui.csproj" />
+  </ItemGroup>
 
 </Project>

@@ -1,0 +1,8 @@
+@inherits VamComponent
+
+<button type="button"
+        class="chip @(IsExcluded ? "bad" : IsOn ? "on" : null)"
+        title="@(IsExcluded ? L["send.lockedWhy"] : Bus.Name)"
+        @onclick="ToggleAsync">
+    @(IsExcluded ? "N−1" : IsOn ? "●" : "○")
+</button>

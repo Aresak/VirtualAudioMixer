@@ -50,9 +50,14 @@ config.local.json
 *.local.env
 recordings/
 sessions/
-diagnostics/
+# Anchored to the repository root. Unanchored, this also matches any source folder called
+# Diagnostics/ - and git matches case-insensitively on Windows and case-sensitively on Linux, so
+# the same file would be committed on one machine and invisible on the other.
+/diagnostics/
 *.wav
 *.flac
+*.mp3
+*.m4a
 
 # OS
 .DS_Store
