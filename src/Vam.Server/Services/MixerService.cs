@@ -669,7 +669,15 @@ public sealed class MixerService(
 
     RecordingState BuildRecording()
     {
-        RecordingState state = new() { IsRecording = engine.Recording?.IsRecording ?? false };
+        // Both of these were left at their protobuf defaults, so every console showed an empty
+        // folder and 0 GB free - and the disk guard, whose whole job is that number, offered
+        // "enough space for 0.0 h" beside a recording running perfectly well.
+        RecordingState state = new()
+        {
+            IsRecording = engine.Recording?.IsRecording ?? false,
+            Directory = engine.RecordingDirectory,
+            FreeBytes = engine.FreeBytes
+        };
 
         if (engine.Recording is not { } recording)
         {
