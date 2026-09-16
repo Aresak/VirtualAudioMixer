@@ -142,7 +142,8 @@ public sealed class MixerService(
 
                     // Informs rather than forbids. Two strips on one endpoint is legal and
                     // occasionally exactly what somebody wants.
-                    IsInUse = inUse.Contains(device.Id.Value)
+                    IsInUse = inUse.Contains(device.Id.Value),
+                    NativeSampleRate = device.NativeSampleRate
                 });
             }
         }
@@ -633,6 +634,8 @@ public sealed class MixerService(
             state.MeasuredSampleRate = telemetry.MeasuredSampleRate;
             state.DriftPpm = telemetry.DriftPpm;
             state.DeviceState = telemetry.State.ToString();
+            state.ShareMode = telemetry.ShareMode.ToString();
+            state.DeviceSampleRate = telemetry.DeviceSampleRate;
         }
 
         AddChannelChain(state, channel, sends, index);

@@ -175,7 +175,9 @@ public static class MixerDiagnostics
                 FillPercentage = telemetry.FillPercentage,
                 Underruns = telemetry.UnderrunCount,
                 Overruns = telemetry.OverrunCount,
-                State = telemetry.State.ToString()
+                State = telemetry.State.ToString(),
+                ShareMode = telemetry.ShareMode.ToString(),
+                DeviceRate = telemetry.DeviceSampleRate
             });
         }
     }

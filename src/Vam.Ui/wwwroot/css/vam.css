@@ -392,6 +392,9 @@ input.num { min-width: 0; width: 62px; text-align: right; }
 
 .strip .rate { font-family: var(--f-mono); font-size: 9px; color: var(--ink-mute); display: flex; justify-content: space-between; }
 
+/* Drawn only when Windows is converting a device, so a console where nothing is stays the mockup's. */
+.strip .rate .conv { font-style: normal; color: var(--brass-dim); }
+
 .ax { padding: 5px 7px 6px; border-bottom: 1px solid var(--line-soft); }
 .axtop { display: flex; align-items: center; gap: 6px; }
 .spk { width: 9px; height: 9px; border-radius: 50%; background: var(--line); flex: 0 0 9px; transition: .1s; }

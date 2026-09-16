@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Vam.Engine.Devices.Abstractions;
+using Vam.Engine.Devices.Extensions;
 
 namespace Vam.Engine.Devices;
 
@@ -161,7 +162,14 @@ public sealed class MasterClock : IDisposable
         {
             IRenderStream stream = backend.OpenRender(
                 deviceId,
-                new RenderOptions(ShareMode.Shared, blockDuration));
+
+                // The engine's rate, not the device's preference. The primary output is the master
+                // clock, so an endpoint opened at a rate nobody asked for does not merely sound
+                // wrong - it runs the whole graph at that rate instead.
+                new RenderOptions(ShareMode.Shared, blockDuration, 0, options.SampleRate));
+
+            // Any width; the fill callback derives the channel count from what the device asks for.
+            stream.RequireFormat(options.SampleRate, 0);
 
             StopFallback();
 

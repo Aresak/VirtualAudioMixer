@@ -61,6 +61,8 @@ public sealed class DeviceInputChannel
 
     int pendingFrames;
     int state = (int)DeviceStreamState.Stopped;
+    int shareMode = (int)ShareMode.Shared;
+    int deviceSampleRateHz;
     long underrunCount;
     long loggedClampCount;
     double measuredRateHz;
@@ -119,6 +121,16 @@ public sealed class DeviceInputChannel
     public int ChannelCount => channelCount;
 
     /// <summary>
+    /// The rate this channel is built for, which every stream feeding it has to deliver.
+    /// </summary>
+    /// <remarks>
+    /// The mix graph's rate, not a preference. The ring is drained at it, and a device delivering
+    /// anything else drains or fills the ring by the difference - which for a device that is off by
+    /// a percent rather than by drift is far outside what the servo may correct.
+    /// </remarks>
+    public int NominalSampleRate => nominalRateHz;
+
+    /// <summary>
     /// What the stream is doing. Set by the supervisor off the audio path; read from anywhere.
     /// </summary>
     public DeviceStreamState State
@@ -148,6 +160,22 @@ public sealed class DeviceInputChannel
 
     /// <summary>Whether the servo is currently asking for more correction than it may apply.</summary>
     public bool IsClamping => servo.IsClamping;
+
+    /// <summary>
+    /// Records what the stream underneath this channel was actually granted.
+    /// </summary>
+    /// <remarks>
+    /// Control thread, at the open and again at the close. The channel outlives every stream that
+    /// feeds it, so this is set rather than constructed - and cleared when the device goes, because
+    /// a strip claiming exclusive mode for a microphone that is not plugged in is a lie a person
+    /// would act on.
+    /// </remarks>
+    /// <param name="format">What the backend granted, or the default when nothing is open.</param>
+    public void DescribeStream(AudioStreamFormat format)
+    {
+        Volatile.Write(ref shareMode, (int)format.ShareMode);
+        Volatile.Write(ref deviceSampleRateHz, format.DeviceSampleRate);
+    }
 
     /// <summary>
     /// Takes one buffer from the device.
@@ -277,7 +305,9 @@ public sealed class DeviceInputChannel
             (double)FillFrames / ring.CapacityFrames * Percent,
             ring.OverrunCount,
             Volatile.Read(ref underrunCount),
-            State);
+            State,
+            (ShareMode)Volatile.Read(ref shareMode),
+            Volatile.Read(ref deviceSampleRateHz));
 
     /// <summary>
     /// Discards everything buffered and returns the correction to rest.
@@ -300,6 +330,8 @@ public sealed class DeviceInputChannel
         measuredRateHz = nominalRateHz;
         driftPpm = 0.0;
         ratio = 1.0;
+        shareMode = (int)ShareMode.Shared;
+        deviceSampleRateHz = 0;
     }
 
     double MeasureDeviceRate(double currentRatio)

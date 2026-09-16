@@ -34,6 +34,12 @@ namespace Vam.Server.Engine;
 /// </remarks>
 public sealed class VamEngine : IDisposable
 {
+    /// <summary>
+    /// Time per capture callback. Twenty milliseconds is what a shared-mode device period rounds to
+    /// on every machine this has run on, and asking for less only makes the device round it back up.
+    /// </summary>
+    const int CaptureBufferMilliseconds = 20;
+
     readonly EngineOptions options;
     readonly ILoggerFactory loggers;
     readonly ILogger<VamEngine> logger;
@@ -593,7 +599,15 @@ public sealed class VamEngine : IDisposable
                 Dropouts = Dropouts,
                 EndpointIndex = index
             },
-            new CaptureOptions(ShareMode.Shared, TimeSpan.FromMilliseconds(20), width));
+            // The engine's rate, and the backend grants it or refuses to open at all. Before it was
+            // passed the channel was built for 48 kHz while the device was opened at whatever its
+            // mix format said, and a device presenting 44.1 kHz drained its ring for the length of
+            // the session against a servo with 500 ppm of authority.
+            new CaptureOptions(
+                options.CaptureShareMode,
+                TimeSpan.FromMilliseconds(CaptureBufferMilliseconds),
+                width,
+                options.SampleRate));
     }
 
     /// <summary>How many channels a strip's device actually produces.</summary>
@@ -610,13 +624,30 @@ public sealed class VamEngine : IDisposable
             {
                 if (device.Id == channel.DeviceId)
                 {
-                    return Math.Max(device.ChannelCount, 1);
+                    return Math.Max(WidthOf(device), 1);
                 }
             }
         }
 
         return Math.Max(channel.ChannelCount, 1);
     }
+
+    /// <summary>How wide to open one device, given which share mode the engine is asking for.</summary>
+    /// <remarks>
+    /// Windows presents almost every mono microphone as stereo, so asking for the presented width
+    /// while asking for exclusive mode declines exclusive on every real device: exclusive runs at
+    /// the hardware's own format, and a device that is mono underneath cannot grant a stereo one.
+    /// Asking for what the device actually is turns the switch from a setting that does nothing
+    /// into one that does what it says.
+    /// </remarks>
+    /// <param name="device">The endpoint.</param>
+    /// <returns>Channels to ask for.</returns>
+    int WidthOf(AudioDeviceInfo device) =>
+        options.CaptureShareMode == ShareMode.Exclusive
+        && device.NativeChannelCount > 0
+        && device.NativeSampleRate == options.SampleRate
+            ? device.NativeChannelCount
+            : device.ChannelCount;
 
     /// <summary>
     /// Starts recording now, into a folder of its own. J1.
