@@ -471,6 +471,24 @@ input.num { min-width: 0; width: 62px; text-align: right; }
 .chainbar .seg { height: 5px; flex: 1; background: var(--brass-dim); border-radius: 1px; }
 .chainbar .seg.byp { background: #2b343d; }
 .chainbar .n { font-family: var(--f-mono); font-size: 9.5px; color: var(--ink-mute); flex: 0 0 auto; }
+
+/* B12: which preset this chain came from. Truncated like the device name above it, because the
+   strip is 128px wide and the full name is in the bar's tooltip. */
+.chainbar .pre {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 56px;
+  font-family: var(--f-cond);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  font-size: 9.5px;
+  color: var(--ink-mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chainbar .pre.mod { color: var(--warn); }
 .chainbar:hover .seg { background: var(--brass); }
 
 .sends { display: flex; flex-direction: column; gap: 2px; padding: 5px 6px; }
@@ -526,7 +544,8 @@ input.num { min-width: 0; width: 62px; text-align: right; }
 .compact .strip .rate,
 .compact .axscale,
 .compact .sends,
-.compact .chainbar .n { display: none; }
+.compact .chainbar .n,
+.compact .chainbar .pre { display: none; }
 .compact .strip .nm { font-size: 11.5px; }
 .compact .msm { grid-template-columns: 1fr 1fr; gap: 2px; }
 .compact .msm b.o { display: none; }

@@ -116,6 +116,17 @@
     <div class="chainbar"
          @onclick="Open"
          title="@ChainTitle">
+        @*
+            B12. A preset is a whole chain, so which one a strip is on belongs beside the chain
+            rather than on the toolbar — the console has one per channel, not one per console.
+        *@
+        @if (Channel.PresetName.Length > 0)
+        {
+            <span class="pre @(Channel.IsPresetModified ? "mod" : null)">
+                @Channel.PresetName@(Channel.IsPresetModified ? " *" : string.Empty)
+            </span>
+        }
+
         @if (Channel.Chain.Count == 0)
         {
             <span class="seg byp"></span>
