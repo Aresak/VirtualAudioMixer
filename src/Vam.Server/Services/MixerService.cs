@@ -340,6 +340,13 @@ public sealed class MixerService(
         state.Automix = BuildAutomix(config);
         state.Recording = BuildRecording();
         state.Health = BuildHealth();
+        state.Paths = new EnginePaths
+        {
+            Recordings = engine.Paths.Recordings,
+            Logs = engine.Paths.Logs,
+            Modifiers = engine.Paths.Modifiers
+        };
+
         state.Startup = new StartupOptions
         {
             LoadLastConsole = engine.Startup.LoadLastConsole,

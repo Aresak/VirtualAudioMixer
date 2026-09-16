@@ -33,12 +33,73 @@ const FLAG_SPEAKING = 64;
 const HOLD_MS = 1200;
 const HOLD_FALL_DB_PER_S = 20;
 
+// How a meter moves, and how often it is allowed to. Both are the console's choice: the engine sends
+// peak and average and knows nothing about how either is drawn.
+const BALLISTICS_PPM = 'ppm';
+const BALLISTICS_RMS = 'rms';
+const BALLISTICS_VU = 'vu';
+
+// PPM rises instantly and falls at a fixed rate. VU integrates both ways, slowly enough to read.
+const PPM_FALL_DB_PER_S = 24;
+const VU_SECONDS = 0.3;
+
+// Buses share the ballistics store with the strips, above anything a channel index can reach.
+const BUS_BAR_BASE = 1000;
+
 const state = {
     channels: [],
     buses: [],
     holds: [],
-    lastFrame: 0
+    bars: [],
+    lastFrame: 0,
+    lastDraw: 0,
+    ballistics: BALLISTICS_RMS,
+    minDrawSeconds: 0
 };
+
+// The value the bar body follows, given the ballistics. Peak and average both arrive every frame;
+// which one leads, and how fast it is allowed to move, is the whole of the difference.
+function barLevel(index, peakDb, rmsDb, elapsedSeconds) {
+    if (state.ballistics === BALLISTICS_RMS) {
+        return rmsDb;
+    }
+
+    const previous = state.bars[index];
+
+    if (previous === undefined) {
+        state.bars[index] = state.ballistics === BALLISTICS_PPM ? peakDb : rmsDb;
+
+        return state.bars[index];
+    }
+
+    if (state.ballistics === BALLISTICS_PPM) {
+        // Instant on the way up, a fixed fall on the way down. A peak that vanished between two
+        // frames is a peak nobody saw.
+        const fallen = previous - (PPM_FALL_DB_PER_S * elapsedSeconds);
+
+        state.bars[index] = peakDb >= previous ? peakDb : Math.max(fallen, peakDb);
+    } else {
+        const weight = Math.min(1, elapsedSeconds / VU_SECONDS);
+
+        state.bars[index] = previous + ((rmsDb - previous) * weight);
+    }
+
+    return state.bars[index];
+}
+
+// How the meters move, and the ceiling on how often they are redrawn.
+export function settings(ballistics, framesPerSecond) {
+    state.ballistics = ballistics === BALLISTICS_PPM || ballistics === BALLISTICS_VU
+        ? ballistics
+        : BALLISTICS_RMS;
+
+    state.minDrawSeconds = framesPerSecond > 0 ? 1 / framesPerSecond : 0;
+    state.bars = [];
+
+    // The next frame draws whatever the ceiling says. Somebody who just changed how the meters move
+    // should see it on the next frame, not up to a tenth of a second later.
+    state.lastDraw = 0;
+}
 
 // .NET hands a byte[] across as a Uint8Array where the host supports it and as base64 where it does
 // not. Both arrive here, and neither is worth a branch anywhere further in.
@@ -121,7 +182,7 @@ function drawTicks(context, width, height) {
     }
 }
 
-function drawMeter(canvas, peakDb, rmsDb, hold, flags) {
+function drawMeter(canvas, peakDb, barDb, hold, flags) {
     const context = fit(canvas);
 
     if (!context) {
@@ -144,12 +205,13 @@ function drawMeter(canvas, peakDb, rmsDb, hold, flags) {
         return;
     }
 
-    // Average as the body of the bar and peak as the line above it. One says how loud it sounded,
-    // the other whether anything clipped, and a meter that shows only one leaves the other a guess.
-    const rms = normalise(rmsDb) * height;
+    // The body of the bar and the peak as a line above it. One says how loud it sounded, the other
+    // whether anything clipped, and a meter that shows only one leaves the other a guess. Which
+    // value the body follows is the ballistics setting.
+    const body = normalise(barDb) * height;
 
     context.fillStyle = verticalGradient(context, height, (flags & FLAG_DUCKED) !== 0);
-    context.fillRect(0, height - rms, width, rms);
+    context.fillRect(0, height - body, width, body);
 
     drawTicks(context, width, height);
 
@@ -279,6 +341,17 @@ export function frame(payload, channelCount, busCount) {
 
     state.lastFrame = now;
 
+    // The ceiling on drawing, and only on drawing. Every frame still advances the peak hold and the
+    // ballistics: a slow client is spared the canvas work, which is where the cost is, and not the
+    // transient that arrived between two draws — which is the one the hold exists for.
+    const draw = state.minDrawSeconds === 0
+        || state.lastDraw === 0
+        || (now - state.lastDraw) / 1000 >= state.minDrawSeconds;
+
+    if (draw) {
+        state.lastDraw = now;
+    }
+
     for (let index = 0; index < channelCount; index++) {
         const target = state.channels[index];
 
@@ -293,8 +366,14 @@ export function frame(payload, channelCount, busCount) {
         const flags = bytes[at + 8];
         const hold = updateHold(index, peakDb, elapsed);
 
+        const bar = barLevel(index, peakDb, rmsDb, elapsed);
+
+        if (!draw) {
+            continue;
+        }
+
         if (target.meter) {
-            drawMeter(target.meter, peakDb, rmsDb, hold, flags);
+            drawMeter(target.meter, peakDb, bar, hold, flags);
         }
 
         if (target.gr) {
@@ -325,8 +404,15 @@ export function frame(payload, channelCount, busCount) {
         }
 
         const at = busBase + (index * BUS_BYTES);
+        const peakDb = readInt16(view, at);
 
-        drawMeter(canvas, readInt16(view, at), readInt16(view, at + 2), FLOOR_DB, 0);
+        // Buses follow the same ballistics as the strips. Two meters on one screen, on one signal,
+        // drawn at different heights, is the console disagreeing with itself.
+        const bar = barLevel(BUS_BAR_BASE + index, peakDb, readInt16(view, at + 2), elapsed);
+
+        if (draw) {
+            drawMeter(canvas, peakDb, bar, FLOOR_DB, 0);
+        }
     }
 }
 
@@ -335,4 +421,5 @@ export function unbind() {
     state.channels = [];
     state.buses = [];
     state.holds = [];
+    state.bars = [];
 }

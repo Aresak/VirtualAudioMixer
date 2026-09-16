@@ -74,6 +74,18 @@ message ConsoleState {
   // paying for a drift history nobody opened.
   EngineHealth health = 6;
   StartupOptions startup = 7;
+
+  // Where the engine keeps things. On the wire because they are the engine's paths, on the engine's
+  // disk, and a console across the room has no other way to know them.
+  EnginePaths paths = 8;
+}
+
+message EnginePaths {
+  string recordings = 1;
+  string logs = 2;
+  // Empty while nothing loads modifiers from disk. EPIC-20 is where that arrives, and a path shown
+  // for a folder nothing reads would be the console inventing a feature.
+  string modifiers = 3;
 }
 
 message StartupOptions {
@@ -248,6 +260,7 @@ message Command {
     ApplyChainPreset apply_chain_preset = 26;
     DeleteChainPreset delete_chain_preset = 27;
     Shutdown shutdown = 33;
+    SetRecordingsPath set_recordings_path = 34;
   }
 }
 
@@ -290,6 +303,9 @@ message AddModifier { ChainTarget target = 1; string modifier_id = 2; int32 at_i
 message RemoveModifier { ChainTarget target = 1; int32 link_index = 2; }
 message MoveModifier { ChainTarget target = 1; int32 from_index = 2; int32 to_index = 3; }
 message SetRecording { bool recording = 1; string directory = 2; }
+// Where sessions go from now on. Refused while one is running: a session already writing into a
+// folder cannot be told it is somewhere else.
+message SetRecordingsPath { string path = 1; }
 // H3 and E4. The two startup behaviours an operator may want to change, and nothing else — every
 // other setting on that view is deliberately not a choice.
 message SetStartupOptions {

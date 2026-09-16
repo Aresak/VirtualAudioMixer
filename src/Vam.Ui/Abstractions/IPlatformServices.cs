@@ -68,4 +68,15 @@ public interface IPlatformServices
     /// browser would be one operator's address arriving in somebody else's console.
     /// </remarks>
     string? RememberedEngine { get; set; }
+
+    /// <summary>
+    /// Whether this console starts an engine on this machine when it finds none listening.
+    /// </summary>
+    /// <remarks>
+    /// On, because a console that comes up beside a dark engine is a console somebody has to know a
+    /// second thing about. Off is for a machine where the engine is run as a service or started by
+    /// hand, and where a console launching a second one would be the problem rather than the fix.
+    /// A host that cannot start an engine at all ignores this.
+    /// </remarks>
+    bool StartsEngineAutomatically { get; set; }
 }
