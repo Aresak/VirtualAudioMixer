@@ -159,12 +159,15 @@ public sealed class MasterClock : IDisposable
     {
         try
         {
-            IRenderStream stream = backend.OpenRender(
-                deviceId,
-                // The engine's rate, not the device's preference. The primary output is the master
-                // clock, so an endpoint opened at a rate nobody asked for does not merely sound
-                // wrong - it runs the whole graph at that rate instead.
-                new RenderOptions(ShareMode.Shared, blockDuration, 0, options.SampleRate));
+            IRenderStream stream = Accept(
+                backend.OpenRender(
+                    deviceId,
+
+                    // The engine's rate, not the device's preference. The primary output is the
+                    // master clock, so an endpoint opened at a rate nobody asked for does not merely
+                    // sound wrong - it runs the whole graph at that rate instead.
+                    new RenderOptions(ShareMode.Shared, blockDuration, 0, options.SampleRate)),
+                options.SampleRate);
 
             StopFallback();
 
@@ -445,5 +448,34 @@ public sealed class MasterClock : IDisposable
         MixBlocks blocks = new(arena.AsSpan(0, offset), slices.AsSpan(0, deviceCount), frameCount);
 
         return consumer(blocks, output, frameCount);
+    }
+
+    /// <summary>
+    /// Takes a clock source only if it runs at the engine's rate.
+    /// </summary>
+    /// <remarks>
+    /// The backend is contracted to grant the rate asked for or to throw, so this should be
+    /// unreachable. It is checked because of what it costs when it is not: every block the graph
+    /// produces is timed by this device, so an output opened at 44.1 kHz would run a 48 kHz session
+    /// eight percent slow - every strip's servo hard over, every recording the wrong length, and no
+    /// single component in a position to say why. Refusing hands the job to the next output, or to
+    /// the fallback timer, either of which is a working session.
+    /// </remarks>
+    /// <param name="stream">What the backend opened.</param>
+    /// <param name="sampleRateHz">The rate the graph runs at.</param>
+    /// <returns>The same stream.</returns>
+    /// <exception cref="UnsupportedAudioFormatException">The device runs at another rate.</exception>
+    static IRenderStream Accept(IRenderStream stream, int sampleRateHz)
+    {
+        if (stream.Format.SampleRate == sampleRateHz)
+        {
+            return stream;
+        }
+
+        stream.Dispose();
+
+        throw new UnsupportedAudioFormatException(
+            $"{stream.DeviceId.Value} opened at {stream.Format.SampleRate} Hz and the graph runs at {sampleRateHz} Hz. "
+            + "It cannot keep time for a session it does not agree with.");
     }
 }

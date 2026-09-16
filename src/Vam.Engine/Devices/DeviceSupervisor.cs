@@ -266,7 +266,6 @@ public sealed class DeviceSupervisor(
         device.Channel.DescribeStream(default);
     }
 
-
     string NameOf(AudioDeviceId deviceId, string fallback)
     {
         foreach (AudioDeviceInfo info in backend.Enumerate(DeviceDirection.Capture))
