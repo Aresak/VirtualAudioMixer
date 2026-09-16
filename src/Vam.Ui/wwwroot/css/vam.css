@@ -739,6 +739,50 @@ input[type=checkbox] { accent-color: var(--brass); width: 15px; height: 15px; }
 .tabs button.on{color:var(--brass);border-bottom-color:var(--brass)}
 .tab{display:none}
 .band{height:96px;background:var(--sunken);border:1px solid var(--line);border-radius:2px;width:100%;display:block}
+
+/* C9's channel rows: a swatch, a name and a bar each, because who is holding the gain is a
+   comparison and a person reads a comparison off lengths rather than off a column of percentages. */
+.axrow {
+  display: grid;
+  grid-template-columns: minmax(140px, 260px) 1fr 74px 58px;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.axrow:last-child { border-bottom: none; }
+
+.axrow .n {
+  font-family: var(--f-cond);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.axrow .n span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.axrow .axgain { font-size: 11.5px; color: var(--ink-dim); text-align: right; }
+
+.sharebar {
+  height: 13px;
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: 1px;
+  position: relative;
+  overflow: hidden;
+}
+
+.sharebar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: linear-gradient(90deg, var(--brass-dim), var(--brass));
+  transition: width .1s linear;
+}
 .spark{width:100%;height:120px;display:block;background:var(--sunken);border:1px solid var(--line);border-radius:2px}
 .logbox{background:var(--sunken);border:1px solid var(--line);border-radius:2px;padding:9px 11px;
   font-family:var(--f-mono);font-size:11.5px;line-height:1.65;max-height:300px;overflow:auto}

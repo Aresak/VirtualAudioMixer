@@ -22,6 +22,7 @@ public partial class MixerView
     readonly HashSet<int> latched = [];
 
     IJSObjectReference? meters;
+    MeterFrameHandler? meterFrames;
     byte[] scratch = [];
     int shape = -1;
     int pending;
@@ -33,7 +34,11 @@ public partial class MixerView
     {
         base.OnInitialized();
 
-        Session.MeterFrame = OnMeterFrame;
+        // Held in a field so that letting go of it later can tell whether the slot is still ours.
+        // A view is replaced by rendering the new one and disposing this one afterwards, so by the
+        // time DisposeAsync runs the automix view may already have taken the slot.
+        meterFrames = OnMeterFrame;
+        Session.MeterFrame = meterFrames;
     }
 
     /// <inheritdoc />
@@ -58,7 +63,10 @@ public partial class MixerView
     /// <summary>Stops drawing and lets go of the module.</summary>
     public async ValueTask DisposeAsync()
     {
-        Session.MeterFrame = null;
+        if (ReferenceEquals(Session.MeterFrame, meterFrames))
+        {
+            Session.MeterFrame = null;
+        }
 
         Dispose();
 
