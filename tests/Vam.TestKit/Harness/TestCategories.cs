@@ -14,4 +14,10 @@ public static class TestCategories
 
     /// <summary>Soaks and stress runs, measured in minutes or hours. Excluded by default.</summary>
     public const string LongRunning = "longrunning";
+
+    /// <summary>
+    /// Needs real audio devices present. Excluded by default, and never runs in CI - a hosted
+    /// runner has no microphone, and a test that passes there would be proving nothing.
+    /// </summary>
+    public const string NeedsHardware = "needs-hardware";
 }

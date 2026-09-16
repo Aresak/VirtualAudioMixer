@@ -1,0 +1,72 @@
+@inherits VamComponent
+
+@*
+    B0d and B12. A preset is a whole chain, not a set of numbers.
+
+    That is what makes "Jabra shared" and "Studio 180 degrees" genuinely different objects: one has a
+    denoise in it and the other does not, and no amount of copying parameters gets from one to the
+    other. So applying one replaces the chain rather than reaching into it.
+
+    The modified marker matters more than it looks. An operator who has spent twenty minutes tuning a
+    chain and then presses save needs to know whether they are saving their work or saving over it.
+*@
+
+<div class="row">
+    <select @bind="chosen"
+            aria-label="@L["preset.title"]">
+        <option value="">—</option>
+        @foreach (ChainPresetSummary preset in Session.Presets)
+        {
+            <option value="@preset.Name">@preset.Name · @preset.LinkCount</option>
+        }
+    </select>
+
+    <button type="button"
+            class="btn sm"
+            disabled="@(chosen.Length == 0)"
+            @onclick="ApplyAsync">
+        @L["preset.apply"]
+    </button>
+
+    <span style="flex:1"></span>
+
+    @if (Name.Length > 0)
+    {
+        <span class="chip @(IsModified ? "warn" : null)"
+              title="@L["help.presetModified"]">
+            @Name@(IsModified ? " *" : string.Empty)
+        </span>
+    }
+</div>
+
+<div class="row"
+     style="margin-top:6px">
+    <input type="text"
+           @bind="saveAs"
+           placeholder="@L["preset.saveAs"]"
+           aria-label="@L["preset.saveAs"]" />
+
+    <button type="button"
+            class="btn sm"
+            disabled="@(SaveName.Length == 0)"
+            @onclick="SaveAsync">
+        @L["preset.save"]
+    </button>
+
+    @if (chosen.Length > 0)
+    {
+        @*
+            Deleting a preset does not touch the chains that came from it — they keep working, they
+            just stop having somewhere to be restored from. Worth saying in the question.
+        *@
+        <ConfirmButton Label="@L.Format("preset.delete", chosen)"
+                       Question="@L.Format("preset.deleteWhy", chosen)"
+                       Confirmed="DeleteAsync" />
+    }
+</div>
+
+@if (refusal.Length > 0)
+{
+    <p class="note"
+       style="border-color:var(--bad);color:var(--bad)">@refusal</p>
+}

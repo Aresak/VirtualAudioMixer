@@ -1,3 +1,22 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!--
+    Apache-2.0, so anybody can write a client, a control surface or a bridge without inheriting
+    copyleft. That is the point of the split: a Stream Deck plugin, a hardware desk or somebody
+    else's app are all welcome on their own terms.
+
+    It references the protocol machinery and nothing of VAM's, deliberately. An assembly a third
+    party takes in order to talk to the engine should not drag the engine's types along with it.
+  -->
+
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" />
+    <PackageReference Include="Grpc.Net.Client" />
+    <PackageReference Include="Grpc.Tools" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="Protos\vam.proto" GrpcServices="Both" />
+  </ItemGroup>
+
 </Project>

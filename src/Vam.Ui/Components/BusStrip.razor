@@ -1,0 +1,56 @@
+@inherits VamComponent
+
+@*
+    A bus. Narrower than an input strip and deliberately so: a bus is something an operator sets up
+    once and then watches, not something they ride during a meeting.
+
+    The master is wider than the rest and outlined in brass, because it is the one that goes out of
+    the building and mistaking it for a monitor is the expensive mistake.
+*@
+
+<div class="bstrip @StateClass">
+    <div class="hd"
+         @onclick="Open">
+        <div style="font-family:var(--f-cond);text-transform:uppercase;font-size:14px;letter-spacing:.05em;color:@NameColour">
+            @Bus.Name
+        </div>
+        <div class="out">@OutputLine</div>
+    </div>
+
+    @*
+        D6. Not a meter — an activity light. The only question a bus strip asks about the limiter is
+        whether it is working, and a number would invite an operator to watch it instead of listening.
+    *@
+    <div class="lim"
+         title="@L["help.limiter"]">
+        <i class="@(IsLimiting ? "on" : null)"></i>
+        @L["bus.limiter"]
+    </div>
+
+    <div class="mf">
+        <canvas class="meter"
+                data-vam-bus="@Bus.Index"
+                aria-hidden="true"></canvas>
+
+        <div class="fader">
+            <div class="unity"
+                 aria-hidden="true"></div>
+            <input type="range"
+                   min="0" max="1000" step="1"
+                   value="@Position"
+                   aria-label="@(Bus.Name + " " + L["bus.gain"])"
+                   @oninput="OnGainAsync" />
+        </div>
+    </div>
+
+    <div class="val">@FaderScale.Format(Bus.GainDb) dB</div>
+
+    <div class="msm">
+        <b class="m @(Bus.IsMuted ? "on" : null)"
+           role="button"
+           tabindex="0"
+           @onclick="ToggleMuteAsync">
+            @L["bus.mute"]
+        </b>
+    </div>
+</div>

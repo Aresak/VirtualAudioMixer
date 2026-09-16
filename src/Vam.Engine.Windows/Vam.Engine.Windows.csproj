@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Windows-only, and that is the entire reason this project is separate from Vam.Engine.
+    Every type in NAudio.CoreAudioApi is [SupportedOSPlatform("windows")], so a WASAPI call
+    from a net10.0 assembly raises CA1416 and the build treats warnings as errors. Keeping
+    the engine platform-free is what lets its soak and allocation suites run anywhere.
+    See Decisions/2026-08-29 Split The Windows Device Layer Into Its Own Project.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+
+    <!--
+      WASAPI hands back a pointer into its own shared buffer. Reading it as a span is the
+      difference between zero copies and one allocation-free copy per callback, and there is
+      no safe way to spell it. Confined to this project on purpose.
+    -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Vam.Core\Vam.Core.csproj" />
+    <ProjectReference Include="..\Vam.Engine\Vam.Engine.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="NAudio.Wasapi" />
+  </ItemGroup>
+
+</Project>

@@ -1,3 +1,52 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <!--
+    MPL-2.0. File-level copyleft: improvements to the console come back, and the licence does not
+    conflict with app store terms the way AGPL does.
+
+    It references the Apache-licensed protocol and NOT the engine. That separation is the whole
+    reason the client speaks gRPC: a console is a view over a running engine and has no business
+    holding one. A ProjectReference to Vam.Engine here would make every client AGPL and would make
+    the remote case a second implementation nobody exercised.
+
+    Every .razor file, view model and service in the product lives here. A host contributes a
+    startup file and one platform-services class, and a .razor anywhere else is a defect.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AddRazorSupportForMvc>false</AddRazorSupportForMvc>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <SupportedPlatform Include="browser" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Grpc.Net.Client" />
+  </ItemGroup>
+
+  <!--
+    U7. Embedded rather than satellite assemblies: the console ships two languages that are edited
+    together, and a missing key has to be a visible defect rather than a silent fall back to English.
+
+    WithCulture is false because it has to be. MSBuild reads "strings.en.json" and "strings.cs.json"
+    as culture-tagged resources - .en and .cs really are culture codes - and builds satellite
+    assemblies out of them, which leaves the main assembly with no manifest resources at all and the
+    console rendering every key as its own name. Naming them explicitly is the fix.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Resources/strings.en.json"
+                      LogicalName="Vam.Ui.Resources.strings.en.json"
+                      WithCulture="false" />
+    <EmbeddedResource Include="Resources/strings.cs.json"
+                      LogicalName="Vam.Ui.Resources.strings.cs.json"
+                      WithCulture="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Vam.Protocol\Vam.Protocol.csproj" />
+  </ItemGroup>
 
 </Project>

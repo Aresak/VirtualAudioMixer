@@ -1,0 +1,28 @@
+@inherits VamComponent
+
+@*
+    U2. Six destinations, always visible, always in the same order. A console an operator has to
+    remember the navigation of is a console they will be hunting through while somebody is talking.
+*@
+
+<nav class="rail">
+    @foreach ((ViewId view, string key, string path) in Destinations)
+    {
+        <button type="button"
+                class="@(Shell.View == view ? "on" : null)"
+                title="@L[key]"
+                aria-current="@(Shell.View == view ? "page" : null)"
+                @onclick="() => Go(view)">
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor"
+                 stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="@path" />
+            </svg>
+            <span>@L[key]</span>
+        </button>
+
+        @if (view == ViewId.Recording)
+        {
+            <div class="sep"></div>
+        }
+    }
+</nav>

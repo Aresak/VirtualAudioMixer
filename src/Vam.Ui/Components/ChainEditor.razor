@@ -1,0 +1,124 @@
+@inherits VamComponent
+
+@*
+    B0's chain, in the order it runs. The same component for a strip and for a bus, because a bus
+    chain is a strip chain on a summed signal and nothing about editing it differs.
+
+    Order is the configuration, not an incidental list order: a gate before a denoise and a gate
+    after one are different microphones. That is why this is a reorderable list rather than a fixed
+    row of five letters with tick boxes.
+*@
+
+<div>
+    @for (int index = 0; index < Chain.Count; index++)
+    {
+        int position = index;
+        ModifierState link = Chain[index];
+        bool locked = IsLocked(position);
+
+        <div class="mod @(locked ? "anchor" : null)"
+             draggable="@((!locked).ToString().ToLowerInvariant())"
+             @ondragstart="() => dragging = position"
+             @ondragover:preventDefault="true"
+             @ondrop="() => MoveAsync(position)">
+
+            <div class="mh">
+                @if (locked)
+                {
+                    <span class="anchoricon"
+                          title="@L["chain.mandatoryWhy"]">⚓</span>
+                }
+                else
+                {
+                    <span class="grip"
+                          title="@L["mixer.reorder"]">⠿</span>
+                }
+
+                <span class="t">@link.Name</span>
+
+                <InlineHelp Title="@link.Name"
+                            Body="@HelpFor(link)" />
+
+                <span style="flex:1"></span>
+
+                <button type="button"
+                        class="chip @(link.IsBypassed ? null : "on")"
+                        @onclick="() => ToggleBypassAsync(position, link)">
+                    @(link.IsBypassed ? L["strip.bypassed"] : L["common.on"])
+                </button>
+
+                @if (!locked)
+                {
+                    <button type="button"
+                            class="btn sm danger"
+                            @onclick="() => RemoveAsync(position)">×</button>
+                }
+            </div>
+
+            @if (locked)
+            {
+                <div class="anchornote">@L["chain.mandatory"]</div>
+            }
+
+            <div class="mb">
+                @*
+                    U18. An equaliser is a shape, not nine numbers. The fields stay underneath for
+                    when "exactly 4 kHz" is the point.
+                *@
+                @if (link.ModifierId.EndsWith("equaliser", StringComparison.OrdinalIgnoreCase))
+                {
+                    <EqualiserCurve Link="link"
+                                    Target="Target"
+                                    LinkIndex="position" />
+                }
+
+                @foreach (ParameterState parameter in link.Parameters)
+                {
+                    <div class="knob">
+                        @*
+                            U14 asks for help on every parameter, not every modifier. "Threshold" is
+                            not self-explanatory at 19:40 on a Tuesday, and knowing which modifier it
+                            belongs to does not help.
+                        *@
+                        <div class="between">
+                            <span>
+                                @parameter.Name
+                                <InlineHelp Title="@parameter.Name"
+                                            Body="@HelpForParameter(link, parameter)"
+                                            @key="parameter.Id" />
+                            </span>
+                            <span class="mono">@Format(parameter)</span>
+                        </div>
+                        <input type="range"
+                               min="@parameter.Minimum" max="@parameter.Maximum" step="@Step(parameter)"
+                               value="@parameter.Value"
+                               aria-label="@(link.Name + " " + parameter.Name)"
+                               @oninput="argument => SetParameterAsync(position, parameter, argument)" />
+                    </div>
+                }
+            </div>
+        </div>
+
+        @if (index < Chain.Count - 1)
+        {
+            <div class="flow"
+                 aria-hidden="true">↓</div>
+        }
+    }
+</div>
+
+<div class="row">
+    <select @bind="adding"
+            aria-label="@L["mixer.add"]">
+        <option value="">—</option>
+        @foreach (ModifierDescriptorState descriptor in Session.Modifiers)
+        {
+            <option value="@descriptor.Id">@descriptor.Name</option>
+        }
+    </select>
+
+    <button type="button"
+            class="btn"
+            disabled="@(adding.Length == 0)"
+            @onclick="AddAsync">@L["mixer.add"]</button>
+</div>

@@ -1,0 +1,14 @@
+@page "/"
+
+@*
+    Interactive, and deliberately not prerendered.
+
+    A prerendered pass would build a session, connect it to the engine, render an empty console
+    because nothing has arrived yet, and then throw the connection away when the request scope ends -
+    and the circuit would open a second one a moment later. There is nothing worth prerendering here:
+    the console has no content until it has talked to an engine.
+*@
+
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+<AppShell />

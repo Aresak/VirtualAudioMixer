@@ -1,0 +1,52 @@
+@inherits VamComponent
+
+@*
+    U18. The equaliser's response, with a handle per band that is dragged rather than typed.
+
+    Four numeric fields for frequency, gain and Q describe a curve nobody can picture. The curve
+    itself is the thing an operator is actually reasoning about — "this room rings around 300" is a
+    shape, not three numbers — and dragging a point on it is how that thought is expressed.
+
+    The numeric fields stay underneath, because "exactly 4 kHz" is sometimes the point.
+*@
+
+<svg class="eqcurve" viewBox="0 0 @Width @Height"
+     role="img" aria-label="@L["eq.curve"]"
+     @onpointermove="OnMoveAsync" @onpointerup="() => dragging = -1" @onpointerleave="() => dragging = -1">
+
+    @* Decade lines, so a shape can be read against a frequency rather than admired. *@
+    @foreach (double frequency in Decades)
+    {
+        @* Wrapped in a group because Razor reads a bare <text> in a code block as its own escape
+           sequence and refuses to give it attributes. Inside an element it is markup again. *@
+        <g>
+            <line x1="@F(X(frequency))" y1="0" x2="@F(X(frequency))" y2="@Height"
+                  stroke="var(--line-soft)" stroke-width="1" />
+            <text x="@F(X(frequency) + 3)" y="@(Height - 4)" fill="var(--ink-mute)"
+                  font-size="9" font-family="monospace">@Label(frequency)</text>
+        </g>
+    }
+
+    <line x1="0"
+          y1="@F(Y(0))"
+          x2="@Width"
+          y2="@F(Y(0))"
+          stroke="var(--line)"
+          stroke-width="1" />
+
+    <path d="@Curve"
+          fill="none"
+          stroke="var(--brass)"
+          stroke-width="1.6" />
+
+    @for (int band = 0; band < BandCount; band++)
+    {
+        int index = band;
+
+        <circle cx="@F(X(Frequency(index)))" cy="@F(Y(Gain(index)))" r="6"
+                fill="@(dragging == index ? "var(--brass)" : "var(--raised)")"
+                stroke="var(--brass)" stroke-width="1.5"
+                style="cursor:grab"
+                @onpointerdown="() => dragging = index" />
+    }
+</svg>

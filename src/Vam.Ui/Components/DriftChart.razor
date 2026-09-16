@@ -1,0 +1,53 @@
+@*
+    K2. Drift over time, one line per device.
+
+    The instantaneous number is already on the strip. This exists for the question the strip cannot
+    answer: whether the fill is holding or walking, which is the difference between a servo doing its
+    job and a device that will empty its ring somewhere in the second hour.
+*@
+
+<svg viewBox="0 0 320 110"
+     style="width:100%;height:110px"
+     role="img"
+     aria-label="Drift">
+    <line x1="0"
+          y1="55"
+          x2="320"
+          y2="55"
+          stroke="var(--line)"
+          stroke-width="1" />
+    <text x="2"
+          y="9"
+          fill="var(--ink-mute)"
+          font-size="8"
+          font-family="monospace">+@F(Scale) ppm</text>
+    <text x="2"
+          y="107"
+          fill="var(--ink-mute)"
+          font-size="8"
+          font-family="monospace">−@F(Scale) ppm</text>
+
+    @foreach ((int channel, string path) in Paths)
+    {
+        <path d="@path"
+              fill="none"
+              stroke="@Colour(channel)"
+              stroke-width="1.2" />
+    }
+</svg>
+
+@if (Series.Count > 0)
+{
+    <div class="row"
+         style="margin-top:6px;gap:12px">
+        @foreach (int channel in Series.Keys)
+        {
+            <span class="row"
+                  style="gap:5px">
+                <span class="swatch"
+                      style="background:@Colour(channel);width:9px;height:9px"></span>
+                <span style="font-size:11px;color:var(--ink-mute)">@NameOf(channel)</span>
+            </span>
+        }
+    </div>
+}

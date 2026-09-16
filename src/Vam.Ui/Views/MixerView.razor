@@ -1,0 +1,106 @@
+@inherits VamComponent
+@implements IAsyncDisposable
+@inject IJSRuntime Js
+
+@*
+    The view a meeting is run from.
+
+    It owns the meter surface: it binds the canvases after a render that changes their number, and it
+    forwards every meter frame straight to JavaScript. Nothing on the meter path touches the render
+    tree, which is what keeps sixteen strips at twenty-five frames a second from becoming four
+    hundred component diffs a second.
+*@
+
+<div class="view mixer">
+    <div class="mixtool">
+        <button type="button"
+                class="btn"
+                @onclick="() => Shell.Overlay = OverlayId.Matrix">
+            @L["mixer.matrix"]
+        </button>
+
+        <span style="flex:1"></span>
+
+        <button type="button"
+                class="chip @(Shell.IsReorderArmed ? "on" : null)"
+                title="@L["help.reorder"]"
+                @onclick="() => Shell.IsReorderArmed = !Shell.IsReorderArmed">
+            @L["mixer.reorder"]
+        </button>
+
+        @* U4. The button says what pressing it does, not what the console is already doing. *@
+        <button type="button"
+                class="btn"
+                title="@L["help.density"]"
+                @onclick="ToggleDensity">
+            @(Shell.IsCompact ? L["mixer.full"] : L["mixer.compact"])
+        </button>
+    </div>
+
+    @if (Session.Console is null)
+    {
+        <div class="pad">
+            <p class="sub">@L["mixer.notConnected"]</p>
+        </div>
+    }
+    else if (Session.Console.Channels.Count == 0)
+    {
+        <div class="pad">
+            <p class="sub">@L["mixer.noChannels"]</p>
+        </div>
+    }
+    else
+    {
+        <div class="mixer">
+            <div class="strips">
+                @foreach (ChannelState channel in Session.Console.Channels)
+                {
+                    <ChannelStrip @key="channel.Index"
+                                  Channel="channel"
+                                  Buses="Session.Console.Buses"
+                                  Reordered="OnReorderedAsync" />
+                }
+
+                @*
+                    U17. A tile at the end of the strips rather than a button in the toolbar, because
+                    that is where an operator looks for the place a new strip would go.
+                *@
+                <button type="button" class="addtile" title="@L["help.addInput"]"
+                        @onclick="() => Shell.Overlay = OverlayId.Add">
+                    <span>＋</span>
+                    <em>@L["mixer.addInput"]</em>
+                </button>
+            </div>
+
+            <div class="buses">
+                @foreach (BusState bus in Session.Console.Buses)
+                {
+                    <BusStrip @key="bus.Index"
+                              Bus="bus"
+                              IsMaster="@IsMaster(bus)" />
+                }
+            </div>
+        </div>
+
+        <MonitorBar />
+    }
+
+    @switch (Shell.Overlay)
+    {
+        case OverlayId.Channel:
+            <ChannelOverlay />
+            break;
+
+        case OverlayId.Bus:
+            <BusOverlay />
+            break;
+
+        case OverlayId.Matrix:
+            <MatrixOverlay />
+            break;
+
+        case OverlayId.Add:
+            <AddOverlay />
+            break;
+    }
+</div>

@@ -129,7 +129,8 @@ public static class AllocationAssert
         return string.Create(
             CultureInfo.InvariantCulture,
             $"""
-             Expected no allocation, but {measurement.Bytes} {plural} were allocated across {measurement.Iterations} iterations, first on iteration {measurement.FirstOffendingIteration}.
+             Expected no allocation, but {measurement.Bytes} {plural} were allocated across
+             {measurement.Iterations} iterations, first on iteration {measurement.FirstOffendingIteration}.
              {Rule}
              {Boundary}
              """);

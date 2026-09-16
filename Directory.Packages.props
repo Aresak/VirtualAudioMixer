@@ -15,6 +15,27 @@
     <PackageVersion Include="Sentry.NLog" Version="6.9.0" />
   </ItemGroup>
 
+  <ItemGroup Label="Audio devices">
+    <PackageVersion Include="NAudio.Wasapi" Version="3.0.1" />
+  </ItemGroup>
+
+  <ItemGroup Label="Protocol and transport">
+    <PackageVersion Include="Google.Protobuf" Version="3.36.0" />
+    <PackageVersion Include="Grpc.Tools" Version="2.83.0" />
+    <PackageVersion Include="Grpc.Net.Client" Version="2.83.0" />
+    <PackageVersion Include="Grpc.AspNetCore" Version="2.83.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Application">
+    <PackageVersion Include="Shiny.Mediator" Version="6.8.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Client">
+    <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Maui.Controls" Version="10.0.20" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="10.0.20" />
+  </ItemGroup>
+
   <ItemGroup Label="Testing">
     <PackageVersion Include="xunit.v3" Version="4.0.0" />
   </ItemGroup>

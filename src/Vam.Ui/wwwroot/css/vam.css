@@ -1,0 +1,907 @@
+/*
+  The console's design tokens and its structural styles, taken from _MockUp/vam-console.html.
+
+  The mockup is the specification rather than an inspiration, so the values here are its values.
+  Where this file differs from the mockup, this file is wrong.
+
+  U6: one fixed dark scheme. A room where somebody is cutting cameras in low light does not want a
+  console that follows a system theme it did not choose.
+*/
+
+:root {
+  --ground: #0d1013;
+  --panel: #151a1f;
+  --raised: #1e252c;
+  --sunken: #0a0d10;
+  --line: #2b343d;
+  --line-soft: #212a32;
+  --ink: #e4e8ea;
+  --ink-dim: #a8b4bf;
+  --ink-mute: #75838f;
+  --brass: #d6a64a;
+  --brass-dim: #8a6d31;
+  --sig-lo: #4fb477;
+  --sig-mid: #c9c34a;
+  --sig-hi: #e5a32e;
+  --sig-clip: #e0503c;
+  --teal: #39b9ae;
+  --violet: #9b8cd9;
+  --blue: #6ea8ff;
+  --ok: #4fb477;
+  --warn: #e5a32e;
+  --bad: #e0503c;
+  --rail-w: 62px;
+  --bar-h: 46px;
+  --f-cond: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --f-sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--f-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+
+/* Every control has to be reachable and visible from the keyboard. An operator with one hand on a
+   camera desk is not always going to be using a mouse. */
+:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
+
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+.lbl { font-family: var(--f-cond); text-transform: uppercase; letter-spacing: .09em; font-weight: 600; }
+
+.app {
+  display: grid;
+  grid-template-columns: var(--rail-w) 1fr;
+  grid-template-rows: var(--bar-h) 1fr;
+  height: 100vh;
+}
+
+/* ---------- status bar (U1) ---------- */
+
+.statusbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  background: linear-gradient(180deg, #1a2128, #12171c);
+  border-bottom: 1px solid var(--line);
+  padding-right: 10px;
+}
+
+.brand {
+  width: var(--rail-w);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid var(--line);
+  height: 100%;
+}
+
+.brand b { font-family: var(--f-cond); font-size: 19px; letter-spacing: .06em; color: var(--brass); }
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 13px;
+  height: 100%;
+  border-right: 1px solid var(--line-soft);
+}
+
+.stat .k {
+  font-family: var(--f-cond);
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+
+.stat .v { font-family: var(--f-mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+
+.stat.grow { flex: 1; border-right: none; justify-content: flex-end; gap: 10px; }
+
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 7px currentColor; color: var(--ok); }
+.dot.rec { background: var(--bad); color: var(--bad); animation: pulse 2s ease-in-out infinite; }
+.dot.bad { background: var(--bad); color: var(--bad); }
+
+@keyframes pulse { 50% { opacity: .35; } }
+
+.zero { color: var(--ok); }
+
+.chip {
+  font-family: var(--f-cond);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: 11px;
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  color: var(--ink-dim);
+}
+
+.chip.on { border-color: var(--brass); color: var(--brass); background: rgba(214, 166, 74, .1); }
+.chip.bad { border-color: rgba(224, 80, 60, .4); color: var(--bad); background: rgba(224, 80, 60, .1); }
+
+/* C10. Amber, not red. The automixer being off is a thing somebody chose and has to be reminded of,
+   not a fault — and a red chip beside a green dropout counter reads as something having broken. */
+.chip.warn { border-color: var(--warn); color: var(--warn); background: rgba(229, 163, 46, .12); }
+
+/* ---------- rail (U2) ---------- */
+
+.rail {
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0;
+  overflow-y: auto;
+}
+
+.rail button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 9px 2px;
+  color: var(--ink-mute);
+  border-left: 2px solid transparent;
+  position: relative;
+}
+
+.rail button span {
+  font-family: var(--f-cond);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  font-size: 9.5px;
+  line-height: 1;
+}
+
+.rail button:hover { color: var(--ink-dim); background: rgba(255, 255, 255, .03); }
+.rail button.on { color: var(--brass); border-left-color: var(--brass); background: rgba(214, 166, 74, .07); }
+.rail .sep { height: 1px; background: var(--line-soft); margin: 6px 10px; }
+
+/* ---------- views ---------- */
+
+.stage { overflow: hidden; position: relative; background: var(--ground); }
+.view { height: 100%; overflow: auto; }
+.view.mixer { display: flex; flex-direction: column; overflow: hidden; }
+.pad { padding: 20px 24px; max-width: 1180px; }
+
+h1 {
+  font-family: var(--f-cond);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  margin: 0 0 3px;
+  text-wrap: balance;
+  text-transform: uppercase;
+}
+
+.sub { color: var(--ink-mute); font-size: 12.5px; margin: 0 0 20px; max-width: 64ch; }
+
+h2 {
+  font-family: var(--f-cond);
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  font-size: 13px;
+  color: var(--ink-dim);
+  margin: 26px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+h2:first-of-type { margin-top: 0; }
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 3px; padding: 14px 16px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+
+th {
+  font-family: var(--f-cond);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: 11px;
+  color: var(--ink-mute);
+  text-align: left;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+}
+
+td { padding: 7px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+.tw { overflow-x: auto; margin-bottom: 4px; }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--f-cond);
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  font-size: 10.5px;
+  padding: 2px 7px;
+  border-radius: 2px;
+  border: 1px solid;
+}
+
+.pill.ok { color: var(--ok); border-color: rgba(79, 180, 119, .4); background: rgba(79, 180, 119, .1); }
+.pill.warn { color: var(--warn); border-color: rgba(229, 163, 46, .4); background: rgba(229, 163, 46, .1); }
+.pill.bad { color: var(--bad); border-color: rgba(224, 80, 60, .4); background: rgba(224, 80, 60, .1); }
+.pill.idle { color: var(--ink-mute); border-color: var(--line); }
+
+.btn {
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 6px 13px;
+  font-family: var(--f-cond);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: 11.5px;
+  color: var(--ink-dim);
+  background: var(--raised);
+}
+
+.btn:hover { color: var(--ink); border-color: var(--ink-mute); }
+.btn.pri { background: var(--brass); border-color: var(--brass); color: #1a1408; font-weight: 600; }
+.btn.danger { color: var(--bad); border-color: rgba(224, 80, 60, .4); }
+.btn.sm { padding: 3px 8px; font-size: 11px; }
+
+.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.between { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+.note {
+  font-size: 12px;
+  color: var(--ink-mute);
+  border-left: 2px solid var(--brass-dim);
+  padding: 2px 0 2px 11px;
+  margin: 12px 0;
+}
+
+.kv { display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; font-size: 12.5px; align-items: center; }
+.kv .k { color: var(--ink-mute); }
+.kv .v { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+select, input[type=text], input[type=number] {
+  font-family: var(--f-mono);
+  font-size: 12px;
+  background: var(--sunken);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 4px 7px;
+  min-width: 150px;
+}
+
+select:hover, input[type=text]:hover { border-color: var(--ink-mute); }
+input.num { min-width: 0; width: 62px; text-align: right; }
+
+/* A labelled field on its own line, where a .kv row would put the label in a fixed narrow column. */
+.field { display: block; margin: 0 0 10px; }
+.field .k { display: block; margin-bottom: 5px; }
+.field input[type=text] { width: 100%; font-family: var(--f-mono); }
+
+.note.bad { border-left-color: var(--bad); color: var(--ink-dim); }
+.note.mono { font-family: var(--f-mono); word-break: break-word; }
+
+/* ---------- mixer ---------- */
+
+.mixtool {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  flex: 0 0 auto;
+}
+
+.mixer { display: grid; grid-template-columns: 1fr auto; flex: 1; min-height: 0; }
+.strips { display: flex; gap: 2px; padding: 10px 10px 10px 12px; overflow-x: auto; align-items: stretch; }
+
+.buses {
+  display: flex;
+  gap: 2px;
+  padding: 10px 12px 10px 10px;
+  background: linear-gradient(90deg, #0a0d10, #11161a);
+  border-left: 1px solid var(--line);
+}
+
+.strip {
+  width: 128px;
+  flex: 0 0 128px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-top-width: 0;
+  border-radius: 2px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  transition: opacity .15s;
+}
+
+.strip.sel { border-color: var(--brass); box-shadow: inset 0 0 0 1px rgba(214, 166, 74, .3); }
+
+/* U16: a muted strip desaturates whole, so it reads as off at a glance from across a room. */
+.strip.muted { filter: saturate(.16) brightness(.6); }
+
+.strip.muted::before {
+  content: "MUTED";
+  position: absolute;
+  top: 46px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  z-index: 5;
+  font-family: var(--f-cond);
+  letter-spacing: .22em;
+  font-size: 11px;
+  color: var(--bad);
+  pointer-events: none;
+}
+
+.strip.absent { opacity: .55; }
+.strip .top { height: 3px; }
+
+.strip .hd {
+  padding: 5px 7px;
+  border-bottom: 1px solid var(--line-soft);
+  cursor: pointer;
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.strip .nm {
+  display: block;
+  font-family: var(--f-cond);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.15;
+}
+
+.strip .dev {
+  display: block;
+  font-family: var(--f-mono);
+  font-size: 9px;
+  color: var(--ink-mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.strip .rate { font-family: var(--f-mono); font-size: 9px; color: var(--ink-mute); display: flex; justify-content: space-between; }
+
+.ax { padding: 5px 7px 6px; border-bottom: 1px solid var(--line-soft); }
+.axtop { display: flex; align-items: center; gap: 6px; }
+.spk { width: 9px; height: 9px; border-radius: 50%; background: var(--line); flex: 0 0 9px; transition: .1s; }
+.spk.on { background: var(--brass); box-shadow: 0 0 9px var(--brass); }
+
+.axbar {
+  flex: 1;
+  height: 9px;
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: 1px;
+  position: relative;
+  overflow: hidden;
+}
+
+.axbar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, var(--brass-dim), var(--brass));
+  transition: width .09s linear;
+}
+
+.axscale {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--f-mono);
+  font-size: 8.5px;
+  color: var(--ink-mute);
+  margin-top: 2px;
+  padding-left: 15px;
+}
+
+.axscale b { color: var(--brass); font-weight: 400; }
+
+.mf { flex: 1; display: flex; gap: 6px; padding: 8px 7px; min-height: 118px; }
+
+/* The meters are a canvas, not markup. Diffing the DOM twenty-five times a second across sixteen
+   channels is the single most likely way this console is made to feel slow, and under a WebView it
+   is the most likely way it stops working at all. */
+.mf canvas { display: block; }
+
+.fader { flex: 1; position: relative; background: var(--sunken); border: 1px solid var(--line); border-radius: 2px; cursor: ns-resize; }
+
+.fader .cap {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  height: 24px;
+  background: linear-gradient(180deg, #39434e, #232b33);
+  border: 1px solid #4a5763;
+  border-radius: 2px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, .5);
+}
+
+.fader .cap::after { content: ""; position: absolute; left: 3px; right: 3px; top: 50%; height: 1px; background: var(--brass); opacity: .7; }
+.fader .unity { position: absolute; left: 0; right: 0; height: 1px; background: var(--line); top: 28%; }
+
+.val {
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  text-align: center;
+  padding: 3px 0;
+  color: var(--ink-dim);
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.chainbar {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 7px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.chainbar .seg { height: 5px; flex: 1; background: var(--brass-dim); border-radius: 1px; }
+.chainbar .seg.byp { background: #2b343d; }
+.chainbar .n { font-family: var(--f-mono); font-size: 9.5px; color: var(--ink-mute); flex: 0 0 auto; }
+.chainbar:hover .seg { background: var(--brass); }
+
+.sends { display: flex; flex-direction: column; gap: 2px; padding: 5px 6px; }
+
+.sends b {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 26px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--sunken);
+  cursor: pointer;
+  font-family: var(--f-cond);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-mute);
+}
+
+.sends b em { font-family: var(--f-mono); font-size: 10px; font-style: normal; opacity: .75; }
+.sends b.on { color: #101418; background: var(--sig-lo); border-color: var(--sig-lo); font-weight: 600; }
+.sends b.on.mon { background: var(--brass); border-color: var(--brass); }
+
+/* D4. Not a disabled button: a locked one, in the colour of a thing that is deliberately refused. */
+.sends b.locked { background: rgba(224, 80, 60, .12); border-color: rgba(224, 80, 60, .35); color: var(--bad); cursor: not-allowed; }
+
+.msm { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3px; padding: 3px 6px 8px; }
+
+.msm b {
+  font-family: var(--f-cond);
+  font-size: 12px;
+  text-align: center;
+  padding: 8px 0;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  color: var(--ink-mute);
+  background: var(--sunken);
+  cursor: pointer;
+  font-weight: 600;
+  letter-spacing: .06em;
+}
+
+.msm b.m.on { background: var(--bad); border-color: var(--bad); color: #fff; }
+.msm b.s.on { background: var(--brass); border-color: var(--brass); color: #1a1408; }
+.msm b.o.on { background: var(--raised); border-color: var(--ink-mute); color: var(--ink); }
+
+/* U4: compact density fits more strips on screen — meters and mutes only. */
+.compact .strip { width: 58px; flex-basis: 58px; }
+.compact .strip .dev,
+.compact .strip .rate,
+.compact .axscale,
+.compact .sends,
+.compact .chainbar .n { display: none; }
+.compact .strip .nm { font-size: 11.5px; }
+.compact .msm { grid-template-columns: 1fr 1fr; gap: 2px; }
+.compact .msm b.o { display: none; }
+
+/* ---------- overlays (U3) ---------- */
+
+/* Over the mixer rather than away from it. An operator adjusting one strip has not stopped needing
+   to see the others, and a console that navigates away loses the meeting behind a settings page. */
+.ovl {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 420px;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  box-shadow: -14px 0 32px rgba(0, 0, 0, .5);
+  display: flex;
+  flex-direction: column;
+  z-index: 20;
+}
+
+.ovl.wide { width: min(880px, 92%); }
+
+.ohd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--raised);
+}
+
+.ohd .nm { font-family: var(--f-cond); text-transform: uppercase; letter-spacing: .05em; font-size: 15px; font-weight: 600; flex: 1; }
+.obody { padding: 14px 16px; overflow: auto; flex: 1; }
+
+.swatch { width: 12px; height: 12px; border-radius: 2px; flex: 0 0 auto; }
+
+/* ---------- faders ---------- */
+
+/*
+  A real range input rather than a div with pointer handlers. It brings keyboard control, touch
+  behaviour and a value an operator's screen reader can read, none of which a hand-rolled control
+  gets for free — and the last thing this console should be is one that only works with a mouse.
+
+  The mockup's cap is the thumb. The travel is the mockup's sunken slot.
+*/
+.fader input[type=range] {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  appearance: none;
+  -webkit-appearance: none;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: transparent;
+  cursor: ns-resize;
+}
+
+.fader input[type=range]::-webkit-slider-runnable-track { background: transparent; width: 100%; }
+.fader input[type=range]::-moz-range-track { background: transparent; width: 100%; }
+
+.fader input[type=range]::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: calc(100% - 4px);
+  height: 24px;
+  background: linear-gradient(180deg, #39434e, #232b33);
+  border: 1px solid #4a5763;
+  border-radius: 2px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, .5);
+}
+
+.fader input[type=range]::-moz-range-thumb {
+  width: 100%;
+  height: 24px;
+  background: linear-gradient(180deg, #39434e, #232b33);
+  border: 1px solid #4a5763;
+  border-radius: 2px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, .5);
+}
+
+.meter { width: 14px; flex: 0 0 14px; border: 1px solid var(--line); border-radius: 1px; height: 100%; }
+.gr { width: 6px; flex: 0 0 6px; border: 1px solid var(--line); border-radius: 1px; height: 100%; }
+
+.compact .gr { display: none; }
+
+/* Horizontal ranges, in the overlays and the panels. */
+.knob input[type=range],
+.card input[type=range] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 18px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.knob input[type=range]::-webkit-slider-runnable-track,
+.card input[type=range]::-webkit-slider-runnable-track {
+  height: 4px;
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+}
+
+.knob input[type=range]::-moz-range-track,
+.card input[type=range]::-moz-range-track {
+  height: 4px;
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+}
+
+.knob input[type=range]::-webkit-slider-thumb,
+.card input[type=range]::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 12px;
+  height: 16px;
+  margin-top: -7px;
+  background: var(--raised);
+  border: 1px solid var(--ink-mute);
+  border-radius: 2px;
+}
+
+.knob input[type=range]::-moz-range-thumb,
+.card input[type=range]::-moz-range-thumb {
+  width: 12px;
+  height: 16px;
+  background: var(--raised);
+  border: 1px solid var(--ink-mute);
+  border-radius: 2px;
+}
+
+input[type=checkbox] { accent-color: var(--brass); width: 15px; height: 15px; }
+
+
+/* ---------- taken from the mockup, verbatim ---------- */
+
+.slider{height:5px;background:var(--sunken);border:1px solid var(--line);border-radius:2px;position:relative;cursor:pointer}
+.slider i{position:absolute;inset:0 auto 0 0;background:var(--brass);border-radius:2px}
+.slider b{position:absolute;top:50%;width:13px;height:13px;margin:-6.5px 0 0 -6.5px;border-radius:50%;
+  background:var(--ink);border:1px solid var(--ground)}
+.sw{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-dim);cursor:pointer}
+.sw i{width:30px;height:16px;border-radius:8px;background:var(--sunken);border:1px solid var(--line);
+  position:relative;transition:.15s;flex:0 0 30px}
+.sw.on i{background:rgba(214,166,74,.25);border-color:var(--brass)}
+.hlp{width:14px;height:14px;border-radius:50%;border:1px solid var(--line);color:var(--ink-mute);
+  font-size:9.5px;line-height:1;display:inline-flex;align-items:center;justify-content:center;
+  font-family:var(--f-mono);flex:0 0 14px}
+.hlp:hover{border-color:var(--brass);color:var(--brass)}
+.addtile{width:44px;flex:0 0 44px;border:1px dashed var(--line);border-radius:2px;background:transparent;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--ink-mute)}
+.addtile:hover{border-color:var(--brass);color:var(--brass);background:rgba(214,166,74,.05)}
+.addtile span{font-size:22px;line-height:1;font-family:var(--f-cond)}
+.addtile em{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.1em;font-size:9.5px;
+  font-style:normal;writing-mode:vertical-rl;transform:rotate(180deg)}
+.bstrip{width:112px;flex:0 0 112px;background:var(--raised);border:1px solid var(--line);border-radius:2px;
+  display:flex;flex-direction:column}
+.bstrip.master{width:132px;flex-basis:132px;border-color:var(--brass-dim)}
+.bstrip .hd{padding:6px 7px;border-bottom:1px solid var(--line-soft);cursor:pointer}
+.bstrip .out{font-family:var(--f-mono);font-size:9px;color:var(--ink-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lim{display:flex;align-items:center;gap:5px;padding:5px 7px;border-bottom:1px solid var(--line-soft);
+  font-family:var(--f-cond);font-size:10.5px;letter-spacing:.07em;color:var(--ink-mute)}
+.lim i{width:6px;height:6px;border-radius:50%;background:var(--line)}
+.monbar{flex:0 0 auto;border-top:1px solid var(--line);background:var(--panel);padding:0 12px}
+.monbar .mhead{display:flex;align-items:center;gap:10px;padding:6px 0}
+.monrow{display:flex;align-items:center;gap:8px;padding:5px 0 8px;border-top:1px solid var(--line-soft);flex-wrap:wrap}
+.monrow .nm{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.08em;font-size:12.5px;
+  color:var(--brass);width:64px;flex:0 0 64px}
+.monrow .grp{display:flex;align-items:center;gap:4px}
+.monrow .gl{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.09em;font-size:9.5px;color:var(--ink-mute);margin-right:2px}
+.mchip{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.05em;font-size:11.5px;
+  padding:4px 9px;border:1px solid var(--line);border-radius:2px;background:var(--sunken);color:var(--ink-mute);cursor:pointer}
+.mchip.on{color:#101418;background:var(--brass);border-color:var(--brass);font-weight:600}
+.mchip.bus.on{background:var(--teal);border-color:var(--teal)}
+.monbar.collapsed .monrow{display:none}
+.mod{background:var(--raised);border:1px solid var(--line);border-radius:2px;margin-bottom:3px}
+.mod.anchor{background:#11161b;border-style:dashed;border-color:#333e49}
+.mod.byp{opacity:.5}
+.mod .mh{display:flex;align-items:center;gap:8px;padding:8px 11px;cursor:pointer}
+.mod .mh .t{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.08em;font-size:13px;flex:1}
+.mod .mh .cost{font-family:var(--f-mono);font-size:10px;color:var(--ink-mute)}
+.mod .mb{padding:0 11px 11px;display:none}
+.mod.open .mb{display:block}
+.mod .anchornote{font-size:11.5px;color:var(--ink-mute);padding:0 11px 9px}
+.anchoricon{color:var(--ink-mute);font-size:12px;line-height:1;flex:0 0 auto}
+.mod.dragging{opacity:.4}
+.mod.over{border-color:var(--brass)}
+.addmod{width:100%;border:1px dashed var(--line);border-radius:2px;padding:9px;color:var(--ink-mute);
+  font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.09em;font-size:12px;margin-top:4px}
+.addmod:hover{border-color:var(--brass);color:var(--brass)}
+.tap{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--ink-mute);
+  border-left:2px solid var(--teal);padding:4px 0 4px 10px;margin:3px 0 3px 18px}
+.flow{text-align:center;color:#333e49;font-size:11px;line-height:1.1}
+.srcgroup{margin-top:10px}
+.srcgroup .gl{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.09em;font-size:10.5px;
+  color:var(--ink-mute);display:block;margin-bottom:5px}
+.srcgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:4px}
+.srcgrid b{font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.05em;font-size:11.5px;
+  padding:7px 9px;border:1px solid var(--line);border-radius:2px;background:var(--sunken);
+  color:var(--ink-mute);cursor:pointer;font-weight:500;display:flex;align-items:center;gap:6px}
+.srcgrid b.on{color:var(--ink);border-color:var(--brass-dim);background:rgba(214,166,74,.13)}
+.tabs{display:flex;border-bottom:1px solid var(--line);margin-bottom:16px;flex-wrap:wrap}
+.tabs button{padding:8px 15px;font-family:var(--f-cond);text-transform:uppercase;letter-spacing:.08em;
+  font-size:12px;color:var(--ink-mute);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button.on{color:var(--brass);border-bottom-color:var(--brass)}
+.tab{display:none}
+.band{height:96px;background:var(--sunken);border:1px solid var(--line);border-radius:2px;width:100%;display:block}
+.spark{width:100%;height:120px;display:block;background:var(--sunken);border:1px solid var(--line);border-radius:2px}
+.logbox{background:var(--sunken);border:1px solid var(--line);border-radius:2px;padding:9px 11px;
+  font-family:var(--f-mono);font-size:11.5px;line-height:1.65;max-height:300px;overflow:auto}
+.logbox .t{color:var(--ink-mute)}
+
+/* Rules the mockup expresses through JavaScript or a body class, and which this console needs as
+   plain CSS because its state lives in C#. */
+
+.tab.on { display: block; }
+.mod .mb { display: block; }
+.lim i.on { background: var(--warn); box-shadow: 0 0 7px var(--warn); }
+.sw input { position: absolute; opacity: 0; pointer-events: none; }
+.sw i::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ink-mute);
+  transition: .15s;
+}
+.sw.on i::after { background: var(--brass); transform: translateX(14px); }
+
+/* U14. The help body, which the mockup shows in a shared panel and this console shows in place. A
+   panel would need somewhere to put it on every view; in place needs nothing and cannot be left
+   open behind you. */
+.hlpwrap { position: relative; display: inline-flex; }
+.hlp { cursor: pointer; background: none; }
+.hlp.on { border-color: var(--brass); color: var(--brass); }
+
+.hlpbody {
+  position: absolute;
+  top: 20px;
+  left: -8px;
+  z-index: 40;
+  width: 280px;
+  background: var(--raised);
+  border: 1px solid var(--brass-dim);
+  border-radius: 2px;
+  padding: 9px 11px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-dim);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .55);
+}
+
+.hlpbody b {
+  display: block;
+  font-family: var(--f-cond);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: 11.5px;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+/* The meter and its gain-reduction strip are canvases here, so they need an explicit height inside
+   the bus strip's .mf the way they do inside a channel strip's. */
+.bstrip .mf { flex: 1; display: flex; gap: 6px; padding: 8px 7px; min-height: 118px; }
+.bstrip .val { font-family: var(--f-mono); font-size: 11.5px; text-align: center; padding: 3px 0; color: var(--ink-dim); border-top: 1px solid var(--line-soft); }
+.bstrip .msm { display: grid; grid-template-columns: 1fr; gap: 3px; padding: 3px 6px 8px; }
+.bstrip.sel { border-color: var(--brass); box-shadow: inset 0 0 0 1px rgba(214, 166, 74, .3); }
+.bstrip.muted { filter: saturate(.16) brightness(.6); }
+
+.compact .bstrip { width: 64px; flex-basis: 64px; }
+.compact .bstrip.master { width: 74px; flex-basis: 74px; }
+.compact .bstrip .out,
+.compact .lim { display: none; }
+
+/* U19. The gate threshold, drawn over the meter canvas rather than into it: it moves when an
+   operator drags a threshold and not twenty-five times a second with the level. */
+.mf { position: relative; }
+
+.thr {
+  position: absolute;
+  left: 7px;
+  width: 14px;
+  height: 0;
+  border-top: 1px dashed var(--bad);
+  opacity: .85;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* U18. Fixed at its viewBox size so a pointer offset is a user unit — see EqualiserCurve. */
+.eqcurve {
+  width: 360px;
+  height: 140px;
+  display: block;
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  touch-action: none;
+  margin-bottom: 8px;
+}
+
+/* F1. The value row doubles as the clip indicator, because that is where an eye already goes to read
+   the level — and a clip that needed its own lamp somewhere else is a clip nobody looks for. */
+.val { cursor: default; }
+.val.clip {
+  background: var(--bad);
+  color: #fff;
+  font-family: var(--f-cond);
+  letter-spacing: .14em;
+  cursor: pointer;
+}
+
+/*
+  The question asked when the window is closed. Centred and modal, unlike the strip overlays, which
+  sit beside a mixer somebody is still watching: there is nothing to keep watching here.
+*/
+
+.closer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(6, 8, 10, .72);
+}
+
+.closer-card {
+  width: 100%;
+  max-width: 460px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 26px 26px 22px;
+}
+
+.closer-card h2 {
+  font: 600 20px/1.25 var(--f-sans);
+  color: var(--ink);
+  letter-spacing: 0;
+  text-transform: none;
+  margin: 0 0 8px;
+}
+
+.closer-card .sub { font-size: 13.5px; margin-bottom: 20px; }
+
+.closer-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  font: 500 15px/1.35 var(--f-sans);
+  padding: 13px 16px;
+  cursor: pointer;
+}
+
+.closer-btn + .closer-btn { margin-top: 10px; }
+.closer-btn:hover { border-color: var(--ink-mute); }
+.closer-btn:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+
+.closer-btn b { display: block; font-weight: 600; }
+.closer-btn span { display: block; margin-top: 3px; font-size: 12.5px; color: var(--ink-mute); }
+
+.closer-btn.primary { background: var(--brass); border-color: var(--brass); color: #17120a; }
+.closer-btn.primary span { color: rgba(23, 18, 10, .72); }
+.closer-btn.primary:hover { background: #e2b358; }

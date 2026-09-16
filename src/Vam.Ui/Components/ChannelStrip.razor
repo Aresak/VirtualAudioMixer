@@ -1,0 +1,159 @@
+@inherits VamComponent
+
+@*
+    One input strip. The thing an operator actually uses, so everything on it is either something
+    they change during a meeting or something they need to see without asking for it.
+
+    The order of the parts is the mockup's, and it is not arbitrary: identity, then what the
+    automixer is doing with the channel, then level, then what is in the chain, then where it goes,
+    then mute and solo at the bottom where a thumb lands.
+
+    The meter, the gain-reduction bar, the automix share and the speaking dot are all written by
+    wwwroot/js/vam-meters.js from the packed frame. None of them is in this markup, and none of them
+    causes a render.
+*@
+
+<div class="strip @StateClass"
+     draggable="@(Shell.IsReorderArmed ? "true" : "false")"
+     @ondragstart="OnDragStart"
+     @ondragover:preventDefault="true"
+     @ondrop="OnDropAsync">
+
+    <div class="top"
+         style="background:@Colour"></div>
+
+    <div class="hd"
+         @onclick="Open"
+         title="@Channel.DeviceName">
+        @if (Shell.IsReorderArmed)
+        {
+            <span class="grip"
+                  aria-hidden="true">⣿</span>
+        }
+        <span style="min-width:0;flex:1">
+            <span class="nm">@Channel.Name</span>
+            <span class="dev">@DeviceLine</span>
+
+            @*
+                A14 and U19. The rate the device claims beside the rate it is really running at. An
+                operator does not need to know what a servo is; they need to be able to say "that
+                microphone is the one that is wrong" when a recording goes out of sync.
+            *@
+            <span class="rate"
+                  title="@L["help.rate"]">
+                <span>@NominalText</span>
+                <b>@MeasuredText</b>
+            </span>
+        </span>
+    </div>
+
+    @if (Channel.ParticipatesInAutomix)
+    {
+        <div class="ax"
+             title="@L["help.share"]">
+            <div class="axtop">
+                <span class="spk"
+                      data-vam-speaking="@Channel.Index"
+                      aria-hidden="true"></span>
+                <div class="axbar">
+                    <i data-vam-share="@Channel.Index"></i>
+                </div>
+            </div>
+
+            @* Its floor and its ceiling visible, so the bar means something rather than being decoration. *@
+            <div class="axscale">
+                <span>@DepthText</span>
+                <b>@GainText</b>
+                <span>0 dB</span>
+            </div>
+        </div>
+    }
+
+    <div class="mf">
+        <canvas class="meter"
+                data-vam-meter="@Channel.Index"
+                aria-hidden="true"></canvas>
+
+        @if (GateThreshold is { } threshold)
+        {
+            @*
+                U19. Where the gate opens, drawn over the meter rather than into it — it moves when
+                somebody drags a threshold, not twenty-five times a second with the level. Without
+                it an operator can see that a quiet voice is not getting through but not how far
+                short of the threshold it is.
+            *@
+            <div class="thr"
+                 style="bottom:@(Position(threshold))%"
+                 title="@L["help.threshold"]"></div>
+        }
+
+        <canvas class="gr"
+                data-vam-gr="@Channel.Index"
+                aria-hidden="true"></canvas>
+
+        <div class="fader">
+            <div class="unity"
+                 aria-hidden="true"></div>
+            <input type="range"
+                   min="0" max="1000" step="1"
+                   value="@FaderPosition"
+                   aria-label="@(Channel.Name + " " + L["strip.fader"])"
+                   @oninput="OnFaderAsync" />
+        </div>
+    </div>
+
+    @*
+        F1. The value row doubles as the clip indicator, because that is where an eye already goes to
+        read the level. Clicking it clears the latch, which is also how an operator says they saw it.
+    *@
+    <div class="val @(HasClipped ? "clip" : null)"
+         role="button" tabindex="0"
+         title="@(HasClipped ? L["help.clip"] : null)"
+         @onclick="ClearClipAsync">
+        @(HasClipped ? L["strip.clip"] : FaderScale.Format(Channel.FaderDb) + " dB")
+    </div>
+
+    <div class="chainbar"
+         @onclick="Open"
+         title="@ChainTitle">
+        @if (Channel.Chain.Count == 0)
+        {
+            <span class="seg byp"></span>
+        }
+        else
+        {
+            @foreach (ModifierState link in Channel.Chain)
+            {
+                <span class="seg @(link.IsBypassed ? "byp" : null)"></span>
+            }
+        }
+        <span class="n">@Channel.Chain.Count</span>
+    </div>
+
+    <div class="sends">
+        @foreach (BusState bus in Buses)
+        {
+            <SendButton Channel="Channel"
+                        Bus="bus"
+                        @key="bus.Index" />
+        }
+    </div>
+
+    <div class="msm">
+        <b class="m @(Channel.IsMuted ? "on" : null)"
+           role="button" tabindex="0"
+           title="@L["help.mute"]"
+           @onclick="ToggleMuteAsync">@L["strip.mute"]</b>
+
+        <b class="s @(Channel.IsSoloed ? "on" : null)"
+           role="button" tabindex="0"
+           title="@L["help.solo"]"
+           @onclick="ToggleSoloAsync">@L["strip.solo"]</b>
+
+        @* B8a. Sum to mono — the mockup's third button, and what almost every conference microphone wants. *@
+        <b class="o @(Channel.IsMonoFold ? "on" : null)"
+           role="button" tabindex="0"
+           title="@L["help.monoFold"]"
+           @onclick="ToggleMonoFoldAsync">Ø</b>
+    </div>
+</div>

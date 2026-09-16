@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    This project references nothing, and that is a licence condition rather than a preference.
+    The section 7 exception at the top of the root LICENSE names this assembly by name and permits
+    a closed-source modifier to link against it. Condition (a) of that exception is only testable
+    if the assembly a third party links to is genuinely standalone - one ProjectReference to the
+    engine and the permission it grants stops meaning anything.
+
+    Its LICENSE is a byte-for-byte copy of the ROOT LICENSE, not of licenses/AGPL-3.0.txt, because
+    the exception has to travel with the file a person actually opens.
+  -->
+
+</Project>

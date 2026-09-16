@@ -1,0 +1,206 @@
+@inherits VamComponent
+@inject VamSessionOptions Options
+
+<div class="view">
+    <div class="pad">
+        <h1>@L["settings.title"]</h1>
+        <p class="sub">@L["settings.sub"]</p>
+
+        <div class="grid2">
+            <div class="card">
+                <h2>@L["settings.language"]</h2>
+
+                <div class="row">
+                    @foreach (Language language in VamLocalizer.Available)
+                    {
+                        <button type="button"
+                                class="chip @(L.Current.Code == language.Code ? "on" : null)"
+                                @onclick="() => L.Use(language.Code)">
+                            @language.Name
+                        </button>
+                    }
+                </div>
+
+                @*
+                    U7. The engine stays in English: its log lines and its refusal messages are read
+                    by whoever ends up with a diagnostic bundle, and translating those would make a
+                    bug report harder to act on. The console is what an operator uses.
+                *@
+                <p class="note">
+                    This changes the console only. The engine's log stays in English so a diagnostic
+                    bundle reads the same wherever it is sent.
+                </p>
+            </div>
+
+            <div class="card">
+                <h2>@L["settings.engine"]</h2>
+
+                @*
+                    The address is editable here and nowhere else. There is no separate remote mode -
+                    the console on the mixing machine speaks the same protocol as one across the room,
+                    which is what stops the remote path rotting while nobody uses it. So pointing this
+                    console somewhere else is one field, for the few people who need it.
+                *@
+                <label class="field">
+                    <span class="k">@L["settings.address"]</span>
+                    <input type="text"
+                           value="@typed"
+                           placeholder="192.168.1.50"
+                           spellcheck="false"
+                           autocomplete="off"
+                           @onchange="OnTyped"
+                           @onkeydown="OnKeyAsync" />
+                </label>
+
+                <div class="row">
+                    <button class="btn"
+                            @onclick="SwitchAsync">@L["settings.reconnect"]</button>
+                    <span class="note">@L["settings.addressWhy"]</span>
+                </div>
+
+                @*
+                    Only for an engine on this machine. Stopping a remote one ends somebody else's
+                    meeting, and a button that can do that from a console across the room is a button
+                    that will eventually be pressed by mistake.
+                *@
+                @if (Connector.CanStopEngine)
+                {
+                    <div class="row"
+                         style="margin-top:12px">
+                        @if (Connector.CanRestartEngine)
+                        {
+                            <button class="btn"
+                                    @onclick="RestartAsync">@L["settings.restartEngine"]</button>
+                        }
+
+                        <ConfirmButton Label="@L["settings.stopEngine"]"
+                                       Question="@L["settings.stopEngineConfirm"]"
+                                       Confirmed="StopAsync" />
+                    </div>
+
+                    <p class="note">@L["settings.engineLifeWhy"]</p>
+                }
+
+                @if (Connector.Problem.Length > 0)
+                {
+                    <p class="note bad">@L[Connector.Problem]</p>
+
+                    @if (Connector.ProblemDetail.Length > 0)
+                    {
+                        <p class="note mono">@Connector.ProblemDetail</p>
+                    }
+                }
+
+                <div class="kv">
+                    <span class="k">@L["status.engine"]</span>
+                    <span class="v">@Session.ServerName</span>
+                    <span class="k">Protocol</span>
+                    <span class="v">@Options.ProtocolVersion</span>
+                    <span class="k">@L["status.rate"]</span>
+                    <span class="v">@Session.SampleRate Hz</span>
+                    <span class="k">@L["status.block"]</span>
+                    <span class="v">@Session.BlockFrames</span>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>@L["settings.interface"]</h2>
+
+                <div class="kv">
+                    <span class="k">
+                        @L["settings.density"]
+                        <InlineHelp Title="@L["settings.density"]"
+                                    Body="@L["help.density"]" />
+                    </span>
+                    <span class="v row"
+                          style="gap:5px">
+                        <button type="button"
+                                class="chip @(Shell.IsCompact ? null : "on")"
+                                @onclick="() => Shell.IsCompact = false">
+                            @L["mixer.full"]
+                        </button>
+                        <button type="button"
+                                class="chip @(Shell.IsCompact ? "on" : null)"
+                                @onclick="() => Shell.IsCompact = true">
+                            @L["mixer.compact"]
+                        </button>
+                    </span>
+
+                    @*
+                        U6. Not a choice, and the reason is worth saying rather than leaving as a
+                        missing option somebody files a bug about.
+                    *@
+                    <span class="k">
+                        @L["settings.theme"]
+                        <InlineHelp Title="@L["settings.theme"]"
+                                    Body="@L["help.theme"]" />
+                    </span>
+                    <span class="v">@L["settings.themeFixed"]</span>
+
+                    <span class="k">
+                        @L["settings.ballistics"]
+                        <InlineHelp Title="@L["settings.ballistics"]"
+                                    Body="@L["help.ballistics"]" />
+                    </span>
+                    <span class="v">@L["settings.ballisticsValue"]</span>
+
+                    <span class="k">@L["settings.meterRate"]</span>
+                    <span class="v">25 / s</span>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>@L["settings.startup"]</h2>
+
+                @*
+                    H3 and E4, the two startup behaviours an operator may actually want to change.
+                    Everything else on this view is deliberately not a choice, and says so.
+                *@
+                <Switch Label="@L["settings.loadLast"]"
+                        Help="@L["help.loadLast"]"
+                        Checked="Startup?.LoadLastConsole ?? true"
+                        Changed="value => SetStartupAsync(value, Startup?.RecordAutomatically ?? true)" />
+
+                <div style="height:8px"></div>
+
+                <Switch Label="@L["settings.autoRecord"]"
+                        Help="@L["help.autoRecord"]"
+                        Checked="Startup?.RecordAutomatically ?? true"
+                        Changed="value => SetStartupAsync(Startup?.LoadLastConsole ?? true, value)" />
+
+                <p class="note">@L["settings.startupWhy"]</p>
+            </div>
+
+            <div class="card">
+                <h2>@L["settings.about"]</h2>
+
+                <p class="sub"
+                   style="margin-bottom:10px">
+                    VAM. A mixing console for a room where a meeting is being recorded and streamed.
+                </p>
+
+                <div class="kv">
+                    <span class="k">Engine</span>
+                    <span class="v">AGPL-3.0 with a linking exception</span>
+                    <span class="k">Console</span>
+                    <span class="v">MPL-2.0</span>
+                    <span class="k">Protocol</span>
+                    <span class="v">Apache-2.0</span>
+                    <span class="k">Modifier API</span>
+                    <span class="v">AGPL-3.0 with a linking exception</span>
+                </div>
+
+                @*
+                    The exception is the point of the arrangement and is worth stating where somebody
+                    might look: a modifier written against the API is the author's own, and the
+                    console can be shipped through an app store without the licence fighting the
+                    terms.
+                *@
+                <p class="note">
+                    A modifier written against the modifier API belongs to whoever wrote it. The
+                    exception exists so that stays true.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
