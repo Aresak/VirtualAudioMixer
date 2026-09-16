@@ -46,6 +46,15 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
     /// <summary>Bytes in a WAVEFORMATEX. A blob shorter than this cannot be one.</summary>
     const int MinimumFormatBytes = 18;
 
+    /// <summary>Bytes in a WAVEFORMATEXTENSIBLE, which is the whole of what an extensible tag implies.</summary>
+    const int ExtensibleFormatBytes = 40;
+
+    /// <summary>Where WAVEFORMATEX keeps the size of whatever follows it.</summary>
+    const int ExtraSizeOffset = 16;
+
+    /// <summary>WAVE_FORMAT_EXTENSIBLE, as the tag at the front of the blob.</summary>
+    const ushort ExtensibleTag = 0xFFFE;
+
     readonly MMDeviceEnumerator enumerator = new();
 
     /// <inheritdoc />
@@ -403,7 +412,7 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
             // A WAVEFORMATEX, or an extensible one, as a blob. Marshalled rather than parsed by
             // hand, because the same struct with a different cbSize is two different layouts.
             if (device.Properties[PropertyKeys.PKEY_AudioEngine_DeviceFormat].Value is not byte[] blob
-                || blob.Length < MinimumFormatBytes)
+                || blob.Length < RequiredBytes(blob))
             {
                 return null;
             }
@@ -422,6 +431,30 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
             // answer to null is to open shared, which is where it would have ended up anyway.
             return null;
         }
+    }
+
+    /// <summary>
+    /// How many bytes a device-format blob has to hold before it is safe to marshal.
+    /// </summary>
+    /// <remarks>
+    /// Both questions, because a driver is free to publish a blob that disagrees with itself.
+    /// <c>MarshalFromPtr</c> reads a whole WAVEFORMATEXTENSIBLE whenever the tag says extensible,
+    /// whatever <c>cbSize</c> claims, so trusting <c>cbSize</c> alone would read off the end of the
+    /// pinned array and into whatever is next on the heap.
+    /// </remarks>
+    /// <param name="blob">What the property store returned.</param>
+    /// <returns>The length the blob must reach.</returns>
+    static int RequiredBytes(byte[] blob)
+    {
+        if (blob.Length < MinimumFormatBytes)
+        {
+            return MinimumFormatBytes;
+        }
+
+        int declared = MinimumFormatBytes + BitConverter.ToUInt16(blob, ExtraSizeOffset);
+        int implied = BitConverter.ToUInt16(blob, 0) == ExtensibleTag ? ExtensibleFormatBytes : MinimumFormatBytes;
+
+        return Math.Max(declared, implied);
     }
 
     /// <summary>

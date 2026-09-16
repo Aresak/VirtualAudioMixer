@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using Vam.Engine.Devices.Abstractions;
+using Vam.Engine.Devices.Extensions;
 
 namespace Vam.Engine.Devices;
 
@@ -230,8 +231,10 @@ public sealed class DeviceSupervisor(
             // carrying either across the gap would splice two unrelated moments together.
             device.Channel.Reset();
 
-            ICaptureStream stream = Accept(backend.OpenCapture(device.DeviceId, device.CaptureOptions), device.Channel);
+            ICaptureStream stream = backend.OpenCapture(device.DeviceId, device.CaptureOptions);
 
+            stream.RequireFormat(device.Channel.NominalSampleRate, device.Channel.ChannelCount);
+            device.Channel.DescribeStream(stream.Format);
             stream.Start(device.Channel.Write);
 
             device.Stream = stream;
@@ -293,39 +296,5 @@ public sealed class DeviceSupervisor(
         }
 
         Changed?.Invoke(this, change);
-    }
-
-    /// <summary>
-    /// Takes a stream only if it delivers the format the channel was built for.
-    /// </summary>
-    /// <remarks>
-    /// The backend is contracted to grant the rate and width asked for or to throw, so reaching the
-    /// refusal below means a backend broke that contract. It is checked anyway, because the failure
-    /// it prevents is silent: a ring fed at a rate it is not drained at underruns for the whole
-    /// session, and one fed a width it was not built for reads interleaved channels as consecutive
-    /// frames - half the audio discarded and the rest an octave down. A strip that stays silent and
-    /// retries is a better outcome than either, and the operator gets a line naming both formats.
-    /// </remarks>
-    /// <param name="stream">What the backend opened.</param>
-    /// <param name="channel">The channel it would feed.</param>
-    /// <returns>The same stream.</returns>
-    /// <exception cref="UnsupportedAudioFormatException">The formats disagree.</exception>
-    static ICaptureStream Accept(ICaptureStream stream, DeviceInputChannel channel)
-    {
-        AudioStreamFormat granted = stream.Format;
-
-        if (granted.SampleRate == channel.NominalSampleRate && granted.ChannelCount == channel.ChannelCount)
-        {
-            channel.DescribeStream(granted);
-
-            return stream;
-        }
-
-        stream.Dispose();
-
-        throw new UnsupportedAudioFormatException(
-            $"{channel.DeviceId.Value} opened at {granted.SampleRate} Hz {granted.ChannelCount} ch, and its strip is "
-            + $"built for {channel.NominalSampleRate} Hz {channel.ChannelCount} ch. Nothing in the engine converts "
-            + "between the two, so the device is left closed rather than fed into a ring it does not fit.");
     }
 }
