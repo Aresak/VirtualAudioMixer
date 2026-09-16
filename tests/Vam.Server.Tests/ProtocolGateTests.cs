@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Vam.Engine.Devices;
 using Vam.Engine.Devices.Abstractions;
+using Vam.Engine.Recording;
 using Vam.Protocol;
 using Vam.Protocol.V1;
 using Vam.Server.Engine;
@@ -84,7 +85,12 @@ public class ProtocolGateTests : IAsyncLifetime
             {
                 ConsolePath = Path.Combine(workspace, "console.json"),
                 RecordingDirectory = Path.Combine(workspace, "recordings"),
-                RecordAutomatically = false
+                RecordAutomatically = false,
+
+                // A minute rather than the four hours a council meeting is assumed to run. The disk
+                // guard refuses when the projection does not fit, and a suite that needs ten
+                // gigabytes free to pass is a suite that fails for a reason nobody can read.
+                ExpectedSessionDuration = TimeSpan.FromMinutes(1)
             },
             NullLoggerFactory.Instance,
             devices);
@@ -448,6 +454,58 @@ public class ProtocolGateTests : IAsyncLifetime
         // The projection follows the selection rather than the channel count, which is the whole
         // reason it is computed by the engine and not by the console.
         Assert.NotEqual(inputsOnly, after.Recording.ProjectedBytes);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public async Task ASessionOpensTheTracksItWasAskedForAndNoOthers()
+    {
+        int buses = (await client!.GetConsoleAsync(new Empty(), cancellationToken: Token)).Buses.Count;
+
+        Assert.True(buses > 0);
+
+        CommandReply changed = await client.ApplyAsync(new Command
+        {
+            SetCaptureOptions = new SetCaptureOptions
+            {
+                Captures = new RecordingCapture { Inputs = false, AllBuses = true, Format = "wav24" }
+            }
+        }, cancellationToken: Token);
+
+        Assert.True(changed.Accepted, changed.Reason);
+
+        CommandReply started = await client.ApplyAsync(
+            new Command { SetRecording = new SetRecording { Recording = true } },
+            cancellationToken: Token
+        );
+
+        Assert.True(started.Accepted, started.Reason);
+
+        // One track per bus and not one input, which is what was asked for. Asserting the count and
+        // the sources rather than the projected size: a byte figure is equally happy to be right
+        // about a track list that is wrong.
+        IReadOnlyList<RecordingTrack> tracks = engine!.Recording!.Tracks;
+
+        Assert.Equal(buses, tracks.Count);
+
+        for (int bus = 0; bus < buses; bus++)
+        {
+            Assert.Contains(tracks, track => track.Source == new RecordingSource(RecordingSourceKind.Bus, bus));
+        }
+
+        await client.ApplyAsync(
+            new Command { SetRecording = new SetRecording { Recording = false } },
+            cancellationToken: Token
+        );
+
+        // Put it back, so the order tests run in cannot matter.
+        await client.ApplyAsync(new Command
+        {
+            SetCaptureOptions = new SetCaptureOptions
+            {
+                Captures = new RecordingCapture { Inputs = true, StreamBus = true, Format = "wav24" }
+            }
+        }, cancellationToken: Token);
     }
 
     [Fact]

@@ -145,9 +145,21 @@
 
                     <div class="row"
                          style="margin-top:12px">
-                        <span class="pill @(HoursLeft(recording) > 4 ? "ok" : "warn")">
-                            @L.Format("recording.roomFor", HoursLeft(recording).ToString("0.0", CultureInfo.InvariantCulture))
-                        </span>
+                        @*
+                            Only when there is something to record. With nothing selected and
+                            nothing configured the rate is zero, and "enough space for 0.0 h" beside
+                            a warning would be the disk telling a lie about itself.
+                        *@
+                        @if (HoursLeft(recording) is { } hours)
+                        {
+                            <span class="pill @(hours > 4 ? "ok" : "warn")">
+                                @L.Format("recording.roomFor", hours.ToString("0.0", CultureInfo.InvariantCulture))
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="pill">@L["recording.nothingToRecord"]</span>
+                        }
                     </div>
                 </div>
             </div>

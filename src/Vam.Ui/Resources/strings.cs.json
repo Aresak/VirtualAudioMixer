@@ -242,6 +242,7 @@
   "recording.diskGuard": "Hlídač disku",
   "recording.guardWhy": "Nahrávání odmítne začít, pokud se předpokládaná relace na disk nevejde, a řekne to v číslech místo aby selhalo později. Tiché selhání tady znamená ztracený záznam veřejné schůze.",
   "recording.roomFor": "Místo na {0} h",
+  "recording.nothingToRecord": "Nic z vybraného by se nenahrávalo",
   "help.rawInputs": "Každý vstup zapsaný syrově, před řetězcem a před automixem. Co se v sále řeklo, jde zrekonstruovat bez ohledu na to, co s tím mix ten den udělal.",
   "help.autoStart": "Engine začne nahrávat, jakmile se spustí. Nikdo si to nemusí pamatovat, a přesně o to jde — nenahraná schůze je ta, kde na to někdo zapomněl.",
   "recording.sub": "Každý kanál se nahrává do vlastního souboru, před faderem a před automixem. Co se v sále řeklo, jde získat zpátky bez ohledu na to, co s tím mix ten den udělal.",

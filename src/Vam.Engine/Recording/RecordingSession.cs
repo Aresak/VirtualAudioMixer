@@ -83,7 +83,7 @@ public sealed class RecordingSession : IDisposable
     /// <param name="name">What this track is.</param>
     /// <param name="format">Its rate, channels and block size.</param>
     /// <returns>The track.</returns>
-    public RecordingTrack AddTrack(string name, RecordingFormat format)
+    public RecordingTrack AddTrack(string name, RecordingFormat format, RecordingSource source)
     {
         ArgumentNullException.ThrowIfNull(format);
 
@@ -95,7 +95,7 @@ public sealed class RecordingSession : IDisposable
         // Qualified, because this type has a Directory of its own and the folder is what is meant.
         System.IO.Directory.CreateDirectory(directory);
 
-        RecordingTrack track = new(name, Path.Combine(directory, $"{Sanitise(name)}.wav"), format);
+        RecordingTrack track = new(name, Path.Combine(directory, $"{Sanitise(name)}.wav"), format, source);
 
         tracks.Add(track);
 
@@ -181,6 +181,27 @@ public sealed class RecordingSession : IDisposable
 
         tracks.Clear();
         stopping.Dispose();
+    }
+
+    /// <summary>The track recording a given channel or bus, if this session is recording it.</summary>
+    /// <param name="source">Which channel or bus.</param>
+    /// <returns>Its track, or null when this session does not record it.</returns>
+    /// <remarks>
+    /// The graph binds its taps through this rather than by position: which tracks a session opens
+    /// is a choice now, and a tap bound by counting would write one source's audio into another
+    /// source's file.
+    /// </remarks>
+    public RecordingTrack? Find(RecordingSource source)
+    {
+        foreach (RecordingTrack track in tracks)
+        {
+            if (track.Source == source)
+            {
+                return track;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>How large this session is expected to become.</summary>

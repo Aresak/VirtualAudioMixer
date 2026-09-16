@@ -761,20 +761,24 @@ public sealed class VamEngine : IDisposable
 
         if (options.Capture.Inputs)
         {
-            foreach (ChannelConfig channel in config.Channels)
+            for (int index = 0; index < config.Channels.Count; index++)
             {
-                Recording.AddTrack(channel.Name, new RecordingFormat
-                {
-                    SampleRate = options.SampleRate,
-                    ChannelCount = Math.Max(channel.ChannelCount, 1),
-                    BlockFrames = options.BlockFrames
-                });
+                Recording.AddTrack(
+                    config.Channels[index].Name,
+                    new RecordingFormat
+                    {
+                        SampleRate = options.SampleRate,
+                        ChannelCount = Math.Max(config.Channels[index].ChannelCount, 1),
+                        BlockFrames = options.BlockFrames
+                    },
+                    new RecordingSource(RecordingSourceKind.Channel, index));
             }
         }
 
         // E3. The stream bus, finished, beside the raw inputs — two different records and a public
-        // body wants both: one to reconstruct what was said, one to show what was broadcast. Added
-        // last, so its index is the channel count, which is where the compiler looks for it.
+        // body wants both: one to reconstruct what was said, one to show what was broadcast. Each
+        // track carries which source it is; the graph binds its taps through that rather than by
+        // counting into the list, because what the list contains is a choice.
         int primary = config.Buses.Count > 0 ? Math.Clamp(config.PrimaryBusIndex, 0, config.Buses.Count - 1) : -1;
 
         for (int index = 0; index < config.Buses.Count; index++)
@@ -784,12 +788,28 @@ public sealed class VamEngine : IDisposable
                 continue;
             }
 
-            Recording.AddTrack($"{config.Buses[index].Name} (bus)", new RecordingFormat
-            {
-                SampleRate = options.SampleRate,
-                ChannelCount = Math.Max(config.Buses[index].ChannelCount, 1),
-                BlockFrames = options.BlockFrames
-            });
+            Recording.AddTrack(
+                $"{config.Buses[index].Name} (bus)",
+                new RecordingFormat
+                {
+                    SampleRate = options.SampleRate,
+                    ChannelCount = Math.Max(config.Buses[index].ChannelCount, 1),
+                    BlockFrames = options.BlockFrames
+                },
+                new RecordingSource(RecordingSourceKind.Bus, index));
+        }
+
+        if (Recording.Tracks.Count == 0)
+        {
+            // A folder with a timestamp on it and nothing in it, and an operator who believes the
+            // meeting is being recorded. The command handler refuses a selection that captures
+            // nothing; this catches the selection that captures something the console does not have.
+            logger.LogError("Recording did not start: nothing selected would be captured.");
+
+            Recording.Dispose();
+            Recording = null;
+
+            return new DiskVerdict(false, 0, 0, "Nothing this session would capture is configured.");
         }
 
         DiskVerdict verdict = Recording.Start(options.ExpectedSessionDuration);

@@ -34,13 +34,15 @@ public sealed class RecordingTrack : IDisposable
     /// <param name="name">What this track is, for the console and for the file name.</param>
     /// <param name="path">Where to write.</param>
     /// <param name="format">Rate, channels and block size.</param>
-    public RecordingTrack(string name, string path, RecordingFormat format)
+    /// <param name="source">Which channel or bus this track is recording.</param>
+    public RecordingTrack(string name, string path, RecordingFormat format, RecordingSource source)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(format);
 
         Name = name;
         Format = format;
+        Source = source;
 
         ring = new AudioRingBuffer((int)(format.SampleRate * RingSeconds), format.ChannelCount);
         writer = new WaveWriter(path, format.SampleRate, format.ChannelCount, format.BlockFrames);
@@ -52,6 +54,9 @@ public sealed class RecordingTrack : IDisposable
 
     /// <summary>Rate, channels and block size. What a byte count for this track is derived from.</summary>
     public RecordingFormat Format { get; }
+
+    /// <summary>Which channel or bus this track is recording.</summary>
+    public RecordingSource Source { get; }
 
     /// <summary>Where its file is.</summary>
     public string Path => writer.Path;

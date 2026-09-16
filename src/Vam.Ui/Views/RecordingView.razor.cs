@@ -66,11 +66,13 @@ public partial class RecordingView
     /// work it out from the channel count, which ignored the bus tracks and was therefore optimistic
     /// about the one number the disk guard exists to get right.
     /// </remarks>
-    static double HoursLeft(RecordingState recording)
+    static double? HoursLeft(RecordingState recording)
     {
         if (recording.ProjectedBytes <= 0 || recording.ExpectedSeconds <= 0)
         {
-            return 0;
+            // Nothing would be written, so there is no rate to divide by and no number of hours to
+            // report. Null rather than zero: zero reads as a full disk.
+            return null;
         }
 
         double bytesPerSecond = recording.ProjectedBytes / (double)recording.ExpectedSeconds;
