@@ -294,7 +294,9 @@ message MoveChannel { int32 from_index = 1; int32 to_index = 2; }
 message AddModifier { ChainTarget target = 1; string modifier_id = 2; int32 at_index = 3; }
 message RemoveModifier { ChainTarget target = 1; int32 link_index = 2; }
 message MoveModifier { ChainTarget target = 1; int32 from_index = 2; int32 to_index = 3; }
-message PastSessionList { repeated PastSession sessions = 1; }
+// Truncated says the list was cut off at the engine's limit, so the console can say so rather
+// than showing fifty of two hundred rows as though that were all of them.
+message PastSessionList { repeated PastSession sessions = 1; bool truncated = 2; }
 
 message PastSession {
   // The folder, as the engine sees it. Not as this console sees it - the two are the same machine

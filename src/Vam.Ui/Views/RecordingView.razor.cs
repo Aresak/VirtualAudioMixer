@@ -20,6 +20,8 @@ public partial class RecordingView
     string refusal = string.Empty;
 
     IReadOnlyList<PastSession>? sessions;
+    bool sessionsTruncated;
+    bool sessionsAsked;
 
     /// <summary>Whether the engine's recordings are on a disk this console can show.</summary>
     [Inject]
@@ -39,7 +41,14 @@ public partial class RecordingView
 
     async Task LoadSessionsAsync()
     {
-        sessions = (await Session.GetPastSessionsAsync())?.Sessions;
+        // Three outcomes, not two. The engine may be still coming up when this view is opened, and a
+        // console that leaves "reading the folder" on screen for the life of the component is
+        // claiming to still be working when it has given up.
+        PastSessionList? list = await Session.GetPastSessionsAsync();
+
+        sessionsAsked = true;
+        sessions = list?.Sessions;
+        sessionsTruncated = list?.Truncated ?? false;
 
         await InvokeAsync(StateHasChanged);
     }
@@ -57,8 +66,15 @@ public partial class RecordingView
 
     async Task OpenAsync(PastSession session)
     {
-        refusal = await Platform.OpenFolderAsync(session.Directory) ?? string.Empty;
+        string? problem = await Platform.OpenFolderAsync(session.Directory);
+
+        // A key where the console owns the words, the operating system's own sentence where it does
+        // not. A key the tables do not have renders as itself, so both arrive readable.
+        refusal = problem is null ? string.Empty : L[problem];
     }
+
+    // Two reasons the button is missing, and they are different things to tell somebody.
+    string NoOpenBecause => Platform.CanOpenFolders ? "recording.openElsewhere" : "recording.openNoHost";
 
     string Duration(RecordingState recording)
     {

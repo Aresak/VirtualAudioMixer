@@ -31,7 +31,7 @@ public sealed class WebPlatformServices : IPlatformServices
 
     /// <inheritdoc />
     public ValueTask<string?> OpenFolderAsync(string path, CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult<string?>("This console runs in a browser and cannot open a folder.");
+        ValueTask.FromResult<string?>("recording.openNoHost");
 
     /// <inheritdoc />
     /// <remarks>

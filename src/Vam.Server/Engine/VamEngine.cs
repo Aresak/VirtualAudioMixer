@@ -684,7 +684,7 @@ public sealed class VamEngine : IDisposable
     {
         string directory = Path.Combine(
             root,
-            DateTimeOffset.Now.ToString("yyyy-MM-dd_HH-mm-ss", System.Globalization.CultureInfo.InvariantCulture));
+            DateTimeOffset.Now.ToString(RecordingCatalogue.FolderFormat, System.Globalization.CultureInfo.InvariantCulture));
 
         Recording = new RecordingSession(
             directory,

@@ -34,14 +34,14 @@ public sealed class DesktopPlatformServices(EngineLauncher launcher) : IPlatform
 
     /// <inheritdoc />
     /// <remarks>
-    /// Explorer, with the folder selected rather than opened into it, which is what somebody who
-    /// asked to see a recording wants: the session beside the ones around it.
+    /// Explorer, opened into the session's own folder, which is where the files somebody asked to
+    /// see are.
     /// </remarks>
     public ValueTask<string?> OpenFolderAsync(string path, CancellationToken cancellationToken = default)
     {
         if (!Directory.Exists(path))
         {
-            return ValueTask.FromResult<string?>("That folder is not on this machine.");
+            return ValueTask.FromResult<string?>("recording.openNotHere");
         }
 
         try

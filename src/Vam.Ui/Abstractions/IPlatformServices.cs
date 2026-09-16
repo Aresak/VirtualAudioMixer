@@ -43,7 +43,11 @@ public interface IPlatformServices
     /// <summary>Shows a folder in whatever this machine uses to browse files.</summary>
     /// <param name="path">The folder.</param>
     /// <param name="cancellationToken">Gives up before opening.</param>
-    /// <returns>Null when it opened; otherwise a sentence saying what stopped it.</returns>
+    /// <returns>
+    /// Null when it opened; otherwise what stopped it, as a localisation key where the console owns
+    /// the words and as the operating system's own sentence where it does not. A key the tables do
+    /// not have renders as itself, which is what lets the two share one return value.
+    /// </returns>
     ValueTask<string?> OpenFolderAsync(string path, CancellationToken cancellationToken = default);
 
     /// <summary>Whether this host can start an engine on the machine it is running on.</summary>

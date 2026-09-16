@@ -35,13 +35,13 @@ public sealed class RecordingSession : IDisposable
     Thread? writer;
     bool isStopped;
 
+    // Every track is written from the same clock, so one rate describes the session.
+    int sampleRate;
+
     /// <summary>Prepares a session in a folder.</summary>
     /// <param name="directory">Where the files go.</param>
     /// <param name="guard">What decides whether there is room.</param>
     /// <param name="logger">Where the loud things are said.</param>
-    // Every track is written from the same clock, so one rate describes the session.
-    int sampleRate;
-
     public RecordingSession(string directory, DiskGuard guard, ILogger<RecordingSession> logger)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
@@ -188,7 +188,6 @@ public sealed class RecordingSession : IDisposable
         {
             StartedAt = StartedAt,
             DurationSeconds = sampleRate > 0 ? frames / (double)sampleRate : 0,
-            Tracks = tracks.Count,
             DroppedFrames = dropped
         };
 

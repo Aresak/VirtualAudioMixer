@@ -90,7 +90,7 @@ public sealed class RecordingCatalogue(ILogger<RecordingCatalogue> logger)
             return new RecordedSession
             {
                 Directory = directory,
-                StartedAt = manifest?.StartedAt ?? StartedFrom(directory),
+                StartedAt = StartedFrom(directory, manifest),
                 Duration = manifest is null ? null : TimeSpan.FromSeconds(manifest.DurationSeconds),
                 Tracks = files.Length,
                 Bytes = bytes,
@@ -106,8 +106,8 @@ public sealed class RecordingCatalogue(ILogger<RecordingCatalogue> logger)
     }
 
     // The folder's own name first, because it is the session's start to the second and survives a
-    // copy that rewrites the timestamps. Its creation time is the fallback.
-    static DateTimeOffset StartedFrom(string directory)
+    // copy that rewrites the timestamps. Then the manifest, then the folder's creation time.
+    static DateTimeOffset StartedFrom(string directory, SessionManifest? manifest)
     {
         string name = Path.GetFileName(directory);
 
@@ -116,6 +116,6 @@ public sealed class RecordingCatalogue(ILogger<RecordingCatalogue> logger)
             return new DateTimeOffset(parsed, TimeZoneInfo.Local.GetUtcOffset(parsed));
         }
 
-        return new DateTimeOffset(Directory.GetCreationTime(directory));
+        return manifest?.StartedAt ?? new DateTimeOffset(Directory.GetCreationTime(directory));
     }
 }

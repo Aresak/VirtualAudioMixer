@@ -194,16 +194,17 @@ public sealed class MixerService(
 
     /// <inheritdoc />
     /// <remarks>
-    /// Off the thread the request arrived on. Enumerating a folder is disk I/O, and a recording root
-    /// on a network share that is not answering would otherwise hold a gRPC thread for as long as
-    /// the share takes to give up.
+    /// The enumeration is synchronous disk I/O, so it goes on the pool rather than running inline in
+    /// the handler. That does not make a slow network share cheap — a blocked pool thread is still a
+    /// blocked thread — but it keeps the blocking out of the request's own continuation, and the
+    /// token stops the work ever starting once the console has given up.
     /// </remarks>
     public override async Task<PastSessionList> ListPastSessions(Empty request, ServerCallContext context)
     {
         IReadOnlyList<RecordedSession> sessions =
             await Task.Run(engine.ReadPastSessions, context.CancellationToken);
 
-        PastSessionList list = new();
+        PastSessionList list = new() { Truncated = sessions.Count >= RecordingCatalogue.Limit };
 
         foreach (RecordedSession session in sessions)
         {

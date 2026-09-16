@@ -144,9 +144,17 @@
                 said those folders were there. The question asked after a meeting is whether last
                 month's recording came out, and it was answered by leaving the console.
             *@
-            @if (sessions is null)
+            @if (sessions is null && !sessionsAsked)
             {
                 <p class="sub">@L["recording.pastLoading"]</p>
+            }
+            else if (sessions is null)
+            {
+                <p class="sub">@L["recording.pastFailed"]</p>
+
+                <button type="button"
+                        class="btn"
+                        @onclick="LoadSessionsAsync">@L["recording.pastRetry"]</button>
             }
             else if (sessions.Count == 0)
             {
@@ -226,14 +234,19 @@
                     </table>
                 </div>
 
+                @if (sessionsTruncated)
+                {
+                    <p class="note">@L.Format("recording.pastTruncated", sessions.Count)</p>
+                }
+
                 @if (!CanOpenFolders)
                 {
                     @*
-                        The engine's disk is not this console's disk. A console across the room can
-                        list what was recorded and has nothing to open it with, so it shows the path
-                        the engine would use instead of a button that would do nothing.
+                        Either this host cannot show a folder at all, or the folder is on the
+                        engine's machine and this console is not it. Two different things to be
+                        told, so the console tells them apart.
                     *@
-                    <p class="note">@L["recording.openElsewhere"]</p>
+                    <p class="note">@L[NoOpenBecause]</p>
                 }
             }
 

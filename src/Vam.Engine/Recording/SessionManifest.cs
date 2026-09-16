@@ -22,16 +22,17 @@ public sealed record SessionManifest
     /// <summary>What it is called, inside the session folder.</summary>
     public const string FileName = "session.json";
 
-    /// <summary>When the session started.</summary>
+    /// <summary>When the session started. A fallback: the folder's own name says it first.</summary>
     public DateTimeOffset StartedAt { get; init; }
 
     /// <summary>How long it ran.</summary>
     public double DurationSeconds { get; init; }
 
-    /// <summary>How many tracks it wrote.</summary>
-    public int Tracks { get; init; }
-
     /// <summary>How many frames it lost, across every track.</summary>
+    /// <remarks>
+    /// The reason this file exists. Track count and size are on disk to be counted and are not
+    /// repeated here: a fact written down twice is a fact that can disagree with itself.
+    /// </remarks>
     public long DroppedFrames { get; init; }
 
     /// <summary>Reads one, or null when there is none or it cannot be read.</summary>
