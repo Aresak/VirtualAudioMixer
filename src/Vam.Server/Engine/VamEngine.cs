@@ -412,7 +412,7 @@ public sealed class VamEngine : IDisposable
     /// a folder nothing reads would be the console inventing a feature that does not exist.
     /// </remarks>
     public (string Recordings, string Logs, string Modifiers) Paths =>
-        (options.RecordingDirectory, EngineLogging.DefaultDirectory, string.Empty);
+        (options.RecordingDirectory, options.LogDirectory ?? EngineLogging.DefaultDirectory, string.Empty);
 
     /// <summary>The default recording root a session starts from.</summary>
     public static string DefaultRecordingDirectory { get; } = new EngineOptions().RecordingDirectory;
@@ -432,20 +432,32 @@ public sealed class VamEngine : IDisposable
             return "A recording is running. The folder changes when it stops.";
         }
 
-        if (path.Length == 0)
+        // Empty is the reset: back to what the engine would have used with nobody telling it
+        // anything. The console sends it for exactly that and has nothing else to send.
+        string wanted = string.IsNullOrWhiteSpace(path) ? DefaultRecordingDirectory : path;
+
+        if (!Path.IsPathFullyQualified(wanted))
         {
-            return "A recording folder cannot be empty.";
+            // A relative path lands beside whatever the engine's working directory happens to be,
+            // which for a service is nowhere an operator will look.
+            return "A recording folder has to be a full path.";
         }
 
-        if (Path.GetInvalidPathChars().Any(path.Contains))
+        try
+        {
+            // Watched first. The watch is what the free-space figure is measured from, and a folder
+            // taken but not watched would leave the console reporting the old drive's space against
+            // the new folder's name.
+            disk?.Watch(wanted);
+        }
+        catch (ArgumentException)
         {
             return "That is not a path this machine can use.";
         }
 
-        options.RecordingDirectory = path;
-        disk?.Watch(path);
+        options.RecordingDirectory = wanted;
 
-        logger.LogInformation("Recordings now go to {Path}.", path);
+        logger.LogInformation("Recordings now go to {Path}.", wanted);
 
         return null;
     }

@@ -49,6 +49,16 @@ public sealed record EngineOptions
             "VAM",
             "recordings");
 
+    /// <summary>
+    /// Where the engine writes its log, or null for the default.
+    /// </summary>
+    /// <remarks>
+    /// Carried here so the console can be told the truth. The host configures logging before the
+    /// engine exists, and a console shown the default folder while the engine writes somewhere else
+    /// is a console sending somebody to an empty directory during an incident.
+    /// </remarks>
+    public string? LogDirectory { get; init; }
+
     /// <summary>Whether to record from the moment the engine starts. E4.</summary>
     public bool RecordAutomatically { get; set; } = true;
 

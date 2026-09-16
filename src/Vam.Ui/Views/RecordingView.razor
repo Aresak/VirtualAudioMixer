@@ -43,7 +43,7 @@
                 <div class="kv"
                      style="margin-top:14px">
                     <span class="k">@L["recording.folder"]</span>
-                    <span class="v">@(recording.Directory.Length > 0 ? recording.Directory : directory)</span>
+                    <span class="v">@(recording.Directory.Length > 0 ? recording.Directory : Paths?.Recordings ?? "—")</span>
                     <span class="k">@L["recording.written"]</span>
                     <span class="v">@Duration(recording)</span>
                     <span class="k">@L["recording.dropped"]</span>
@@ -114,28 +114,17 @@
 
             <h2>@L["recording.folder"]</h2>
 
-            <div class="row">
-                <input type="text"
-                       @bind="directory"
-                       aria-label="@L["recording.folder"]"
-                       style="min-width:340px" />
-
-                @if (Platform.CanPickFolders)
-                {
-                    <button type="button"
-                            class="btn"
-                            @onclick="PickAsync">…</button>
-                }
+            @*
+                Shown, not set. The folder is the engine's and it is changed in Settings, where the
+                rest of its paths are: two boxes for one path is two places to disagree, and an
+                operator who set it in one of them would watch the recording land somewhere else.
+            *@
+            <div class="kv">
+                <span class="k">@L["recording.folder"]</span>
+                <span class="v mono">@(Paths?.Recordings ?? "—")</span>
             </div>
 
-            @if (!Platform.CanPickFolders)
-            {
-                @*
-                    A browser cannot put up a native folder dialog, and the engine's disk is not the
-                    browser's disk anyway. Saying so beats a button that would do nothing.
-                *@
-                <p class="note">@L["recording.noPicker"]</p>
-            }
+            <p class="note">@L["recording.folderInSettings"]</p>
 
             @if (refusal.Length > 0)
             {

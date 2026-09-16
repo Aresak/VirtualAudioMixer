@@ -160,6 +160,20 @@
                         }
                     </span>
 
+                    @*
+                        Not a choice, and the reason is worth saying rather than leaving as a missing
+                        row somebody files a bug about. The mockup offers dBFS against dBu; this
+                        console prints no absolute level for either to apply to — the meters carry no
+                        numbers, the faders are gains, and a modifier's threshold is in the unit that
+                        modifier declared.
+                    *@
+                    <span class="k">
+                        @L["settings.levelScale"]
+                        <InlineHelp Title="@L["settings.levelScale"]"
+                                    Body="@L["help.levelScale"]" />
+                    </span>
+                    <span class="v">@L["settings.levelScaleFixed"]</span>
+
                     <span class="k">
                         @L["settings.meterRate"]
                         <InlineHelp Title="@L["settings.meterRate"]"
@@ -234,7 +248,7 @@
                     <label class="field">
                         <span class="k">@L["settings.recordings"]</span>
                         <input type="text"
-                               value="@recordings"
+                               value="@Typed"
                                spellcheck="false"
                                autocomplete="off"
                                @onchange="OnRecordingsTyped" />

@@ -43,6 +43,9 @@ const BALLISTICS_VU = 'vu';
 const PPM_FALL_DB_PER_S = 24;
 const VU_SECONDS = 0.3;
 
+// Buses share the ballistics store with the strips, above anything a channel index can reach.
+const BUS_BAR_BASE = 1000;
+
 const state = {
     channels: [],
     buses: [],
@@ -338,13 +341,16 @@ export function frame(payload, channelCount, busCount) {
 
     state.lastFrame = now;
 
-    // The ceiling on drawing. Frames still arrive at the engine's rate and the holds still advance;
-    // what a slow client is spared is the canvas work, which is where the cost is.
-    if (state.minDrawSeconds > 0 && state.lastDraw !== 0 && (now - state.lastDraw) / 1000 < state.minDrawSeconds) {
-        return;
-    }
+    // The ceiling on drawing, and only on drawing. Every frame still advances the peak hold and the
+    // ballistics: a slow client is spared the canvas work, which is where the cost is, and not the
+    // transient that arrived between two draws — which is the one the hold exists for.
+    const draw = state.minDrawSeconds === 0
+        || state.lastDraw === 0
+        || (now - state.lastDraw) / 1000 >= state.minDrawSeconds;
 
-    state.lastDraw = now;
+    if (draw) {
+        state.lastDraw = now;
+    }
 
     for (let index = 0; index < channelCount; index++) {
         const target = state.channels[index];
@@ -360,8 +366,14 @@ export function frame(payload, channelCount, busCount) {
         const flags = bytes[at + 8];
         const hold = updateHold(index, peakDb, elapsed);
 
+        const bar = barLevel(index, peakDb, rmsDb, elapsed);
+
+        if (!draw) {
+            continue;
+        }
+
         if (target.meter) {
-            drawMeter(target.meter, peakDb, barLevel(index, peakDb, rmsDb, elapsed), hold, flags);
+            drawMeter(target.meter, peakDb, bar, hold, flags);
         }
 
         if (target.gr) {
@@ -392,8 +404,15 @@ export function frame(payload, channelCount, busCount) {
         }
 
         const at = busBase + (index * BUS_BYTES);
+        const peakDb = readInt16(view, at);
 
-        drawMeter(canvas, readInt16(view, at), readInt16(view, at + 2), FLOOR_DB, 0);
+        // Buses follow the same ballistics as the strips. Two meters on one screen, on one signal,
+        // drawn at different heights, is the console disagreeing with itself.
+        const bar = barLevel(BUS_BAR_BASE + index, peakDb, readInt16(view, at + 2), elapsed);
+
+        if (draw) {
+            drawMeter(canvas, peakDb, bar, FLOOR_DB, 0);
+        }
     }
 }
 

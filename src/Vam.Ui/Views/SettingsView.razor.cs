@@ -40,6 +40,10 @@ public partial class SettingsView
     [Inject]
     public required IPlatformServices Platform { get; set; }
 
+    // What the box shows: whatever was typed, and the engine's own path until something is. A console
+    // that connected after this view opened would otherwise show an empty box over a live engine.
+    string Typed => recordings.Length > 0 ? recordings : Paths?.Recordings ?? string.Empty;
+
     void OnRecordingsTyped(ChangeEventArgs arguments) => recordings = arguments.Value as string ?? string.Empty;
 
     async Task BrowseAsync()
@@ -54,9 +58,8 @@ public partial class SettingsView
 
     Task ResetRecordingsAsync()
     {
-        // Back to what the engine would have used with nobody telling it anything. Applied rather
-        // than typed into the box, because a reset that needed a second press would be a reset that
-        // did not happen.
+        // An empty path is the reset, and the engine reads it as one: back to the folder it would
+        // have used with nobody telling it anything.
         recordings = string.Empty;
 
         return ApplyRecordingsAsync();
@@ -69,11 +72,12 @@ public partial class SettingsView
             SetRecordingsPath = new SetRecordingsPath { Path = recordings }
         });
 
+        // Typed goes back to showing the engine's answer, whatever the engine made of it.
+        recordings = string.Empty;
+
         pathProblem = reply.Accepted ? string.Empty : reply.Reason;
 
         await Session.RefreshAsync();
-
-        recordings = Paths?.Recordings ?? recordings;
     }
 
     /// <inheritdoc />
@@ -82,7 +86,6 @@ public partial class SettingsView
         base.OnInitialized();
 
         typed = Options.Address;
-        recordings = Paths?.Recordings ?? string.Empty;
 
         Connector.Changed += OnConnectorChanged;
     }

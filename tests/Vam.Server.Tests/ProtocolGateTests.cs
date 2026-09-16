@@ -434,12 +434,31 @@ public class ProtocolGateTests : IAsyncLifetime
 
         Assert.Equal(moved, after.Paths.Recordings);
 
-        CommandReply empty = await client.ApplyAsync(
+        // Empty is the reset the console sends, and it comes back as the engine's own default rather
+        // than as a refusal or as an empty path taken literally.
+        CommandReply reset = await client.ApplyAsync(
             new Command { SetRecordingsPath = new SetRecordingsPath { Path = string.Empty } },
             cancellationToken: Token
         );
 
-        Assert.False(empty.Accepted);
+        Assert.True(reset.Accepted, reset.Reason);
+        Assert.Equal(VamEngine.DefaultRecordingDirectory, (await client.GetConsoleAsync(new Empty(), cancellationToken: Token)).Paths.Recordings);
+
+        CommandReply relative = await client.ApplyAsync(
+            new Command { SetRecordingsPath = new SetRecordingsPath { Path = "somewhere-relative" } },
+            cancellationToken: Token
+        );
+
+        // A relative path lands beside whatever the engine's working directory happens to be, which
+        // for a service is nowhere an operator will look.
+        Assert.False(relative.Accepted);
+
+        CommandReply whitespace = await client.ApplyAsync(
+            new Command { SetRecordingsPath = new SetRecordingsPath { Path = "   " } },
+            cancellationToken: Token
+        );
+
+        Assert.True(whitespace.Accepted, whitespace.Reason);
 
         // Put it back, so the order tests run in cannot matter.
         await client.ApplyAsync(
