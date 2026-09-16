@@ -211,6 +211,34 @@ message RecordingState {
   int64 free_bytes = 5;
   // E4. Whether the engine starts recording on its own.
   bool starts_automatically = 6;
+
+  // E3. What the next session writes. Stated rather than assumed: the engine already puts the
+  // primary bus in the folder beside the raw inputs, and a console that does not say so leaves the
+  // contents of a public record to be discovered by opening it.
+  RecordingCapture captures = 7;
+
+  // On disk so far, and where the session is heading. Free space alone does not answer the question
+  // asked before a four-hour meeting, which is whether it fits.
+  int64 bytes_written = 8;
+  int64 projected_bytes = 9;
+
+  // What the engine can actually write. One entry today; the console offers what is here rather
+  // than a list of its own that could promise a format nothing implements.
+  repeated string available_formats = 10;
+
+  // What the projection assumes, so the console can say what it is a projection of rather
+  // than showing a number with nothing attached to it.
+  int64 expected_seconds = 11;
+}
+
+// Named for the recording rather than for the devices: Vam.Engine already has a CaptureOptions
+// and it is about opening a microphone, not about what lands on disk.
+message RecordingCapture {
+  bool inputs = 1;
+  bool stream_bus = 2;
+  bool all_buses = 3;
+  // One of RecordingState.available_formats.
+  string format = 4;
 }
 
 message Command {
@@ -248,6 +276,7 @@ message Command {
     ApplyChainPreset apply_chain_preset = 26;
     DeleteChainPreset delete_chain_preset = 27;
     Shutdown shutdown = 33;
+    SetCaptureOptions set_capture_options = 34;
   }
 }
 
@@ -290,6 +319,9 @@ message AddModifier { ChainTarget target = 1; string modifier_id = 2; int32 at_i
 message RemoveModifier { ChainTarget target = 1; int32 link_index = 2; }
 message MoveModifier { ChainTarget target = 1; int32 from_index = 2; int32 to_index = 3; }
 message SetRecording { bool recording = 1; string directory = 2; }
+// E3. What the next session writes. A session already running keeps the tracks it opened with -
+// tracks cannot be added to a file that is being written - so this takes effect at the next start.
+message SetCaptureOptions { RecordingCapture captures = 1; }
 // H3 and E4. The two startup behaviours an operator may want to change, and nothing else — every
 // other setting on that view is deliberately not a choice.
 message SetStartupOptions {

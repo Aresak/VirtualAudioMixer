@@ -55,6 +55,22 @@ public sealed class RecordingSession : IDisposable
     /// <summary>The folder this session writes into.</summary>
     public string Directory => directory;
 
+    /// <summary>What the session has put on disk so far, across every track.</summary>
+    public long BytesWritten
+    {
+        get
+        {
+            long total = 0;
+
+            foreach (RecordingTrack track in tracks)
+            {
+                total += track.FramesWritten * track.Format.ChannelCount * WaveWriter.BytesPerSample;
+            }
+
+            return total;
+        }
+    }
+
     /// <summary>Whether the writer thread is running.</summary>
     public bool IsRecording => writer is not null;
 
@@ -170,13 +186,19 @@ public sealed class RecordingSession : IDisposable
     /// <summary>How large this session is expected to become.</summary>
     /// <param name="duration">How long it is expected to run.</param>
     /// <returns>Bytes.</returns>
+    /// <remarks>
+    /// Per track, at that track's own format. A stereo bus costs twice what a mono microphone does,
+    /// and a projection that assumed one rate and one channel for everything was under by half on
+    /// the one number the disk guard exists to get right.
+    /// </remarks>
     public long ProjectedBytes(TimeSpan duration)
     {
         long total = 0;
 
         foreach (RecordingTrack track in tracks)
         {
-            total += (long)(DiskGuard.BytesPerSecond(48000, 1) * duration.TotalSeconds);
+            total += (long)(DiskGuard.BytesPerSecond(track.Format.SampleRate, track.Format.ChannelCount)
+                * duration.TotalSeconds);
         }
 
         return total;

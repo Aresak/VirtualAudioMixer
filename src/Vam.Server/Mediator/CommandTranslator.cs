@@ -144,6 +144,12 @@ public static class CommandTranslator
                 command.SetStartupOptions.LoadLastConsole,
                 command.SetStartupOptions.RecordAutomatically),
 
+            Command.KindOneofCase.SetCaptureOptions => new SetCaptureOptionsRequest(
+                command.SetCaptureOptions.Captures.Inputs,
+                command.SetCaptureOptions.Captures.StreamBus,
+                command.SetCaptureOptions.Captures.AllBuses,
+                command.SetCaptureOptions.Captures.Format),
+
             Command.KindOneofCase.Shutdown =>
                 new ShutdownRequest(command.Shutdown.Reason),
 

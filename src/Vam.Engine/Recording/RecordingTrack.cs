@@ -40,6 +40,7 @@ public sealed class RecordingTrack : IDisposable
         ArgumentNullException.ThrowIfNull(format);
 
         Name = name;
+        Format = format;
 
         ring = new AudioRingBuffer((int)(format.SampleRate * RingSeconds), format.ChannelCount);
         writer = new WaveWriter(path, format.SampleRate, format.ChannelCount, format.BlockFrames);
@@ -48,6 +49,9 @@ public sealed class RecordingTrack : IDisposable
 
     /// <summary>What this track is.</summary>
     public string Name { get; }
+
+    /// <summary>Rate, channels and block size. What a byte count for this track is derived from.</summary>
+    public RecordingFormat Format { get; }
 
     /// <summary>Where its file is.</summary>
     public string Path => writer.Path;

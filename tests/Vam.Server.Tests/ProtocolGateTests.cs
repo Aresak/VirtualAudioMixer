@@ -409,6 +409,82 @@ public class ProtocolGateTests : IAsyncLifetime
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
+    public async Task WhatARecordingCapturesIsSaidAndCanBeChanged()
+    {
+        ConsoleState idle = await client!.GetConsoleAsync(new Empty(), cancellationToken: Token);
+
+        // E3. The engine has always written the inputs and the primary bus; what is new is that it
+        // says so, and that the projection is a number rather than a blank.
+        Assert.True(idle.Recording.Captures.Inputs);
+        Assert.True(idle.Recording.Captures.StreamBus);
+        Assert.False(idle.Recording.Captures.AllBuses);
+        Assert.Contains("wav24", idle.Recording.AvailableFormats);
+        Assert.True(idle.Recording.ProjectedBytes > 0);
+        Assert.True(idle.Recording.ExpectedSeconds > 0);
+
+        long inputsOnly = idle.Recording.ProjectedBytes;
+
+        CommandReply changed = await client.ApplyAsync(new Command
+        {
+            SetCaptureOptions = new SetCaptureOptions
+            {
+                Captures = new RecordingCapture
+                {
+                    Inputs = false,
+                    StreamBus = true,
+                    AllBuses = true,
+                    Format = "wav24"
+                }
+            }
+        }, cancellationToken: Token);
+
+        Assert.True(changed.Accepted, changed.Reason);
+
+        ConsoleState after = await client.GetConsoleAsync(new Empty(), cancellationToken: Token);
+
+        Assert.False(after.Recording.Captures.Inputs);
+        Assert.True(after.Recording.Captures.AllBuses);
+
+        // The projection follows the selection rather than the channel count, which is the whole
+        // reason it is computed by the engine and not by the console.
+        Assert.NotEqual(inputsOnly, after.Recording.ProjectedBytes);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public async Task ARecordingThatCapturesNothingIsRefused()
+    {
+        CommandReply reply = await client!.ApplyAsync(new Command
+        {
+            SetCaptureOptions = new SetCaptureOptions
+            {
+                Captures = new RecordingCapture { Format = "wav24" }
+            }
+        }, cancellationToken: Token);
+
+        // A folder with a timestamp on it and no tracks in it is worse than a refusal: the operator
+        // believes the meeting is being recorded.
+        Assert.False(reply.Accepted);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public async Task AFormatTheEngineCannotWriteIsRefused()
+    {
+        CommandReply reply = await client!.ApplyAsync(new Command
+        {
+            SetCaptureOptions = new SetCaptureOptions
+            {
+                Captures = new RecordingCapture { Inputs = true, Format = "flac24" }
+            }
+        }, cancellationToken: Token);
+
+        Assert.False(reply.Accepted);
+        Assert.Contains("flac24", reply.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
     public async Task TheConsoleSurvivesBeingSavedAndLoaded()
     {
         await client!.ApplyAsync(

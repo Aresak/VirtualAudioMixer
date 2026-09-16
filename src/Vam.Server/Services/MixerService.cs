@@ -676,8 +676,23 @@ public sealed class MixerService(
         {
             IsRecording = engine.Recording?.IsRecording ?? false,
             Directory = engine.RecordingDirectory,
-            FreeBytes = engine.FreeBytes
+            FreeBytes = engine.FreeBytes,
+            StartsAutomatically = engine.Startup.RecordAutomatically,
+            Captures = new RecordingCapture
+            {
+                Inputs = engine.Capture.Inputs,
+                StreamBus = engine.Capture.StreamBus,
+                AllBuses = engine.Capture.AllBuses,
+                Format = engine.Capture.Format
+            },
+
+            // Carried whether or not a session is running: the projection is what an operator reads
+            // before pressing record, not after.
+            ProjectedBytes = engine.ProjectedBytes,
+            ExpectedSeconds = (long)engine.ExpectedSessionDuration.TotalSeconds
         };
+
+        state.AvailableFormats.AddRange(VamEngine.AvailableFormats);
 
         if (engine.Recording is not { } recording)
         {
@@ -694,6 +709,8 @@ public sealed class MixerService(
             // Summed, because this one really is a total: a frame lost on any track is a frame lost.
             state.DroppedFrames += track.DroppedFrames;
         }
+
+        state.BytesWritten = recording.BytesWritten;
 
         return state;
     }

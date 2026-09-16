@@ -52,6 +52,9 @@ public sealed record EngineOptions
     /// <summary>Whether to record from the moment the engine starts. E4.</summary>
     public bool RecordAutomatically { get; set; } = true;
 
+    /// <summary>What a session writes. E3.</summary>
+    public CaptureSelection Capture { get; set; } = new();
+
     /// <summary>
     /// Whether the engine comes up in the console it went down in. H3.
     /// </summary>
