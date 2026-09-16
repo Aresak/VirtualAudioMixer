@@ -52,7 +52,7 @@ public class RecordingTests : IDisposable
             written[index] = (index / (float)written.Length * 2f) - 1f;
         }
 
-        using (RecordingTrack track = new("track", path, format))
+        using (RecordingTrack track = new("track", path, format, new RecordingSource(RecordingSourceKind.Channel, 0)))
         {
             for (int block = 0; block < 8; block++)
             {
@@ -85,7 +85,11 @@ public class RecordingTests : IDisposable
 
         Directory.CreateDirectory(directory);
 
-        using RecordingTrack track = new("tiny", Path.Combine(directory, "tiny.wav"), format);
+        using RecordingTrack track = new(
+            "tiny",
+            Path.Combine(directory, "tiny.wav"),
+            format,
+            new RecordingSource(RecordingSourceKind.Channel, 0));
 
         float[] block = new float[BlockFrames];
         int refused = 0;
@@ -218,7 +222,7 @@ public class RecordingTests : IDisposable
 
         RecordingFormat format = new() { SampleRate = SampleRate, ChannelCount = 1, BlockFrames = BlockFrames };
 
-        session.AddTrack("Mayor 180 degrees", format);
+        session.AddTrack("Mayor 180 degrees", format, new RecordingSource(RecordingSourceKind.Channel, 0));
 
         DiskVerdict verdict = session.Start(TimeSpan.FromSeconds(10));
 
@@ -260,7 +264,8 @@ public class RecordingTests : IDisposable
 
         session.AddTrack(
             "Mayor 180 degrees",
-            new RecordingFormat { SampleRate = SampleRate, ChannelCount = 1, BlockFrames = BlockFrames });
+            new RecordingFormat { SampleRate = SampleRate, ChannelCount = 1, BlockFrames = BlockFrames },
+            new RecordingSource(RecordingSourceKind.Channel, 0));
 
         Assert.True(session.Start(TimeSpan.FromSeconds(10)).CanStart);
 
@@ -306,12 +311,15 @@ public class RecordingTests : IDisposable
             NullLogger<RecordingSession>.Instance
         );
 
-        session.AddTrack("Mayor 180 degrees", new RecordingFormat
-        {
-            SampleRate = SampleRate,
-            ChannelCount = 1,
-            BlockFrames = BlockFrames
-        });
+        session.AddTrack(
+            "Mayor 180 degrees",
+            new RecordingFormat
+            {
+                SampleRate = SampleRate,
+                ChannelCount = 1,
+                BlockFrames = BlockFrames
+            },
+            new RecordingSource(RecordingSourceKind.Channel, 0));
 
         ConsoleFixture console = Build(session);
 
@@ -321,13 +329,61 @@ public class RecordingTests : IDisposable
         AllocationAssert.None(console, static fixture => fixture.Render());
     }
 
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void ASessionThatRecordsOnlyTheBusGetsTheBusAndNotTheFirstMicrophone()
+    {
+        RecordingSession session = new(
+            directory,
+            new DiskGuard(NullLogger<DiskGuard>.Instance),
+            NullLogger<RecordingSession>.Instance
+        );
+
+        // The one track is the bus. The graph used to find its tap by counting — inputs first, the
+        // bus at index Channels.Count — so a session that skipped the inputs wrote the first
+        // microphone into the file named after the bus, and said nothing about it.
+        session.AddTrack(
+            "Stream (bus)",
+            new RecordingFormat { SampleRate = SampleRate, ChannelCount = 2, BlockFrames = BlockFrames },
+            new RecordingSource(RecordingSourceKind.Bus, 0));
+
+        Assert.True(session.Start(TimeSpan.FromSeconds(10)).CanStart);
+
+        ConsoleFixture console = Build(session);
+
+        console.Feed(0, 0.4f);
+        console.RenderUntilSettled();
+
+        session.Stop();
+
+        RecordingTrack track = Assert.Single(session.Tracks);
+
+        Assert.True(track.FramesWritten > 0, "The bus track was never written.");
+
+        float[] read = ReadSamples(track.Path);
+
+        Assert.Equal(0, read.Length % 2);
+
+        // Something arrived, and it is not the pre-fader input: 0.4 is what the microphone sends and
+        // what the channel tap would have written. The bus is twenty decibels down from it.
+        Assert.Contains(read, sample => Math.Abs(sample) > 0.0001f);
+        Assert.DoesNotContain(read, sample => Math.Abs(sample - 0.4f) < 0.01f);
+    }
+
     static ConsoleFixture Build(RecordingSession session)
     {
         GraphConfig config = new();
 
         config.InputDeviceOrder.Add(Microphone);
-        config.Channels.Add(new ChannelConfig { DeviceId = Microphone, Name = "Mayor 180 degrees" });
+        // Faded well down, so what the bus carries and what the pre-fader input tap carries are
+        // different numbers. A test that could not tell them apart could not tell which plane a
+        // tap was bound to either.
+        config.Channels.Add(new ChannelConfig { DeviceId = Microphone, Name = "Mayor 180 degrees", FaderDb = -20 });
         config.Buses.Add(new BusConfig { Name = "Stream", Role = BusRole.Stream, ChannelCount = 2 });
+
+        // Routed, so the bus carries something. Without a send the bus tap would record silence and
+        // a test asserting the bus got the bus would pass whatever the tap was bound to.
+        config.Sends.Add(new SendConfig(0, 0, IsOn: true, LevelDb: 0));
 
         ConsoleFixture console = new(config);
 

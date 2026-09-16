@@ -25,6 +25,7 @@ public sealed class EngineCommandHandler(
     IRequestHandler<ShutdownRequest, CommandReply>,
     IRequestHandler<SetRecordingRequest, CommandReply>,
     IRequestHandler<SetStartupOptionsRequest, CommandReply>,
+    IRequestHandler<SetCaptureOptionsRequest, CommandReply>,
     IRequestHandler<ClearClipRequest, CommandReply>,
     IRequestHandler<SaveChainPresetRequest, CommandReply>,
     IRequestHandler<ApplyChainPresetRequest, CommandReply>,
@@ -98,6 +99,36 @@ public sealed class EngineCommandHandler(
     )
     {
         engine.SetStartup(request.LoadLastConsole, request.RecordAutomatically);
+
+        return Replies.DoneAsync(Replies.Accepted());
+    }
+
+    /// <inheritdoc />
+    public Task<CommandReply> Handle(
+        SetCaptureOptionsRequest request,
+        IMediatorContext context,
+        CancellationToken cancellationToken
+    )
+    {
+        if (!VamEngine.AvailableFormats.Contains(request.Format))
+        {
+            return Replies.DoneAsync(Replies.Refused($"The engine cannot write {request.Format}."));
+        }
+
+        if (!request.Inputs && !request.StreamBus && !request.AllBuses)
+        {
+            // A session with no tracks in it is a folder with a timestamp on it, and an operator who
+            // believes the meeting is being recorded.
+            return Replies.DoneAsync(Replies.Refused("A recording has to capture something."));
+        }
+
+        engine.SetCapture(new CaptureSelection
+        {
+            Inputs = request.Inputs,
+            StreamBus = request.StreamBus,
+            AllBuses = request.AllBuses,
+            Format = request.Format
+        });
 
         return Replies.DoneAsync(Replies.Accepted());
     }

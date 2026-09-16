@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Vam.Engine.Devices;
 using Vam.Engine.Devices.Abstractions;
+using Vam.Engine.Recording;
 using Vam.Protocol;
 using Vam.Protocol.V1;
 using Vam.Server.Engine;
@@ -84,7 +85,12 @@ public class ProtocolGateTests : IAsyncLifetime
             {
                 ConsolePath = Path.Combine(workspace, "console.json"),
                 RecordingDirectory = Path.Combine(workspace, "recordings"),
-                RecordAutomatically = false
+                RecordAutomatically = false,
+
+                // A minute rather than the four hours a council meeting is assumed to run. The disk
+                // guard refuses when the projection does not fit, and a suite that needs ten
+                // gigabytes free to pass is a suite that fails for a reason nobody can read.
+                ExpectedSessionDuration = TimeSpan.FromMinutes(1)
             },
             NullLoggerFactory.Instance,
             devices);
@@ -405,6 +411,134 @@ public class ProtocolGateTests : IAsyncLifetime
         // Still measured once the session is over, because the figure is what an operator checks
         // before starting the next one.
         Assert.True(after.Recording.FreeBytes > 0);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public async Task WhatARecordingCapturesIsSaidAndCanBeChanged()
+    {
+        ConsoleState idle = await client!.GetConsoleAsync(new Empty(), cancellationToken: Token);
+
+        // E3. The engine has always written the inputs and the primary bus; what is new is that it
+        // says so, and that the projection is a number rather than a blank.
+        Assert.True(idle.Recording.Captures.Inputs);
+        Assert.True(idle.Recording.Captures.StreamBus);
+        Assert.False(idle.Recording.Captures.AllBuses);
+        Assert.Contains("wav24", idle.Recording.AvailableFormats);
+        Assert.True(idle.Recording.ProjectedBytes > 0);
+        Assert.True(idle.Recording.ExpectedSeconds > 0);
+
+        long inputsOnly = idle.Recording.ProjectedBytes;
+
+        CommandReply changed = await client.ApplyAsync(new Command
+        {
+            SetCaptureOptions = new SetCaptureOptions
+            {
+                Captures = new RecordingCapture
+                {
+                    Inputs = false,
+                    StreamBus = true,
+                    AllBuses = true,
+                    Format = "wav24"
+                }
+            }
+        }, cancellationToken: Token);
+
+        Assert.True(changed.Accepted, changed.Reason);
+
+        ConsoleState after = await client.GetConsoleAsync(new Empty(), cancellationToken: Token);
+
+        Assert.False(after.Recording.Captures.Inputs);
+        Assert.True(after.Recording.Captures.AllBuses);
+
+        // The projection follows the selection rather than the channel count, which is the whole
+        // reason it is computed by the engine and not by the console.
+        Assert.NotEqual(inputsOnly, after.Recording.ProjectedBytes);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public async Task ASessionOpensTheTracksItWasAskedForAndNoOthers()
+    {
+        int buses = (await client!.GetConsoleAsync(new Empty(), cancellationToken: Token)).Buses.Count;
+
+        Assert.True(buses > 0);
+
+        CommandReply changed = await client.ApplyAsync(new Command
+        {
+            SetCaptureOptions = new SetCaptureOptions
+            {
+                Captures = new RecordingCapture { Inputs = false, AllBuses = true, Format = "wav24" }
+            }
+        }, cancellationToken: Token);
+
+        Assert.True(changed.Accepted, changed.Reason);
+
+        CommandReply started = await client.ApplyAsync(
+            new Command { SetRecording = new SetRecording { Recording = true } },
+            cancellationToken: Token
+        );
+
+        Assert.True(started.Accepted, started.Reason);
+
+        // One track per bus and not one input, which is what was asked for. Asserting the count and
+        // the sources rather than the projected size: a byte figure is equally happy to be right
+        // about a track list that is wrong.
+        IReadOnlyList<RecordingTrack> tracks = engine!.Recording!.Tracks;
+
+        Assert.Equal(buses, tracks.Count);
+
+        for (int bus = 0; bus < buses; bus++)
+        {
+            Assert.Contains(tracks, track => track.Source == new RecordingSource(RecordingSourceKind.Bus, bus));
+        }
+
+        await client.ApplyAsync(
+            new Command { SetRecording = new SetRecording { Recording = false } },
+            cancellationToken: Token
+        );
+
+        // Put it back, so the order tests run in cannot matter.
+        await client.ApplyAsync(new Command
+        {
+            SetCaptureOptions = new SetCaptureOptions
+            {
+                Captures = new RecordingCapture { Inputs = true, StreamBus = true, Format = "wav24" }
+            }
+        }, cancellationToken: Token);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public async Task ARecordingThatCapturesNothingIsRefused()
+    {
+        CommandReply reply = await client!.ApplyAsync(new Command
+        {
+            SetCaptureOptions = new SetCaptureOptions
+            {
+                Captures = new RecordingCapture { Format = "wav24" }
+            }
+        }, cancellationToken: Token);
+
+        // A folder with a timestamp on it and no tracks in it is worse than a refusal: the operator
+        // believes the meeting is being recorded.
+        Assert.False(reply.Accepted);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public async Task AFormatTheEngineCannotWriteIsRefused()
+    {
+        CommandReply reply = await client!.ApplyAsync(new Command
+        {
+            SetCaptureOptions = new SetCaptureOptions
+            {
+                Captures = new RecordingCapture { Inputs = true, Format = "flac24" }
+            }
+        }, cancellationToken: Token);
+
+        Assert.False(reply.Accepted);
+        Assert.Contains("flac24", reply.Reason, StringComparison.Ordinal);
     }
 
     [Fact]

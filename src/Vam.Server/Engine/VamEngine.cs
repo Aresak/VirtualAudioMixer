@@ -405,6 +405,79 @@ public sealed class VamEngine : IDisposable
         return null;
     }
 
+    /// <summary>What the next session writes. E3.</summary>
+    public CaptureSelection Capture => options.Capture;
+
+    /// <summary>How long a session is assumed to run, for the projection.</summary>
+    public TimeSpan ExpectedSessionDuration => options.ExpectedSessionDuration;
+
+    /// <summary>The formats the engine can actually write.</summary>
+    /// <remarks>
+    /// One, and the console offers what is here rather than a list of its own. A dropdown promising
+    /// a format nothing implements is worse than a dropdown with one entry in it.
+    /// </remarks>
+    public static IReadOnlyList<string> AvailableFormats { get; } = [CaptureSelection.WaveFormat];
+
+    /// <summary>
+    /// How large a session of the expected length would be, whether or not one is running.
+    /// </summary>
+    /// <remarks>
+    /// The question asked before a four-hour meeting is not how much disk is free, it is whether the
+    /// session fits, and that has to be answerable before anybody presses record.
+    /// </remarks>
+    public long ProjectedBytes
+    {
+        get
+        {
+            if (Recording is { } recording)
+            {
+                return recording.ProjectedBytes(options.ExpectedSessionDuration);
+            }
+
+            return Graph is { } graph ? ProjectedBytesFor(graph.Config) : 0;
+        }
+    }
+
+    /// <summary>Changes what a session writes, for the next one.</summary>
+    /// <param name="selection">What to capture, and in which format.</param>
+    public void SetCapture(CaptureSelection selection)
+    {
+        options.Capture = selection;
+
+        logger.LogInformation(
+            "Capture: inputs {Inputs}, stream bus {Stream}, all buses {Buses}, format {Format}. Takes effect at the next recording.",
+            selection.Inputs,
+            selection.StreamBus,
+            selection.AllBuses,
+            selection.Format);
+    }
+
+    long ProjectedBytesFor(GraphConfig config)
+    {
+        double seconds = options.ExpectedSessionDuration.TotalSeconds;
+        long total = 0;
+
+        if (options.Capture.Inputs)
+        {
+            foreach (ChannelConfig channel in config.Channels)
+            {
+                total += (long)(DiskGuard.BytesPerSecond(options.SampleRate, Math.Max(channel.ChannelCount, 1)) * seconds);
+            }
+        }
+
+        int primary = config.Buses.Count > 0 ? Math.Clamp(config.PrimaryBusIndex, 0, config.Buses.Count - 1) : -1;
+
+        for (int index = 0; index < config.Buses.Count; index++)
+        {
+            if (options.Capture.AllBuses || (options.Capture.StreamBus && index == primary))
+            {
+                total += (long)(DiskGuard.BytesPerSecond(options.SampleRate, Math.Max(config.Buses[index].ChannelCount, 1)) * seconds);
+            }
+        }
+
+        return total;
+    }
+
     /// <summary>The two startup behaviours an operator may change. H3 and E4.</summary>
     public (bool LoadLastConsole, bool RecordAutomatically) Startup =>
         (options.LoadLastConsole, options.RecordAutomatically);
@@ -686,29 +759,57 @@ public sealed class VamEngine : IDisposable
             loggers.CreateLogger<RecordingSession>()
         );
 
-        foreach (ChannelConfig channel in config.Channels)
+        if (options.Capture.Inputs)
         {
-            Recording.AddTrack(channel.Name, new RecordingFormat
+            for (int index = 0; index < config.Channels.Count; index++)
             {
-                SampleRate = options.SampleRate,
-                ChannelCount = Math.Max(channel.ChannelCount, 1),
-                BlockFrames = options.BlockFrames
-            });
+                Recording.AddTrack(
+                    config.Channels[index].Name,
+                    new RecordingFormat
+                    {
+                        SampleRate = options.SampleRate,
+                        ChannelCount = Math.Max(config.Channels[index].ChannelCount, 1),
+                        BlockFrames = options.BlockFrames
+                    },
+                    new RecordingSource(RecordingSourceKind.Channel, index));
+            }
         }
 
         // E3. The stream bus, finished, beside the raw inputs — two different records and a public
-        // body wants both: one to reconstruct what was said, one to show what was broadcast. Added
-        // last, so its index is the channel count, which is where the compiler looks for it.
-        if (config.Buses.Count > 0)
-        {
-            int primary = Math.Clamp(config.PrimaryBusIndex, 0, config.Buses.Count - 1);
+        // body wants both: one to reconstruct what was said, one to show what was broadcast. Each
+        // track carries which source it is; the graph binds its taps through that rather than by
+        // counting into the list, because what the list contains is a choice.
+        int primary = config.Buses.Count > 0 ? Math.Clamp(config.PrimaryBusIndex, 0, config.Buses.Count - 1) : -1;
 
-            Recording.AddTrack($"{config.Buses[primary].Name} (bus)", new RecordingFormat
+        for (int index = 0; index < config.Buses.Count; index++)
+        {
+            if (!options.Capture.AllBuses && !(options.Capture.StreamBus && index == primary))
             {
-                SampleRate = options.SampleRate,
-                ChannelCount = Math.Max(config.Buses[primary].ChannelCount, 1),
-                BlockFrames = options.BlockFrames
-            });
+                continue;
+            }
+
+            Recording.AddTrack(
+                $"{config.Buses[index].Name} (bus)",
+                new RecordingFormat
+                {
+                    SampleRate = options.SampleRate,
+                    ChannelCount = Math.Max(config.Buses[index].ChannelCount, 1),
+                    BlockFrames = options.BlockFrames
+                },
+                new RecordingSource(RecordingSourceKind.Bus, index));
+        }
+
+        if (Recording.Tracks.Count == 0)
+        {
+            // A folder with a timestamp on it and nothing in it, and an operator who believes the
+            // meeting is being recorded. The command handler refuses a selection that captures
+            // nothing; this catches the selection that captures something the console does not have.
+            logger.LogError("Recording did not start: nothing selected would be captured.");
+
+            Recording.Dispose();
+            Recording = null;
+
+            return new DiskVerdict(false, 0, 0, "Nothing this session would capture is configured.");
         }
 
         DiskVerdict verdict = Recording.Start(options.ExpectedSessionDuration);

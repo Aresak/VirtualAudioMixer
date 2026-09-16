@@ -29,6 +29,14 @@ public partial class Switch
     [Parameter]
     public bool Checked { get; set; }
 
+    /// <summary>Whether it cannot be moved right now, and why.</summary>
+    /// <remarks>
+    /// The reason is required rather than optional: a switch that will not move and does not say
+    /// why teaches an operator that the console is broken.
+    /// </remarks>
+    [Parameter]
+    public string DisabledBecause { get; set; } = string.Empty;
+
     /// <summary>Raised when somebody changed it.</summary>
     [Parameter]
     public EventCallback<bool> Changed { get; set; }

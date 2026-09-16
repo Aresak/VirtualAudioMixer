@@ -764,6 +764,13 @@ input[type=checkbox] { accent-color: var(--brass); width: 15px; height: 15px; }
 }
 .sw.on i::after { background: var(--brass); transform: translateX(14px); }
 
+/* A switch that cannot be moved right now. Dimmed rather than hidden: an operator needs to see
+   that the setting exists and read the title saying when it will take. */
+.sw.off { opacity: .5; cursor: default; }
+
+/* A column of them, the way the mockup stacks the capture toggles. */
+.switches { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+
 /* U14. The help body, which the mockup shows in a shared panel and this console shows in place. A
    panel would need somewhere to put it on every view; in place needs nothing and cannot be left
    open behind you. */

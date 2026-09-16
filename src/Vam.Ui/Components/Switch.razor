@@ -6,9 +6,11 @@
     room, which is the only distance this console is ever read from.
 *@
 
-<label class="sw @(Checked ? "on" : null)">
+<label class="sw @(Checked ? "on" : null) @(DisabledBecause.Length > 0 ? "off" : null)"
+       title="@DisabledBecause">
     <input type="checkbox"
            checked="@Checked"
+           disabled="@(DisabledBecause.Length > 0)"
            @onchange="OnChangedAsync" />
     <i aria-hidden="true"></i>
     <span>@Label</span>

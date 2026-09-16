@@ -44,7 +44,7 @@
                      style="margin-top:14px">
                     <span class="k">@L["recording.folder"]</span>
                     <span class="v">@(recording.Directory.Length > 0 ? recording.Directory : directory)</span>
-                    <span class="k">@L["recording.written"]</span>
+                    <span class="k">@L["recording.elapsed"]</span>
                     <span class="v">@Duration(recording)</span>
                     <span class="k">@L["recording.dropped"]</span>
                     <span class="v @(recording.DroppedFrames == 0 ? "zero" : null)">@recording.DroppedFrames</span>
@@ -63,27 +63,67 @@
                         recoverable afterwards, and for a public body the multitrack is the record.
                     *@
                     @*
-                        Stated, not offered. Both are true and neither is a switch yet, and drawing
-                        them as switches that cannot be moved would be a control that teaches an
-                        operator the console is broken.
+                        Offered, not merely stated. Tracks cannot be added to files that are already
+                        open, so while a session runs these say what the next one will do and refuse
+                        to move rather than accepting a change they cannot make.
                     *@
-                    <div class="kv">
-                        <span class="k">
-                            @L.Format("recording.allInputs", Channels)
-                            <InlineHelp Title="@L["recording.captured"]"
-                                        Body="@L["help.rawInputs"]" />
-                        </span>
-                        <span class="v"><span class="pill ok">@L["common.on"]</span></span>
+                    <div class="switches">
+                        <Switch Label="@L.Format("recording.allInputs", Channels)"
+                                Help="@L["help.rawInputs"]"
+                                Checked="recording.Captures.Inputs"
+                                DisabledBecause="@LockedBecause(recording)"
+                                Changed="value => SetCaptureAsync(new RecordingCapture(recording.Captures) { Inputs = value })" />
 
-                        <span class="k">
-                            @L["recording.startWithEngine"]
-                            <InlineHelp Title="@L["recording.startWithEngine"]"
-                                        Body="@L["help.autoStart"]" />
-                        </span>
-                        <span class="v"><span class="pill ok">@L["common.on"]</span></span>
+                        <Switch Label="@L["recording.streamBus"]"
+                                Help="@L["help.streamBus"]"
+                                Checked="recording.Captures.StreamBus"
+                                DisabledBecause="@LockedBecause(recording)"
+                                Changed="value => SetCaptureAsync(new RecordingCapture(recording.Captures) { StreamBus = value })" />
+
+                        <Switch Label="@L.Format("recording.allBuses", Buses)"
+                                Help="@L["help.allBuses"]"
+                                Checked="recording.Captures.AllBuses"
+                                DisabledBecause="@LockedBecause(recording)"
+                                Changed="value => SetCaptureAsync(new RecordingCapture(recording.Captures) { AllBuses = value })" />
+
+                        <Switch Label="@L["recording.startWithEngine"]"
+                                Help="@L["help.autoStart"]"
+                                Checked="recording.StartsAutomatically"
+                                Changed="SetAutoStartAsync" />
                     </div>
 
-                    <p class="note">@L["recording.fixedWhy"]</p>
+                    <div class="kv"
+                         style="margin-top:14px">
+                        <span class="k">@L["recording.format"]</span>
+                        <span class="v">
+                            @*
+                                What the engine can write, not what the console imagines. One entry
+                                today, and the control is here so the second one needs no console
+                                change.
+                            *@
+                            <select value="@recording.Captures.Format"
+                                    disabled="@(recording.AvailableFormats.Count < 2 || recording.IsRecording)"
+                                    title="@FormatTitle(recording)"
+                                    aria-label="@L["recording.format"]"
+                                    @onchange="OnFormatAsync">
+                                @foreach (string format in recording.AvailableFormats)
+                                {
+                                    <option value="@format">@FormatLabel(format)</option>
+                                }
+                            </select>
+                        </span>
+
+                        <span class="k">@L["recording.written"]</span>
+                        <span class="v">@Gigabytes(recording.BytesWritten)</span>
+
+                        <span class="k">@L.Format("recording.projected", ExpectedHours(recording))</span>
+                        <span class="v">@Gigabytes(recording.ProjectedBytes)</span>
+                    </div>
+
+                    @if (LockedBecause(recording).Length > 0)
+                    {
+                        <p class="note">@LockedBecause(recording)</p>
+                    }
                 </div>
 
                 <div class="card">
@@ -105,9 +145,21 @@
 
                     <div class="row"
                          style="margin-top:12px">
-                        <span class="pill @(HoursLeft(recording) > 4 ? "ok" : "warn")">
-                            @L.Format("recording.roomFor", HoursLeft(recording).ToString("0.0", CultureInfo.InvariantCulture))
-                        </span>
+                        @*
+                            Only when there is something to record. With nothing selected and
+                            nothing configured the rate is zero, and "enough space for 0.0 h" beside
+                            a warning would be the disk telling a lie about itself.
+                        *@
+                        @if (HoursLeft(recording) is { } hours)
+                        {
+                            <span class="pill @(hours > 4 ? "ok" : "warn")">
+                                @L.Format("recording.roomFor", hours.ToString("0.0", CultureInfo.InvariantCulture))
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="pill">@L["recording.nothingToRecord"]</span>
+                        }
                     </div>
                 </div>
             </div>
