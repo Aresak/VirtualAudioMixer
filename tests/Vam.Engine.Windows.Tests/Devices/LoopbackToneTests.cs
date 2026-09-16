@@ -85,11 +85,25 @@ public class LoopbackToneTests(ITestOutputHelper output)
             ToneHz * (1.0 + (TolerancePercent / 100.0)));
     }
 
+    /// <summary>
+    /// The endpoint an environment variable names, or null when it is not present.
+    /// </summary>
+    /// <remarks>
+    /// Case-insensitively, unlike <see cref="AudioDeviceId"/>'s own ordinal comparison, and
+    /// deliberately: WASAPI reports an identity with a lower-case GUID and Device Manager shows the
+    /// same identity in upper case. Somebody copying one into the other gets told the device is not
+    /// present and loses an hour to it. The engine still compares identities ordinally - there both
+    /// sides came from the backend. Here one side was typed by a person.
+    /// </remarks>
+    /// <param name="backend">What to ask.</param>
+    /// <param name="direction">Which way to look.</param>
+    /// <param name="deviceId">The identity named.</param>
+    /// <returns>The endpoint, or null.</returns>
     static AudioDeviceInfo? Find(WasapiBackend backend, DeviceDirection direction, AudioDeviceId deviceId)
     {
         foreach (AudioDeviceInfo device in backend.Enumerate(direction))
         {
-            if (device.Id == deviceId)
+            if (string.Equals(device.Id.Value, deviceId.Value, StringComparison.OrdinalIgnoreCase))
             {
                 return device;
             }

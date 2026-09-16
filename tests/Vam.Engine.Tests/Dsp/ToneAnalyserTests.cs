@@ -92,6 +92,24 @@ public class ToneAnalyserTests
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
+    public void OneLoudTransientDoesNotBecomeTheMeasurement()
+    {
+        // Taken from a real acoustic run: a knock on the desk read as 107 Hz at twelve times the
+        // level of the tone, because the loudest window is the wrong window exactly when something
+        // has gone wrong. Three non-overlapping windows mean a single event spoils at most one.
+        float[] audio = Tone(ToneHz, 1);
+        Random noise = new(Seed: 1);
+
+        for (int frame = 20000; frame < 22000; frame++)
+        {
+            audio[frame] = (float)((noise.NextDouble() * 2.0) - 1.0) * 6f;
+        }
+
+        Assert.Equal(ToneHz, new ToneAnalyser(SampleRate, 1).Measure(audio).FrequencyHz, ToleranceHz);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
     public void TooLittleAudioToMeasureSaysSoRatherThanGuessing()
     {
         ToneAnalyser analyser = new(SampleRate, 1);

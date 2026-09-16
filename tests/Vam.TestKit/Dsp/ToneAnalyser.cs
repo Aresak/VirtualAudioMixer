@@ -22,6 +22,14 @@ namespace Vam.TestKit.Dsp;
 /// window smears a tone that does not land on a bin centre across the whole spectrum, and 1 kHz
 /// never lands on a bin centre.
 /// </para>
+/// <para>
+/// <b>Three windows and the median, not one.</b> The first draft measured the single loudest window,
+/// and a knock on the desk during an acoustic run read as 107 Hz at twelve times the level of the
+/// tone. One transient is louder than a steady tone almost anywhere, so the loudest window is the
+/// wrong window exactly when something went wrong. Three windows that cannot overlap means a single
+/// click pollutes at most one of them, and the median is then always a real reading. It is not a
+/// repair for a bad rig - sustained noise still defeats it - but a click no longer does.
+/// </para>
 /// </remarks>
 /// <param name="sampleRate">The rate the buffer was captured at.</param>
 /// <param name="channelCount">Channels interleaved in the buffer.</param>
@@ -33,13 +41,21 @@ public sealed class ToneAnalyser(int sampleRate, int channelCount)
     /// </summary>
     const int WindowFrames = 8192;
 
-    /// <summary>How far to step while hunting for the loudest window.</summary>
+    /// <summary>How far to step while hunting for a window.</summary>
     const int HopFrames = 1024;
+
+    /// <summary>
+    /// Windows measured. Three is the smallest number with a median, and the median is what makes
+    /// one transient survivable.
+    /// </summary>
+    const int Candidates = 3;
 
     /// <summary>Below this there is no pitch to find, only rumble and any DC the device carries.</summary>
     const double LowestFrequencyHz = 20.0;
 
     readonly double[] window = new double[WindowFrames];
+    readonly int[] starts = new int[Candidates];
+    readonly ToneMeasurement[] measured = new ToneMeasurement[Candidates];
 
     /// <summary>Finds the dominant frequency in one channel of an interleaved capture.</summary>
     /// <param name="interleaved">The capture, as it came off the device.</param>
@@ -48,19 +64,30 @@ public sealed class ToneAnalyser(int sampleRate, int channelCount)
     public ToneMeasurement Measure(ReadOnlySpan<float> interleaved, int channel = 0)
     {
         int frameCount = interleaved.Length / channelCount;
+        int needed = WindowFrames * Candidates;
 
-        if (frameCount < WindowFrames)
+        if (frameCount < needed)
         {
             throw new ArgumentException(
-                $"Measuring needs {WindowFrames} frames and the capture has {frameCount}.",
+                $"Measuring needs {needed} frames and the capture has {frameCount}.",
                 nameof(interleaved));
         }
 
-        int start = LoudestWindowStart(interleaved, channel, frameCount);
-        float peak = Fill(interleaved, channel, start);
-        int bin = StrongestBin();
+        for (int candidate = 0; candidate < Candidates; candidate++)
+        {
+            starts[candidate] = LoudestWindowStart(interleaved, channel, frameCount, candidate);
 
-        return new ToneMeasurement(Refine(bin) * sampleRate / WindowFrames, peak, start);
+            float peak = Fill(interleaved, channel, starts[candidate]);
+
+            measured[candidate] = new ToneMeasurement(
+                Refine(StrongestBin()) * sampleRate / WindowFrames,
+                peak,
+                starts[candidate]);
+        }
+
+        Array.Sort(measured, static (left, right) => left.FrequencyHz.CompareTo(right.FrequencyHz));
+
+        return measured[Candidates / 2];
     }
 
     /// <summary>
@@ -87,16 +114,29 @@ public sealed class ToneAnalyser(int sampleRate, int channelCount)
     }
 
     /// <summary>
-    /// Where the strongest <see cref="WindowFrames"/> frames begin, so the silence a device plays
-    /// while it primes is not what gets measured.
+    /// Where the strongest unclaimed <see cref="WindowFrames"/> frames begin, so the silence a
+    /// device plays while it primes is not what gets measured.
     /// </summary>
-    int LoudestWindowStart(ReadOnlySpan<float> interleaved, int channel, int frameCount)
+    /// <param name="interleaved">The capture.</param>
+    /// <param name="channel">Which channel.</param>
+    /// <param name="frameCount">Frames available.</param>
+    /// <param name="alreadyChosen">
+    /// How many earlier windows are in <see cref="starts"/>. A candidate overlapping any of them is
+    /// skipped, which is what stops one loud event from taking every window.
+    /// </param>
+    /// <returns>The first frame of the window.</returns>
+    int LoudestWindowStart(ReadOnlySpan<float> interleaved, int channel, int frameCount, int alreadyChosen)
     {
         int best = 0;
         double bestEnergy = -1.0;
 
         for (int start = 0; start + WindowFrames <= frameCount; start += HopFrames)
         {
+            if (Overlaps(start, alreadyChosen))
+            {
+                continue;
+            }
+
             double energy = 0.0;
 
             for (int frame = 0; frame < WindowFrames; frame++)
@@ -113,6 +153,23 @@ public sealed class ToneAnalyser(int sampleRate, int channelCount)
         }
 
         return best;
+    }
+
+    /// <summary>Whether a candidate window shares any frame with one already taken.</summary>
+    /// <param name="start">The candidate's first frame.</param>
+    /// <param name="alreadyChosen">How many of <see cref="starts"/> are filled.</param>
+    /// <returns>Whether it overlaps.</returns>
+    bool Overlaps(int start, int alreadyChosen)
+    {
+        for (int index = 0; index < alreadyChosen; index++)
+        {
+            if (Math.Abs(start - starts[index]) < WindowFrames)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Copies one channel of a window out and applies the Hann taper.</summary>
