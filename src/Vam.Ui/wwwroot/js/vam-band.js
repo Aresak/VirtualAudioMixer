@@ -20,6 +20,16 @@ const MAX_COLUMNS = WINDOW_MS / 20;
 /** Below this a share is rounding noise, and drawing it puts a hairline under a channel that is out. */
 const MIN_SHARE = 0.002;
 
+// How far a single column may be stretched to meet the next one. Frames arrive every forty
+// milliseconds, so this changes nothing while the stream is healthy — and when the stream stalls it
+// is what stops the last speaker before the stall being drawn as holding the gain right through it.
+const MAX_COLUMN_MS = 200;
+
+// The band redraws on a clock rather than on arriving frames. Its axis is a time axis, so it has to
+// advance when nothing is arriving: a stalled stream must scroll off the left and leave the right
+// blank, rather than freezing a picture with its last column glued to the "now" label.
+const REDRAW_MS = 100;
+
 const BACKGROUND = '#0a0d10';
 const BORDER = '#2b343d';
 const LABEL = '#75838f';
@@ -33,7 +43,8 @@ const state = {
     colours: [],
     columns: [],
     shares: [],
-    gains: []
+    gains: [],
+    redraw: 0
 };
 
 // .NET hands a byte[] across as a Uint8Array where the host supports it and as base64 where it does
@@ -73,11 +84,11 @@ function colourOf(index) {
 }
 
 /**
- * Where a column starts, as a fraction of the width.
+ * Where a column sits, as a fraction of the width.
  *
- * Placed by the time it was taken rather than by its position in the ring, so a console that
- * dropped frames draws a gap where the frames were missing instead of stretching what it did get
- * across the whole thirty seconds.
+ * Placed by the time it was taken rather than by its position in the ring. A console that dropped
+ * frames then draws the gap where the frames were missing, rather than stretching what it did get
+ * evenly across the whole thirty seconds.
  */
 function positionOf(timestamp, now) {
     return 1 - Math.min(Math.max((now - timestamp) / WINDOW_MS, 0), 1);
@@ -127,7 +138,7 @@ function draw() {
         const next = state.columns[index + 1];
         const left = positionOf(column.timestamp, now) * width;
         const right = next ? positionOf(next.timestamp, now) * width : width;
-        const span = Math.max(right - left, 1);
+        const span = Math.min(Math.max(right - left, 1), (MAX_COLUMN_MS / WINDOW_MS) * width);
 
         let bottom = height;
 
@@ -193,10 +204,10 @@ function writeRows(view, channelCount) {
  * @param {Array<string>} colours the colour of each strip, in strip order
  */
 export function bind(colours) {
+    unbind();
+
     state.colours = colours || [];
     state.canvas = document.querySelector('canvas[data-vam-band]');
-    state.shares = [];
-    state.gains = [];
 
     document.querySelectorAll('[data-vam-axshare]').forEach(element => {
         state.shares[Number(element.dataset.vamAxshare)] = element;
@@ -205,6 +216,8 @@ export function bind(colours) {
     document.querySelectorAll('[data-vam-axgain]').forEach(element => {
         state.gains[Number(element.dataset.vamAxgain)] = element;
     });
+
+    state.redraw = setInterval(draw, REDRAW_MS);
 
     draw();
 }
@@ -220,12 +233,17 @@ export function frame(payload, channelCount) {
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
     record(view, channelCount);
+
+    // The bars are a live reading rather than a history, so they are written here. The band itself
+    // is left to the redraw clock.
     writeRows(view, channelCount);
-    draw();
 }
 
 /** Lets go of everything, so a view that has navigated away stops being drawn into. */
 export function unbind() {
+    clearInterval(state.redraw);
+
+    state.redraw = 0;
     state.canvas = null;
     state.colours = [];
     state.columns = [];

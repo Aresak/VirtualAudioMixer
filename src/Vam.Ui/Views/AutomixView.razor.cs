@@ -120,6 +120,10 @@ public partial class AutomixView
 
         foreach (ChannelState channel in Channels)
         {
+            // The index too, because the rows are keyed on it: two strips swapping places replaces
+            // the row elements, and a binding that did not notice would keep writing into the two
+            // that had just been thrown away.
+            shapeOf.Add(channel.Index);
             shapeOf.Add(channel.Colour);
             shapeOf.Add(channel.ParticipatesInAutomix);
         }
