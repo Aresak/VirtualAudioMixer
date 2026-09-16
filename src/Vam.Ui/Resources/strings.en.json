@@ -137,6 +137,8 @@
   "chain.head": "Input · trim, polarity, mono",
   "chain.tail": "Fader · automix gain",
   "chain.alwaysFirst": "Always first in the chain. The settings below are editable.",
+  "chain.silent": "silent",
+  "chain.silentWhy": "This link is running and nothing is coming out of it. The strip meter shows what arrived, not what is left after the chain.",
   "chain.alwaysLast": "Always last in the chain. The settings below are editable.",
   "chain.anchoredWhy": "Fixed position — this link cannot be dragged.",
   "chain.vadTap": "Voice activity is read here, before the denoise — because denoise removes what the detector keys on.",

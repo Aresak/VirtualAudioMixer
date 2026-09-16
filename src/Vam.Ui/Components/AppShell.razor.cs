@@ -16,9 +16,16 @@ namespace Vam.Ui.Components;
 /// <summary>The code behind <c>AppShell.razor</c>.</summary>
 public partial class AppShell
 {
+    IJSObjectReference? faders;
+    IJSObjectReference? drag;
+
     /// <summary>Finds the engine and connects to it.</summary>
     [Inject]
     public required EngineConnector Connector { get; set; }
+
+    /// <summary>Where the pointer behaviour is attached.</summary>
+    [Inject]
+    public required IJSRuntime Js { get; set; }
 
     /// <inheritdoc />
     protected override async Task OnInitializedAsync()
@@ -31,5 +38,27 @@ public partial class AppShell
         // starts one. Not awaited into a blank window: the console draws immediately and the status
         // bar says what is happening, which is the same thing it says when an engine drops mid-meeting.
         await Connector.StartAsync();
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Attached at the shell rather than per view. Sliders are in the mixer, the automix view, the
+    /// chain editor and the strip overlay, and a fader that teleports in one place and not another is
+    /// worse than one that teleports everywhere.
+    /// </remarks>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        faders = await Js.InvokeAsync<IJSObjectReference>("import", "./_content/Vam.Ui/js/vam-faders.js");
+
+        await faders.InvokeVoidAsync("attach");
+
+        drag = await Js.InvokeAsync<IJSObjectReference>("import", "./_content/Vam.Ui/js/vam-drag.js");
+
+        await drag.InvokeVoidAsync("attach");
     }
 }
