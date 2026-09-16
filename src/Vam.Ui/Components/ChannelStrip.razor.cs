@@ -83,8 +83,23 @@ public partial class ChannelStrip
         ? automix.GainsDb[Channel.Index].ToString("0.0", CultureInfo.InvariantCulture)
         : "−∞";
 
-    string ChainTitle =>
-        $"{L["strip.chain"]}: {Channel.Chain.Count(link => !link.IsBypassed)}/{Channel.Chain.Count}";
+    string ChainTitle
+    {
+        get
+        {
+            string chain = $"{L["strip.chain"]}: {Channel.Chain.Count(link => !link.IsBypassed)}/{Channel.Chain.Count}";
+
+            if (Channel.PresetName.Length == 0)
+            {
+                return chain;
+            }
+
+            // The label on the bar is truncated to fit a 128px strip, so the full name lives here.
+            string preset = $"{chain} · {L["mixer.preset"]}: {Channel.PresetName}";
+
+            return Channel.IsPresetModified ? $"{preset} · {L["help.presetModified"]}" : preset;
+        }
+    }
 
     /// <summary>
     /// Where the gate opens, in decibels, or null when there is no gate in the chain.
