@@ -21,6 +21,7 @@ namespace Vam.Client;
 public sealed class DesktopPlatformServices(EngineLauncher launcher) : IPlatformServices
 {
     const string RememberedEngineKey = "vam.engine";
+    const string StartsEngineKey = "vam.engine.autostart";
 
     /// <inheritdoc />
     public string ClientName => "VAM Desktop Console";
@@ -80,5 +81,12 @@ public sealed class DesktopPlatformServices(EngineLauncher launcher) : IPlatform
 
             Preferences.Default.Set(RememberedEngineKey, value);
         }
+    }
+
+    /// <inheritdoc />
+    public bool StartsEngineAutomatically
+    {
+        get => Preferences.Default.Get(StartsEngineKey, true);
+        set => Preferences.Default.Set(StartsEngineKey, value);
     }
 }

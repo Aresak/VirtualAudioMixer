@@ -16,11 +16,19 @@ namespace Vam.Ui.State;
 /// </remarks>
 public sealed class ShellState
 {
+    /// <summary>The rate the engine publishes at, and the most the console can draw.</summary>
+    public const int DefaultMeterFramesPerSecond = 25;
+
+    /// <summary>For a client that cannot keep up with the full rate.</summary>
+    public const int SlowMeterFramesPerSecond = 10;
+
     ViewId view = ViewId.Mixer;
     OverlayId overlay = OverlayId.None;
     int selectedChannel = -1;
     int selectedBus = -1;
     bool isCompact;
+    MeterBallistics ballistics = MeterBallistics.Rms;
+    int meterFramesPerSecond = DefaultMeterFramesPerSecond;
     bool isMonitorBarOpen = true;
     bool isReorderArmed;
 
@@ -66,6 +74,27 @@ public sealed class ShellState
     {
         get => isCompact;
         set => Set(ref isCompact, value);
+    }
+
+    /// <summary>How the meters move. F1.</summary>
+    public MeterBallistics Ballistics
+    {
+        get => ballistics;
+        set => Set(ref ballistics, value);
+    }
+
+    /// <summary>
+    /// How often the meters are redrawn, at most.
+    /// </summary>
+    /// <remarks>
+    /// A ceiling on drawing, not a request to the engine: frames arrive at the engine's rate and
+    /// this decides how many of them reach a canvas. Lower is for a client that cannot keep up, and
+    /// there is nothing above the engine's rate to ask for.
+    /// </remarks>
+    public int MeterFramesPerSecond
+    {
+        get => meterFramesPerSecond;
+        set => Set(ref meterFramesPerSecond, Math.Clamp(value, SlowMeterFramesPerSecond, DefaultMeterFramesPerSecond));
     }
 
     /// <summary>Whether the D5 monitor bar is showing.</summary>

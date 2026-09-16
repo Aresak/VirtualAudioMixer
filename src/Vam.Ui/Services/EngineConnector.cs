@@ -74,7 +74,16 @@ public sealed class EngineConnector(
 
         if (!await probe.IsListeningAsync(address, cancellationToken).ConfigureAwait(false))
         {
-            await StartHereAsync(address, cancellationToken).ConfigureAwait(false);
+            if (platform.StartsEngineAutomatically)
+            {
+                await StartHereAsync(address, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                // Asked not to. The console still connects below, so it answers the moment somebody
+                // starts the engine by hand or the service comes up.
+                Report("settings.noAutoStart");
+            }
         }
 
         // Connected either way. If starting one did not work, this is the console retrying an address

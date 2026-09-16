@@ -43,7 +43,7 @@ public sealed record EngineOptions
             "presets.json");
 
     /// <summary>Where recordings go.</summary>
-    public string RecordingDirectory { get; init; } =
+    public string RecordingDirectory { get; set; } =
         Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
             "VAM",

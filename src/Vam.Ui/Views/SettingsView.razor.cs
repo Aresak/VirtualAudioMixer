@@ -16,6 +16,9 @@ namespace Vam.Ui.Views;
 /// <summary>The code behind <c>SettingsView.razor</c>.</summary>
 public partial class SettingsView
 {
+    string recordings = string.Empty;
+    string pathProblem = string.Empty;
+
     string typed = string.Empty;
 
     /// <summary>Where the console is pointed, and what points it somewhere else.</summary>
@@ -24,12 +27,62 @@ public partial class SettingsView
 
     StartupOptions? Startup => Session.Console?.Startup;
 
+    EnginePaths? Paths => Session.Console?.Paths;
+
+    static IEnumerable<MeterBallistics> Ballistics => Enum.GetValues<MeterBallistics>();
+
+    // What the engine publishes at, and what a client that cannot keep up should draw. Nothing
+    // between them, and nothing above: a console cannot draw frames it has not been sent.
+    static IEnumerable<int> MeterRates =>
+        [ShellState.DefaultMeterFramesPerSecond, ShellState.SlowMeterFramesPerSecond];
+
+    /// <summary>This host, for the folder picker and the automatic start.</summary>
+    [Inject]
+    public required IPlatformServices Platform { get; set; }
+
+    void OnRecordingsTyped(ChangeEventArgs arguments) => recordings = arguments.Value as string ?? string.Empty;
+
+    async Task BrowseAsync()
+    {
+        if (await Platform.PickFolderAsync(L["settings.recordings"]) is { } chosen)
+        {
+            recordings = chosen;
+
+            await ApplyRecordingsAsync();
+        }
+    }
+
+    Task ResetRecordingsAsync()
+    {
+        // Back to what the engine would have used with nobody telling it anything. Applied rather
+        // than typed into the box, because a reset that needed a second press would be a reset that
+        // did not happen.
+        recordings = string.Empty;
+
+        return ApplyRecordingsAsync();
+    }
+
+    async Task ApplyRecordingsAsync()
+    {
+        CommandReply reply = await Session.ApplyAsync(new Command
+        {
+            SetRecordingsPath = new SetRecordingsPath { Path = recordings }
+        });
+
+        pathProblem = reply.Accepted ? string.Empty : reply.Reason;
+
+        await Session.RefreshAsync();
+
+        recordings = Paths?.Recordings ?? recordings;
+    }
+
     /// <inheritdoc />
     protected override void OnInitialized()
     {
         base.OnInitialized();
 
         typed = Options.Address;
+        recordings = Paths?.Recordings ?? string.Empty;
 
         Connector.Changed += OnConnectorChanged;
     }

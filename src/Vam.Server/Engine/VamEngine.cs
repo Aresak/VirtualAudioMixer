@@ -13,6 +13,7 @@ using Vam.Engine.Recording;
 using Vam.Engine.Modifiers.BuiltIn;
 using Vam.Engine.Windows.Devices.Wasapi;
 using Vam.Engine.Windows.Dsp;
+using Vam.Server.Logging;
 
 namespace Vam.Server.Engine;
 
@@ -401,6 +402,50 @@ public sealed class VamEngine : IDisposable
                 return automix.State;
             }
         }
+
+        return null;
+    }
+
+    /// <summary>Where the engine keeps things.</summary>
+    /// <remarks>
+    /// The modifier folder is empty because nothing loads modifiers from disk yet. A path shown for
+    /// a folder nothing reads would be the console inventing a feature that does not exist.
+    /// </remarks>
+    public (string Recordings, string Logs, string Modifiers) Paths =>
+        (options.RecordingDirectory, EngineLogging.DefaultDirectory, string.Empty);
+
+    /// <summary>The default recording root a session starts from.</summary>
+    public static string DefaultRecordingDirectory { get; } = new EngineOptions().RecordingDirectory;
+
+    /// <summary>Changes where sessions are written from now on.</summary>
+    /// <param name="path">The folder. It is created when the next session starts.</param>
+    /// <returns>Null when it was taken, otherwise why it was not.</returns>
+    /// <remarks>
+    /// Refused while a session is running. The files are open in the folder it started in, and
+    /// accepting a change that could not apply to them would leave the console showing one path and
+    /// the recording going to another.
+    /// </remarks>
+    public string? SetRecordingDirectory(string path)
+    {
+        if (Recording is not null)
+        {
+            return "A recording is running. The folder changes when it stops.";
+        }
+
+        if (path.Length == 0)
+        {
+            return "A recording folder cannot be empty.";
+        }
+
+        if (Path.GetInvalidPathChars().Any(path.Contains))
+        {
+            return "That is not a path this machine can use.";
+        }
+
+        options.RecordingDirectory = path;
+        disk?.Watch(path);
+
+        logger.LogInformation("Recordings now go to {Path}.", path);
 
         return null;
     }
