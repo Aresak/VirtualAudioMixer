@@ -34,6 +34,7 @@
   "strip.options": "···",
   "strip.absent": "Absent",
   "strip.faulted": "Faulted",
+  "strip.converting": "Windows is converting this device from {0} to {1}: its own converter does not run at the mix rate.",
   "strip.speaking": "Speaking",
   "strip.chain": "Chain",
   "strip.bypassed": "bypassed",

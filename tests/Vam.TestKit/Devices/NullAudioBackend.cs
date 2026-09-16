@@ -78,7 +78,9 @@ public sealed class NullAudioBackend : IAudioBackend
             deviceOptions.NominalSampleRate,
             deviceOptions.SupportsExclusiveMode,
             deviceOptions.IsVirtual,
-            deviceOptions.ContainerId);
+            deviceOptions.ContainerId,
+            deviceOptions.DeviceSampleRate,
+            deviceOptions.DeviceChannelCount);
 
         devices[id] = info;
         options[id] = deviceOptions;
@@ -167,9 +169,11 @@ public sealed class NullAudioBackend : IAudioBackend
 
         AudioStreamFormat format = FormatFor(
             deviceOptions,
-            captureOptions.ShareMode,
-            captureOptions.BufferDuration,
-            captureOptions.ChannelCount);
+            new NullStreamRequest(
+                captureOptions.ShareMode,
+                captureOptions.BufferDuration,
+                captureOptions.SampleRate,
+                captureOptions.ChannelCount));
 
         NullCaptureStream stream = new(deviceId, deviceOptions, format);
         captureStreams.Add(stream);
@@ -184,9 +188,11 @@ public sealed class NullAudioBackend : IAudioBackend
 
         AudioStreamFormat format = FormatFor(
             deviceOptions,
-            renderOptions.ShareMode,
-            renderOptions.BufferDuration,
-            renderOptions.ChannelCount);
+            new NullStreamRequest(
+                renderOptions.ShareMode,
+                renderOptions.BufferDuration,
+                renderOptions.SampleRate,
+                renderOptions.ChannelCount));
 
         NullRenderStream stream = new(deviceId, deviceOptions, format);
         renderStreams.Add(stream);
@@ -211,26 +217,47 @@ public sealed class NullAudioBackend : IAudioBackend
         renderStreams.Clear();
     }
 
-    static AudioStreamFormat FormatFor(
-        NullDeviceOptions deviceOptions,
-        ShareMode requested,
-        TimeSpan bufferDuration,
-        int channelCount)
+    /// <summary>
+    /// Grants a stream the same way the real backend does.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Deliberately the same policy rather than a convenient one, because it is the policy under
+    /// test. Exclusive is granted only where the device's own format already carries what was asked
+    /// for; anything else is shared, and shared converts - which is what an operating system does
+    /// and what this stands in for.
+    /// </para>
+    /// <para>
+    /// A device that cannot convert refuses instead. Nothing here does that today, and the setting
+    /// exists because something will: an ASIO driver has no system mixer behind it to convert with,
+    /// and the engine's answer to a rate it cannot have has to be tested somewhere.
+    /// </para>
+    /// </remarks>
+    static AudioStreamFormat FormatFor(NullDeviceOptions deviceOptions, NullStreamRequest request)
     {
+        int rate = request.SampleRate > 0 ? request.SampleRate : deviceOptions.NominalSampleRate;
+        int channels = request.ChannelCount > 0 ? request.ChannelCount : deviceOptions.ChannelCount;
+
+        if (!deviceOptions.CanConvertRate && rate != deviceOptions.DeviceSampleRate)
+        {
+            throw new UnsupportedAudioFormatException(
+                $"{deviceOptions.FriendlyName} runs at {deviceOptions.DeviceSampleRate} Hz and nothing behind it "
+                + $"converts, so it cannot deliver {rate} Hz.");
+        }
+
         // Exclusive is the mode a device can refuse, and refusing it must be visible rather than
         // silent - a session that fell back to shared is a session with a different latency budget.
-        ShareMode granted = requested == ShareMode.Exclusive && !deviceOptions.SupportsExclusiveMode
-            ? ShareMode.Shared
-            : requested;
+        bool canTakeExclusive = deviceOptions.SupportsExclusiveMode
+            && rate == deviceOptions.DeviceSampleRate
+            && channels == deviceOptions.DeviceChannelCount;
 
-        int channels = channelCount > 0 ? channelCount : deviceOptions.ChannelCount;
-        int frames = (int)Math.Round(bufferDuration.TotalSeconds * deviceOptions.NominalSampleRate);
+        ShareMode granted = request.ShareMode == ShareMode.Exclusive && canTakeExclusive
+            ? ShareMode.Exclusive
+            : ShareMode.Shared;
 
-        return new AudioStreamFormat(
-            deviceOptions.NominalSampleRate,
-            channels,
-            Math.Max(1, frames),
-            granted);
+        int frames = (int)Math.Round(request.BufferDuration.TotalSeconds * rate);
+
+        return new AudioStreamFormat(rate, channels, Math.Max(1, frames), granted, deviceOptions.DeviceSampleRate);
     }
 
     NullDeviceOptions Resolve(AudioDeviceId deviceId, DeviceDirection direction)

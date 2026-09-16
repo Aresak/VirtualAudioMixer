@@ -114,6 +114,11 @@ message ChannelState {
   double drift_ppm = 15;
   // Present, absent, faulted.
   string device_state = 16;
+  // Which share mode the device was actually granted, and what the hardware itself runs at. An
+  // operator who can see that one microphone is being converted by Windows and the one beside it is
+  // not can explain why they sound different, which is the whole reason these travel.
+  string share_mode = 24;
+  int32 device_sample_rate = 25;
   repeated ModifierState chain = 17;
   // U5. Set by the operator, kept by the engine, so every console shows the same room the same way.
   string colour = 18;
@@ -336,6 +341,9 @@ message DeviceInfo {
   // Whether a strip is already using it. Two strips on one endpoint is legal and occasionally
   // wanted, so this informs rather than forbids.
   bool is_in_use = 7;
+  // What the hardware runs at, as opposed to what it presents. Zero when the backend cannot say.
+  // A speakerphone reports 48 kHz here and 16 kHz there, and picking it costs a conversion.
+  int32 native_sample_rate = 8;
 }
 
 message ChainPresetList {
@@ -384,6 +392,9 @@ message DeviceClock {
   int64 underruns = 9;
   int64 overruns = 10;
   string state = 11;
+  string share_mode = 12;
+  // What the hardware itself runs at, which is not the nominal rate when the system is converting.
+  double device_rate = 13;
 }
 
 // K1.

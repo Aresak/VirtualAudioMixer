@@ -34,6 +34,7 @@
   "strip.options": "···",
   "strip.absent": "Chybí",
   "strip.faulted": "Chyba",
+  "strip.converting": "Windows převádí toto zařízení z {0} na {1}: jeho vlastní převodník neběží na frekvenci mixu.",
   "strip.speaking": "Mluví",
   "strip.chain": "Řetězec",
   "strip.bypassed": "vyřazeno",

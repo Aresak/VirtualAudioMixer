@@ -161,7 +161,10 @@ public sealed class MasterClock : IDisposable
         {
             IRenderStream stream = backend.OpenRender(
                 deviceId,
-                new RenderOptions(ShareMode.Shared, blockDuration));
+                // The engine's rate, not the device's preference. The primary output is the master
+                // clock, so an endpoint opened at a rate nobody asked for does not merely sound
+                // wrong - it runs the whole graph at that rate instead.
+                new RenderOptions(ShareMode.Shared, blockDuration, 0, options.SampleRate));
 
             StopFallback();
 
