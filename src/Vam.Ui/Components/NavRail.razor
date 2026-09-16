@@ -11,24 +11,30 @@
 <nav class="rail">
     @foreach ((ViewId? view, string key, string path, RailPhase phase, bool separatorAfter) in Destinations)
     {
-        <button type="button"
-                class="@(Shell.View == view ? "on" : null)"
-                title="@Title(key, phase)"
-                disabled="@(view is null)"
-                aria-current="@(Shell.View == view ? "page" : null)"
-                @onclick="() => Go(view)">
-            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor"
-                 stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="@path" />
-            </svg>
-            <span>@L[key]</span>
+        @*
+            The tooltip sits on the wrapper rather than the button: a disabled button takes no
+            pointer events, so a title on it would never be shown to anybody.
+        *@
+        <span class="item"
+              title="@Title(key, phase)">
+            <button type="button"
+                    class="@(Shell.View == view ? "on" : null)"
+                    disabled="@(view is null)"
+                    aria-current="@(Shell.View == view ? "page" : null)"
+                    @onclick="() => Go(view)">
+                <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor"
+                     stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="@path" />
+                </svg>
+                <span>@L[key]</span>
 
-            @if (phase is not RailPhase.Mvp)
-            {
-                <i class="phase @(phase is RailPhase.Phase1 ? "p1" : "pl")"
-                   aria-hidden="true"></i>
-            }
-        </button>
+                @if (phase is not RailPhase.Mvp)
+                {
+                    <i class="phase @(phase is RailPhase.Phase1 ? "p1" : "pl")"
+                       aria-hidden="true"></i>
+                }
+            </button>
+        </span>
 
         @if (separatorAfter)
         {
