@@ -1,16 +1,20 @@
 @inherits VamComponent
 
 @*
-    U2. Six destinations, always visible, always in the same order. A console an operator has to
+    U2. Ten destinations, always visible, always in the same order. A console an operator has to
     remember the navigation of is a console they will be hunting through while somebody is talking.
+
+    Four of them have no view yet. They are here, disabled and marked with the phase they wait for,
+    because a destination given no place now is a destination bolted onto Settings later.
 *@
 
 <nav class="rail">
-    @foreach ((ViewId view, string key, string path) in Destinations)
+    @foreach ((ViewId? view, string key, string path, RailPhase phase, bool separatorAfter) in Destinations)
     {
         <button type="button"
                 class="@(Shell.View == view ? "on" : null)"
-                title="@L[key]"
+                title="@Title(key, phase)"
+                disabled="@(view is null)"
                 aria-current="@(Shell.View == view ? "page" : null)"
                 @onclick="() => Go(view)">
             <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor"
@@ -18,9 +22,15 @@
                 <path d="@path" />
             </svg>
             <span>@L[key]</span>
+
+            @if (phase is not RailPhase.Mvp)
+            {
+                <i class="phase @(phase is RailPhase.Phase1 ? "p1" : "pl")"
+                   aria-hidden="true"></i>
+            }
         </button>
 
-        @if (view == ViewId.Recording)
+        @if (separatorAfter)
         {
             <div class="sep"></div>
         }
