@@ -364,6 +364,51 @@ public class ProtocolGateTests : IAsyncLifetime
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
+    public async Task ARecordingSaysWhereItIsGoingAndHowMuchRoomIsLeft()
+    {
+        ConsoleState idle = await client!.GetConsoleAsync(new Empty(), cancellationToken: Token);
+
+        // E5's number, and the one number on that panel that must never be wrong: the console
+        // divides by it to say how many hours fit, so zero reads as "enough space for 0.0 h".
+        Assert.True(idle.Recording.FreeBytes > 0);
+
+        // Nothing is recording, so there is no folder to name and the view falls back to whatever
+        // the operator picked.
+        Assert.Equal(string.Empty, idle.Recording.Directory);
+
+        CommandReply started = await client.ApplyAsync(
+            new Command { SetRecording = new SetRecording { Recording = true } },
+            cancellationToken: Token
+        );
+
+        Assert.True(started.Accepted, started.Reason);
+
+        ConsoleState running = await client.GetConsoleAsync(new Empty(), cancellationToken: Token);
+
+        Assert.True(running.Recording.IsRecording);
+        Assert.True(running.Recording.FreeBytes > 0);
+        Assert.StartsWith(
+            Path.Combine(workspace, "recordings"),
+            running.Recording.Directory,
+            StringComparison.Ordinal
+        );
+
+        CommandReply stopped = await client.ApplyAsync(
+            new Command { SetRecording = new SetRecording { Recording = false } },
+            cancellationToken: Token
+        );
+
+        Assert.True(stopped.Accepted, stopped.Reason);
+
+        ConsoleState after = await client.GetConsoleAsync(new Empty(), cancellationToken: Token);
+
+        // Still measured once the session is over, because the figure is what an operator checks
+        // before starting the next one.
+        Assert.True(after.Recording.FreeBytes > 0);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
     public async Task TheConsoleSurvivesBeingSavedAndLoaded()
     {
         await client!.ApplyAsync(

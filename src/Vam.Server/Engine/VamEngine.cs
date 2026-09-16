@@ -42,6 +42,7 @@ public sealed class VamEngine : IDisposable
     readonly Dictionary<(int Channel, int Link), long> overruns = [];
 
     IAudioBackend? backend;
+    DiskSpaceWatch? disk;
     DropoutPump? dropoutPump;
     Thread? control;
     TimeSpan sinceCorrection;
@@ -170,6 +171,18 @@ public sealed class VamEngine : IDisposable
     /// <summary>The recording, if one is running.</summary>
     public RecordingSession? Recording { get; private set; }
 
+    /// <summary>The folder the running recording writes into, or empty when nothing is recording.</summary>
+    public string RecordingDirectory => Recording?.Directory ?? string.Empty;
+
+    /// <summary>
+    /// How much room is left where recordings go. E5.
+    /// </summary>
+    /// <remarks>
+    /// Measured on the session's own folder while one is running, and on the configured root the
+    /// rest of the time, so the console has a figure to show before anybody presses record.
+    /// </remarks>
+    public long FreeBytes => disk?.FreeBytes ?? 0;
+
     /// <summary>What virtual endpoints this machine has, and what to say when it has none. A6 and E2.</summary>
     public VirtualEndpointReport? VirtualEndpoints { get; private set; }
 
@@ -202,6 +215,10 @@ public sealed class VamEngine : IDisposable
         Graph.Overran += OnOverran;
 
         OpenDevices(config);
+
+        disk = new DiskSpaceWatch(new DiskGuard(loggers.CreateLogger<DiskGuard>()), options.RecordingDirectory);
+        disk.Start();
+
         StartRecording(config);
         StartClock(config);
         StartTelemetry(config);
@@ -300,6 +317,12 @@ public sealed class VamEngine : IDisposable
 
         Recording?.Stop();
         Clock?.Stop();
+
+        // Stopped here rather than only at disposal, so a restarted engine does not leave the
+        // previous watch's thread measuring a folder nothing writes to any more.
+        disk?.Dispose();
+        disk = null;
+
         BusOutputs?.Dispose();
         BusOutputs = null;
         Supervisor?.Dispose();
@@ -321,6 +344,8 @@ public sealed class VamEngine : IDisposable
 
         Recording?.Dispose();
         Clock?.Dispose();
+        disk?.Dispose();
+        disk = null;
         stopping.Dispose();
     }
 
@@ -632,6 +657,8 @@ public sealed class VamEngine : IDisposable
         Recording.Dispose();
         Recording = null;
 
+        disk?.Watch(options.RecordingDirectory);
+
         logger.LogInformation("Recording stopped.");
 
         return true;
@@ -699,6 +726,8 @@ public sealed class VamEngine : IDisposable
         }
 
         Graph!.BindRecording(Recording);
+
+        disk?.Watch(directory);
 
         return verdict;
     }
