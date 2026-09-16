@@ -123,8 +123,18 @@
         @if (Channel.PresetName.Length > 0)
         {
             <span class="pre @(Channel.IsPresetModified ? "mod" : null)">
-                @Channel.PresetName@(Channel.IsPresetModified ? " *" : string.Empty)
+                @Channel.PresetName
             </span>
+
+            @*
+                The marker is its own element so the name's ellipsis cannot be what removes it. An
+                operator about to press save needs to know whether they are saving their work or
+                saving over it, and that is the one part of this label that must not be truncated.
+            *@
+            @if (Channel.IsPresetModified)
+            {
+                <span class="mark">*</span>
+            }
         }
 
         @if (Channel.Chain.Count == 0)

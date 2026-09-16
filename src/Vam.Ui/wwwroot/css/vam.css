@@ -468,16 +468,19 @@ input.num { min-width: 0; width: 62px; text-align: right; }
   border-bottom: 1px solid var(--line-soft);
 }
 
-.chainbar .seg { height: 5px; flex: 1; background: var(--brass-dim); border-radius: 1px; }
+/* The floor is what stops a preset name from squeezing an eight-link chain into slivers: the
+   name gives way first, because the chain is what this bar is for. */
+.chainbar .seg { height: 5px; flex: 1; min-width: 6px; background: var(--brass-dim); border-radius: 1px; }
 .chainbar .seg.byp { background: #2b343d; }
 .chainbar .n { font-family: var(--f-mono); font-size: 9.5px; color: var(--ink-mute); flex: 0 0 auto; }
 
 /* B12: which preset this chain came from. Truncated like the device name above it, because the
-   strip is 128px wide and the full name is in the bar's tooltip. */
+   strip is 128px wide and the full name is in the bar's tooltip. Kept narrow: the segments beside
+   it are what the bar is for, and they are flexible where this is not. */
 .chainbar .pre {
   flex: 0 1 auto;
   min-width: 0;
-  max-width: 56px;
+  max-width: 40px;
   font-family: var(--f-cond);
   text-transform: uppercase;
   letter-spacing: .04em;
@@ -488,7 +491,11 @@ input.num { min-width: 0; width: 62px; text-align: right; }
   text-overflow: ellipsis;
 }
 
-.chainbar .pre.mod { color: var(--warn); }
+.chainbar .pre.mod,
+.chainbar .mark { color: var(--warn); }
+
+/* Never truncated, unlike the name it follows. */
+.chainbar .mark { flex: 0 0 auto; font-family: var(--f-mono); font-size: 9.5px; }
 .chainbar:hover .seg { background: var(--brass); }
 
 .sends { display: flex; flex-direction: column; gap: 2px; padding: 5px 6px; }
@@ -546,6 +553,11 @@ input.num { min-width: 0; width: 62px; text-align: right; }
 .compact .sends,
 .compact .chainbar .n,
 .compact .chainbar .pre { display: none; }
+
+/* A 58px strip has no room for the floor the full-width bar gives its segments. */
+.compact .chainbar .seg { min-width: 0; }
+
+/* The marker survives compact density; the name it qualifies does not need to. */
 .compact .strip .nm { font-size: 11.5px; }
 .compact .msm { grid-template-columns: 1fr 1fr; gap: 2px; }
 .compact .msm b.o { display: none; }
