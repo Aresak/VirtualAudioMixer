@@ -163,6 +163,32 @@ public class RecordingTests : IDisposable
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
+    public void TheFigureIsTakenAgainWhileTheSessionRuns()
+    {
+        Directory.CreateDirectory(directory);
+
+        using DiskSpaceWatch watch = new(
+            new DiskGuard(NullLogger<DiskGuard>.Instance),
+            directory,
+            TimeSpan.FromMilliseconds(50)
+        );
+
+        DateTimeOffset first = watch.MeasuredAt;
+
+        watch.Start();
+
+        // The whole point of the watch. A figure taken once when the recording started says nothing
+        // about the hour that fills the disk up, which is the hour the operator needs warning in.
+        Assert.True(
+            SpinWait.SpinUntil(() => watch.MeasuredAt > first, TimeSpan.FromSeconds(5)),
+            "The disk was never measured a second time."
+        );
+
+        Assert.True(watch.FreeBytes > 0);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
     public void AFolderThatCannotBeMeasuredLeavesTheLastFigureStanding()
     {
         Directory.CreateDirectory(directory);
