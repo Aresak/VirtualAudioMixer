@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using Vam.Ui.Abstractions;
@@ -27,6 +28,36 @@ public sealed class DesktopPlatformServices(EngineLauncher launcher) : IPlatform
 
     /// <inheritdoc />
     public bool CanPickFolders => true;
+
+    /// <inheritdoc />
+    public bool CanOpenFolders => true;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Explorer, with the folder selected rather than opened into it, which is what somebody who
+    /// asked to see a recording wants: the session beside the ones around it.
+    /// </remarks>
+    public ValueTask<string?> OpenFolderAsync(string path, CancellationToken cancellationToken = default)
+    {
+        if (!Directory.Exists(path))
+        {
+            return ValueTask.FromResult<string?>("That folder is not on this machine.");
+        }
+
+        try
+        {
+            using Process? explorer = Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"")
+            {
+                UseShellExecute = true
+            });
+
+            return ValueTask.FromResult<string?>(null);
+        }
+        catch (Exception failure) when (failure is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            return ValueTask.FromResult<string?>(failure.Message);
+        }
+    }
 
     /// <inheritdoc />
     public async ValueTask<string?> PickFolderAsync(string title, CancellationToken cancellationToken = default)

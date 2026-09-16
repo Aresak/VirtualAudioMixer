@@ -193,6 +193,38 @@ public sealed class MixerService(
         Task.FromResult(PresetCommands.List(engine.Presets));
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Off the thread the request arrived on. Enumerating a folder is disk I/O, and a recording root
+    /// on a network share that is not answering would otherwise hold a gRPC thread for as long as
+    /// the share takes to give up.
+    /// </remarks>
+    public override async Task<PastSessionList> ListPastSessions(Empty request, ServerCallContext context)
+    {
+        IReadOnlyList<RecordedSession> sessions =
+            await Task.Run(engine.ReadPastSessions, context.CancellationToken);
+
+        PastSessionList list = new();
+
+        foreach (RecordedSession session in sessions)
+        {
+            list.Sessions.Add(new PastSession
+            {
+                Directory = session.Directory,
+                StartedUnixSeconds = session.StartedAt.ToUnixTimeSeconds(),
+                Tracks = session.Tracks,
+                Bytes = session.Bytes,
+
+                // Negative for "the folder does not say", which is a different answer from zero and
+                // the console draws it differently.
+                DurationSeconds = session.Duration is { } duration ? (long)duration.TotalSeconds : -1,
+                DroppedFrames = session.DroppedFrames ?? -1
+            });
+        }
+
+        return list;
+    }
+
+    /// <inheritdoc />
     public override Task<DiagnosticsState> GetDiagnostics(Empty request, ServerCallContext context) =>
         Task.FromResult(MixerDiagnostics.Build(engine));
 

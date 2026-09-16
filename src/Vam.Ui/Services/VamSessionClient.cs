@@ -209,6 +209,28 @@ public sealed class VamSessionClient(
         }
     }
 
+    /// <inheritdoc />
+    public async ValueTask<PastSessionList?> GetPastSessionsAsync(CancellationToken cancellationToken = default)
+    {
+        Mixer.MixerClient? current = client;
+
+        if (current is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await current.ListPastSessionsAsync(new Empty(), cancellationToken: cancellationToken);
+        }
+        catch (RpcException failure)
+        {
+            logger.LogWarning(failure, "The past sessions did not come back.");
+
+            return null;
+        }
+    }
+
     /// <summary>Stops trying, and lets go of the channel.</summary>
     /// <remarks>
     /// Safe to call twice, and it will be. A Blazor Server host disposes the request scope and then

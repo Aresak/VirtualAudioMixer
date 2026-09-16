@@ -409,6 +409,41 @@ public class ProtocolGateTests : IAsyncLifetime
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
+    public async Task ASessionThatHasBeenRecordedCanBeListedAfterwards()
+    {
+        PastSessionList before = await client!.ListPastSessionsAsync(new Empty(), cancellationToken: Token);
+
+        CommandReply started = await client.ApplyAsync(
+            new Command { SetRecording = new SetRecording { Recording = true } },
+            cancellationToken: Token
+        );
+
+        Assert.True(started.Accepted, started.Reason);
+
+        CommandReply stopped = await client.ApplyAsync(
+            new Command { SetRecording = new SetRecording { Recording = false } },
+            cancellationToken: Token
+        );
+
+        Assert.True(stopped.Accepted, stopped.Reason);
+
+        PastSessionList after = await client.ListPastSessionsAsync(new Empty(), cancellationToken: Token);
+
+        Assert.Equal(before.Sessions.Count + 1, after.Sessions.Count);
+
+        PastSession session = after.Sessions[0];
+
+        Assert.True(session.Tracks > 0);
+        Assert.True(session.Bytes > 0);
+
+        // The manifest written when the session closed is what carries these two. Everything else in
+        // the row can be counted off the files; what a session lost cannot.
+        Assert.True(session.DurationSeconds >= 0);
+        Assert.True(session.DroppedFrames >= 0);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
     public async Task TheConsoleSurvivesBeingSavedAndLoaded()
     {
         await client!.ApplyAsync(

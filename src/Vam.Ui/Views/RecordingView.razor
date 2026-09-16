@@ -137,6 +137,106 @@
                 <p class="note">@L["recording.noPicker"]</p>
             }
 
+            <h2>@L["recording.past"]</h2>
+
+            @*
+                E3. Every session lands in its own dated folder, and until now nothing in the console
+                said those folders were there. The question asked after a meeting is whether last
+                month's recording came out, and it was answered by leaving the console.
+            *@
+            @if (sessions is null)
+            {
+                <p class="sub">@L["recording.pastLoading"]</p>
+            }
+            else if (sessions.Count == 0)
+            {
+                <p class="sub">@L["recording.pastNone"]</p>
+            }
+            else
+            {
+                <div class="tw">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>
+                                    @L["recording.date"]
+                                </th>
+                                <th>
+                                    @L["recording.duration"]
+                                </th>
+                                <th>
+                                    @L["recording.tracks"]
+                                </th>
+                                <th>
+                                    @L["recording.size"]
+                                </th>
+                                <th>
+                                    @L["recording.dropped"]
+                                </th>
+                                <th></th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (PastSession session in sessions)
+                            {
+                                <tr @key="session.Directory">
+                                    <td>
+                                        @Started(session)
+                                    </td>
+                                    <td class="mono">
+                                        @Ran(session)
+                                    </td>
+                                    <td class="mono">
+                                        @session.Tracks
+                                    </td>
+                                    <td class="mono">
+                                        @Gigabytes(session.Bytes)
+                                    </td>
+                                    <td>
+                                        @if (session.DroppedFrames < 0)
+                                        {
+                                            <span class="sub">—</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="pill @(session.DroppedFrames == 0 ? "ok" : "warn")">
+                                                @session.DroppedFrames
+                                            </span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (CanOpenFolders)
+                                        {
+                                            <button type="button"
+                                                    class="btn sm"
+                                                    title="@session.Directory"
+                                                    @onclick="() => OpenAsync(session)">
+                                                @L["recording.openFolder"]
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <span class="sub mono">@session.Directory</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @if (!CanOpenFolders)
+                {
+                    @*
+                        The engine's disk is not this console's disk. A console across the room can
+                        list what was recorded and has nothing to open it with, so it shows the path
+                        the engine would use instead of a button that would do nothing.
+                    *@
+                    <p class="note">@L["recording.openElsewhere"]</p>
+                }
+            }
+
             @if (refusal.Length > 0)
             {
                 <p class="note"

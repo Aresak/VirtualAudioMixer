@@ -405,6 +405,12 @@ public sealed class VamEngine : IDisposable
         return null;
     }
 
+    /// <summary>What is already on disk under the recording root. E3.</summary>
+    /// <returns>Recent sessions, newest first.</returns>
+    /// <remarks>Reads the folder on the calling thread. The service calls it off its own.</remarks>
+    public IReadOnlyList<RecordedSession> ReadPastSessions() =>
+        new RecordingCatalogue(loggers.CreateLogger<RecordingCatalogue>()).Read(options.RecordingDirectory);
+
     /// <summary>The two startup behaviours an operator may change. H3 and E4.</summary>
     public (bool LoadLastConsole, bool RecordAutomatically) Startup =>
         (options.LoadLastConsole, options.RecordAutomatically);

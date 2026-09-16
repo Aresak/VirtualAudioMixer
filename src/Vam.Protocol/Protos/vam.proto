@@ -43,6 +43,11 @@ service Mixer {
   // B12. The chain presets this engine has. Kept by the engine rather than by each console, so a
   // preset saved at the desk is there on the tablet.
   rpc ListChainPresets(Empty) returns (ChainPresetList);
+
+  // E3. What is already on disk, asked for when the recording view opens rather than carried in
+  // every snapshot: it is not a number that changes during a meeting, and enumerating a folder on a
+  // network share is not something the console should do twenty-five times a second.
+  rpc ListPastSessions(Empty) returns (PastSessionList);
 }
 
 message Empty {}
@@ -289,6 +294,22 @@ message MoveChannel { int32 from_index = 1; int32 to_index = 2; }
 message AddModifier { ChainTarget target = 1; string modifier_id = 2; int32 at_index = 3; }
 message RemoveModifier { ChainTarget target = 1; int32 link_index = 2; }
 message MoveModifier { ChainTarget target = 1; int32 from_index = 2; int32 to_index = 3; }
+message PastSessionList { repeated PastSession sessions = 1; }
+
+message PastSession {
+  // The folder, as the engine sees it. Not as this console sees it - the two are the same machine
+  // only some of the time.
+  string directory = 1;
+  int64 started_unix_seconds = 2;
+  int32 tracks = 3;
+  int64 bytes = 4;
+
+  // Negative when nothing in the folder says. A session recorded before the engine wrote a manifest
+  // has files to count and nothing that remembers what it lost.
+  int64 duration_seconds = 5;
+  int64 dropped_frames = 6;
+}
+
 message SetRecording { bool recording = 1; string directory = 2; }
 // H3 and E4. The two startup behaviours an operator may want to change, and nothing else — every
 // other setting on that view is deliberately not a choice.

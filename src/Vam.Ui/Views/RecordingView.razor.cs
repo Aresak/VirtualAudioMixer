@@ -19,7 +19,46 @@ public partial class RecordingView
     string directory = string.Empty;
     string refusal = string.Empty;
 
+    IReadOnlyList<PastSession>? sessions;
+
+    /// <summary>Whether the engine's recordings are on a disk this console can show.</summary>
+    [Inject]
+    public required EngineConnector Connector { get; set; }
+
     RecordingState? Recording => Session.Console?.Recording;
+
+    // Two separate questions, and both have to be yes: this host can show a folder at all, and the
+    // engine whose folder it is runs on this machine.
+    bool CanOpenFolders => Platform.CanOpenFolders && Connector.CanStopEngine;
+
+    /// <inheritdoc />
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSessionsAsync();
+    }
+
+    async Task LoadSessionsAsync()
+    {
+        sessions = (await Session.GetPastSessionsAsync())?.Sessions;
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    static string Started(PastSession session) =>
+        DateTimeOffset.FromUnixTimeSeconds(session.StartedUnixSeconds)
+            .ToLocalTime()
+            .ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+
+    // A dash rather than 0:00:00 when the folder does not say. A session recorded before the engine
+    // wrote a manifest has files to count and nothing that remembers how long it ran.
+    static string Ran(PastSession session) => session.DurationSeconds < 0
+        ? "—"
+        : TimeSpan.FromSeconds(session.DurationSeconds).ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture);
+
+    async Task OpenAsync(PastSession session)
+    {
+        refusal = await Platform.OpenFolderAsync(session.Directory) ?? string.Empty;
+    }
 
     string Duration(RecordingState recording)
     {
@@ -82,5 +121,9 @@ public partial class RecordingView
         });
 
         refusal = reply.Accepted ? string.Empty : reply.Reason;
+
+        // The session that just closed is one of the past ones now, and an operator who stopped a
+        // recording looks at that table next.
+        await LoadSessionsAsync();
     }
 }

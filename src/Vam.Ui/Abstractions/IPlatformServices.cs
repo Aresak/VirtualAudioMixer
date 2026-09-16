@@ -32,6 +32,20 @@ public interface IPlatformServices
     /// <returns>The chosen path, or null.</returns>
     ValueTask<string?> PickFolderAsync(string title, CancellationToken cancellationToken = default);
 
+    /// <summary>Whether this host can show a folder to the person using it.</summary>
+    /// <remarks>
+    /// A browser cannot, and a desktop console can only show a folder on its own machine. Whether
+    /// the engine's disk is this machine's disk is a separate question, and the recording view asks
+    /// it separately.
+    /// </remarks>
+    bool CanOpenFolders { get; }
+
+    /// <summary>Shows a folder in whatever this machine uses to browse files.</summary>
+    /// <param name="path">The folder.</param>
+    /// <param name="cancellationToken">Gives up before opening.</param>
+    /// <returns>Null when it opened; otherwise a sentence saying what stopped it.</returns>
+    ValueTask<string?> OpenFolderAsync(string path, CancellationToken cancellationToken = default);
+
     /// <summary>Whether this host can start an engine on the machine it is running on.</summary>
     /// <remarks>
     /// A desktop console can: the engine ships beside it and starting a process is what a desktop

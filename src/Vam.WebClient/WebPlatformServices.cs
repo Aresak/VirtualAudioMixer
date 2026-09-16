@@ -24,6 +24,17 @@ public sealed class WebPlatformServices : IPlatformServices
 
     /// <inheritdoc />
     /// <remarks>
+    /// The same reason as the picker, and one more: the folder is on the engine's machine, and this
+    /// host is a process serving a page to somebody who may be nowhere near it.
+    /// </remarks>
+    public bool CanOpenFolders => false;
+
+    /// <inheritdoc />
+    public ValueTask<string?> OpenFolderAsync(string path, CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult<string?>("This console runs in a browser and cannot open a folder.");
+
+    /// <inheritdoc />
+    /// <remarks>
     /// It could start a process, and it must not. This host runs wherever the page is served from,
     /// which is not necessarily — and for a console reached over the network, not usually — the
     /// machine with the microphones in it. An engine started here would be an engine with no inputs,
