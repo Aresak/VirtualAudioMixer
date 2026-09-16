@@ -119,4 +119,14 @@ public interface IVamSession
     /// <param name="cancellationToken">Gives up.</param>
     /// <returns>The report, or null when there is no engine to ask.</returns>
     ValueTask<DiagnosticsState?> GetDiagnosticsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>What the engine has already recorded. E3.</summary>
+    /// <param name="cancellationToken">Gives up waiting.</param>
+    /// <returns>Recent sessions, newest first, or null when the engine did not answer.</returns>
+    /// <remarks>
+    /// Asked for when the recording view opens rather than carried in the snapshot. Enumerating a
+    /// folder is disk I/O on the engine's machine, and what is already on disk does not change
+    /// during a meeting.
+    /// </remarks>
+    ValueTask<PastSessionList?> GetPastSessionsAsync(CancellationToken cancellationToken = default);
 }

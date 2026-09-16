@@ -19,7 +19,62 @@ public partial class RecordingView
     string directory = string.Empty;
     string refusal = string.Empty;
 
+    IReadOnlyList<PastSession>? sessions;
+    bool sessionsTruncated;
+    bool sessionsAsked;
+
+    /// <summary>Whether the engine's recordings are on a disk this console can show.</summary>
+    [Inject]
+    public required EngineConnector Connector { get; set; }
+
     RecordingState? Recording => Session.Console?.Recording;
+
+    // Two separate questions, and both have to be yes: this host can show a folder at all, and the
+    // engine whose folder it is runs on this machine.
+    bool CanOpenFolders => Platform.CanOpenFolders && Connector.CanStopEngine;
+
+    /// <inheritdoc />
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSessionsAsync();
+    }
+
+    async Task LoadSessionsAsync()
+    {
+        // Three outcomes, not two. The engine may be still coming up when this view is opened, and a
+        // console that leaves "reading the folder" on screen for the life of the component is
+        // claiming to still be working when it has given up.
+        PastSessionList? list = await Session.GetPastSessionsAsync();
+
+        sessionsAsked = true;
+        sessions = list?.Sessions;
+        sessionsTruncated = list?.Truncated ?? false;
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    static string Started(PastSession session) =>
+        DateTimeOffset.FromUnixTimeSeconds(session.StartedUnixSeconds)
+            .ToLocalTime()
+            .ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+
+    // A dash rather than 0:00:00 when the folder does not say. A session recorded before the engine
+    // wrote a manifest has files to count and nothing that remembers how long it ran.
+    static string Ran(PastSession session) => session.DurationSeconds < 0
+        ? "—"
+        : TimeSpan.FromSeconds(session.DurationSeconds).ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture);
+
+    async Task OpenAsync(PastSession session)
+    {
+        string? problem = await Platform.OpenFolderAsync(session.Directory);
+
+        // A key where the console owns the words, the operating system's own sentence where it does
+        // not. A key the tables do not have renders as itself, so both arrive readable.
+        refusal = problem is null ? string.Empty : L[problem];
+    }
+
+    // Two reasons the button is missing, and they are different things to tell somebody.
+    string NoOpenBecause => Platform.CanOpenFolders ? "recording.openElsewhere" : "recording.openNoHost";
 
     string Duration(RecordingState recording)
     {
@@ -82,5 +137,9 @@ public partial class RecordingView
         });
 
         refusal = reply.Accepted ? string.Empty : reply.Reason;
+
+        // The session that just closed is one of the past ones now, and an operator who stopped a
+        // recording looks at that table next.
+        await LoadSessionsAsync();
     }
 }

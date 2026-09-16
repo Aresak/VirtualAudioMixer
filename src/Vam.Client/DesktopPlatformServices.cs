@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using Vam.Ui.Abstractions;
@@ -27,6 +28,36 @@ public sealed class DesktopPlatformServices(EngineLauncher launcher) : IPlatform
 
     /// <inheritdoc />
     public bool CanPickFolders => true;
+
+    /// <inheritdoc />
+    public bool CanOpenFolders => true;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Explorer, opened into the session's own folder, which is where the files somebody asked to
+    /// see are.
+    /// </remarks>
+    public ValueTask<string?> OpenFolderAsync(string path, CancellationToken cancellationToken = default)
+    {
+        if (!Directory.Exists(path))
+        {
+            return ValueTask.FromResult<string?>("recording.openNotHere");
+        }
+
+        try
+        {
+            using Process? explorer = Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"")
+            {
+                UseShellExecute = true
+            });
+
+            return ValueTask.FromResult<string?>(null);
+        }
+        catch (Exception failure) when (failure is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            return ValueTask.FromResult<string?>(failure.Message);
+        }
+    }
 
     /// <inheritdoc />
     public async ValueTask<string?> PickFolderAsync(string title, CancellationToken cancellationToken = default)

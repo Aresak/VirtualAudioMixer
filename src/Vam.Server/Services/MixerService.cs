@@ -193,6 +193,39 @@ public sealed class MixerService(
         Task.FromResult(PresetCommands.List(engine.Presets));
 
     /// <inheritdoc />
+    /// <remarks>
+    /// The enumeration is synchronous disk I/O, so it goes on the pool rather than running inline in
+    /// the handler. That does not make a slow network share cheap — a blocked pool thread is still a
+    /// blocked thread — but it keeps the blocking out of the request's own continuation, and the
+    /// token stops the work ever starting once the console has given up.
+    /// </remarks>
+    public override async Task<PastSessionList> ListPastSessions(Empty request, ServerCallContext context)
+    {
+        IReadOnlyList<RecordedSession> sessions =
+            await Task.Run(engine.ReadPastSessions, context.CancellationToken);
+
+        PastSessionList list = new() { Truncated = sessions.Count >= RecordingCatalogue.Limit };
+
+        foreach (RecordedSession session in sessions)
+        {
+            list.Sessions.Add(new PastSession
+            {
+                Directory = session.Directory,
+                StartedUnixSeconds = session.StartedAt.ToUnixTimeSeconds(),
+                Tracks = session.Tracks,
+                Bytes = session.Bytes,
+
+                // Negative for "the folder does not say", which is a different answer from zero and
+                // the console draws it differently.
+                DurationSeconds = session.Duration is { } duration ? (long)duration.TotalSeconds : -1,
+                DroppedFrames = session.DroppedFrames ?? -1
+            });
+        }
+
+        return list;
+    }
+
+    /// <inheritdoc />
     public override Task<DiagnosticsState> GetDiagnostics(Empty request, ServerCallContext context) =>
         Task.FromResult(MixerDiagnostics.Build(engine));
 

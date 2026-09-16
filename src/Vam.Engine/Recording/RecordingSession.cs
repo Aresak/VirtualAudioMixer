@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
 namespace Vam.Engine.Recording;
@@ -33,6 +34,9 @@ public sealed class RecordingSession : IDisposable
 
     Thread? writer;
     bool isStopped;
+
+    // Every track is written from the same clock, so one rate describes the session.
+    int sampleRate;
 
     /// <summary>Prepares a session in a folder.</summary>
     /// <param name="directory">Where the files go.</param>
@@ -78,6 +82,8 @@ public sealed class RecordingSession : IDisposable
 
         // Qualified, because this type has a Directory of its own and the folder is what is meant.
         System.IO.Directory.CreateDirectory(directory);
+
+        sampleRate = format.SampleRate;
 
         RecordingTrack track = new(name, Path.Combine(directory, $"{Sanitise(name)}.wav"), format);
 
@@ -156,6 +162,47 @@ public sealed class RecordingSession : IDisposable
         }
 
         Report();
+        WriteManifest();
+    }
+
+    // Written when the session closes, into the session's own folder. Everything else in the table a
+    // later console shows can be counted off the files; what a session lost cannot, and a recording
+    // that dropped frames looks exactly like one that did not.
+    void WriteManifest()
+    {
+        if (tracks.Count == 0)
+        {
+            return;
+        }
+
+        long dropped = 0;
+        long frames = 0;
+
+        foreach (RecordingTrack track in tracks)
+        {
+            dropped += track.DroppedFrames;
+            frames = Math.Max(frames, track.FramesWritten);
+        }
+
+        SessionManifest manifest = new()
+        {
+            StartedAt = StartedAt,
+            DurationSeconds = sampleRate > 0 ? frames / (double)sampleRate : 0,
+            DroppedFrames = dropped
+        };
+
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(directory, SessionManifest.FileName),
+                JsonSerializer.Serialize(manifest));
+        }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
+        {
+            // The recording is already closed and on disk. A manifest that could not be written
+            // costs a column in a table; failing the stop would cost the files.
+            logger.LogWarning(failure, "The session manifest for {Directory} could not be written.", directory);
+        }
     }
 
     /// <inheritdoc />
