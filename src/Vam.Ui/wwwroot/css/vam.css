@@ -551,13 +551,14 @@ input.num { min-width: 0; width: 62px; text-align: right; }
 .compact .strip .rate,
 .compact .axscale,
 .compact .sends,
-.compact .chainbar .n,
+.compact .chainbar .n { display: none; }
+
+/* The marker survives compact density; the name it qualifies does not need to. */
 .compact .chainbar .pre { display: none; }
 
 /* A 58px strip has no room for the floor the full-width bar gives its segments. */
 .compact .chainbar .seg { min-width: 0; }
 
-/* The marker survives compact density; the name it qualifies does not need to. */
 .compact .strip .nm { font-size: 11.5px; }
 .compact .msm { grid-template-columns: 1fr 1fr; gap: 2px; }
 .compact .msm b.o { display: none; }
