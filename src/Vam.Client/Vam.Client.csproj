@@ -36,6 +36,14 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Vam.Ui\Vam.Ui.csproj" />
+
+    <!--
+      Build order only, never linked: the console starts the engine as a process, and in a source
+      checkout an engine left over from an older build would otherwise be the one it starts.
+    -->
+    <ProjectReference Include="..\Vam.Server\Vam.Server.csproj"
+                      ReferenceOutputAssembly="false"
+                      SkipGetTargetFrameworkProperties="true" />
   </ItemGroup>
 
 </Project>

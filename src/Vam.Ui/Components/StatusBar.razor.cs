@@ -6,6 +6,7 @@ using Vam.Protocol;
 using Vam.Protocol.V1;
 using Vam.Ui.Abstractions;
 using Vam.Ui.Components;
+using Vam.Ui.Extensions;
 using Vam.Ui.Localization;
 using Vam.Ui.Services;
 using Vam.Ui.State;
@@ -21,6 +22,8 @@ public partial class StatusBar
     EngineHealth? Health => Session.Console?.Health;
 
     bool IsAutomixOn => Session.Console?.Automix is { IsBypassed: false };
+
+    bool IsOlderEngine => Session.IsOlderEngine();
 
     string ConnectionDotClass => Session.Connection switch
     {

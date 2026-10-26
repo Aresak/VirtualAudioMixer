@@ -12,6 +12,10 @@ option csharp_namespace = "Vam.Protocol.V1";
 service Mixer {
   // Agreed before anything else. An old client meeting a new server has to fail with a sentence a
   // person can read, not by subtly misbehaving three commands later.
+  //
+  // protocol_version changes only for a breaking change. An addition gets a name in
+  // HelloReply.features instead, so a console can use an older engine for what it has. See
+  // docs/protocol-compatibility.md.
   rpc Hello(HelloRequest) returns (HelloReply);
 
   // The whole console as it stands.
@@ -66,6 +70,9 @@ message HelloReply {
   string reason = 4;
   int32 sample_rate = 5;
   int32 block_frames = 6;
+
+  // What this engine has beyond protocol_version, by name. Empty from an engine older than the list.
+  repeated string features = 7;
 }
 
 message ConsoleState {

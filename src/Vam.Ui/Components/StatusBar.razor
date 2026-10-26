@@ -72,6 +72,12 @@
             @(IsAutomixOn ? L["status.automixOn"] : L["status.automixOff"])
         </button>
 
+        @if (IsOlderEngine)
+        {
+            <span class="chip warn"
+                  title="@L["help.olderEngine"]">@L["status.olderEngine"]</span>
+        }
+
         @if (Session.StatusMessage.Length > 0)
         {
             <span class="chip bad">@Session.StatusMessage</span>

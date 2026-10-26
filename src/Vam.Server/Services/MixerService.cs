@@ -57,7 +57,7 @@ public sealed class MixerService(
                 ProtocolVersion);
         }
 
-        return Task.FromResult(new HelloReply
+        HelloReply reply = new()
         {
             Accepted = accepted,
             ProtocolVersion = ProtocolVersion,
@@ -67,7 +67,11 @@ public sealed class MixerService(
                 : $"This server speaks protocol {ProtocolVersion} and the client speaks {request.ProtocolVersion}.",
             SampleRate = 48000,
             BlockFrames = 120
-        });
+        };
+
+        reply.Features.AddRange(EngineFeatures.All);
+
+        return Task.FromResult(reply);
     }
 
     /// <inheritdoc />

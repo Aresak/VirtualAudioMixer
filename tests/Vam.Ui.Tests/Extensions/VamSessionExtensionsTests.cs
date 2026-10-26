@@ -1,3 +1,4 @@
+using Vam.Protocol;
 using Vam.Protocol.V1;
 using Vam.TestKit.Harness;
 using Vam.Ui.Abstractions;
@@ -9,6 +10,7 @@ namespace Vam.Ui.Tests.Extensions;
 /// <summary>
 /// The meter-frame slot passes from one view to the next, and the old view's teardown runs after
 /// the new view has taken it. Getting that wrong is a console whose meters stop on a view change.
+/// And an engine older than the console is told apart from a current one, rather than crashing it.
 /// </summary>
 public class VamSessionExtensionsTests
 {
@@ -53,6 +55,41 @@ public class VamSessionExtensionsTests
         Assert.Same(automix, session.MeterFrame);
     }
 
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void AnEngineFromBeforeTheListSupportsNothingAndIsOlder()
+    {
+        FakeSession session = new() { Connection = ConnectionState.Connected };
+
+        Assert.False(session.Supports(EngineFeatures.RecordingCaptures));
+        Assert.True(session.IsOlderEngine());
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void ACurrentEngineSupportsEverythingAndIsNotOlder()
+    {
+        FakeSession session = new()
+        {
+            Connection = ConnectionState.Connected,
+            Features = EngineFeatures.All.ToHashSet()
+        };
+
+        Assert.True(session.Supports(EngineFeatures.PastSessions));
+        Assert.False(session.IsOlderEngine());
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void NoEngineIsNotAnOlderOne()
+    {
+        // Before the first Hello the list is empty too, and the status bar must not blame an engine
+        // it has not reached.
+        FakeSession session = new() { Connection = ConnectionState.Connecting };
+
+        Assert.False(session.IsOlderEngine());
+    }
+
     sealed class FakeSession : IVamSession
     {
         public event Action? Changed
@@ -61,7 +98,7 @@ public class VamSessionExtensionsTests
             remove { }
         }
 
-        public ConnectionState Connection => throw new NotSupportedException();
+        public ConnectionState Connection { get; init; }
 
         public string StatusMessage => throw new NotSupportedException();
 
@@ -72,6 +109,8 @@ public class VamSessionExtensionsTests
         public int SampleRate => throw new NotSupportedException();
 
         public int BlockFrames => throw new NotSupportedException();
+
+        public IReadOnlySet<string> Features { get; init; } = new HashSet<string>();
 
         public IReadOnlyList<EngineEvent> Events => throw new NotSupportedException();
 

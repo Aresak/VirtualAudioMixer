@@ -72,6 +72,11 @@ Implement them, then **stop**. Say what remains. Do not mark them done.
 The same goes for anything where the task turns out to be wrong, ambiguous in a way that matters, or blocked
 by something nobody noticed. Stopping and saying so is a good outcome. Guessing is not.
 
+## Protocol changes
+
+An addition to `vam.proto` gets a name in `EngineFeatures`; a breaking change bumps `protocol_version`.
+The console checks the name before using the addition. See `docs/protocol-compatibility.md`.
+
 ## Commits
 
 Short and plain. A one-line subject, and at most a couple of matter-of-fact lines of body if the subject does

@@ -295,6 +295,28 @@ public class ProtocolGateTests : IAsyncLifetime
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
+    public async Task TheEngineSaysEveryFeatureItHas()
+    {
+        HelloReply hello = await client!.HelloAsync(new HelloRequest
+        {
+            ProtocolVersion = MixerService.ProtocolVersion,
+            ClientName = "test"
+        }, cancellationToken: Token);
+
+        // Read from the constants rather than from All, so a name added without listing it fails
+        // here instead of hiding a working feature from every console.
+        string[] defined = typeof(EngineFeatures)
+            .GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+            .Where(field => field.IsLiteral)
+            .Select(field => (string)field.GetRawConstantValue()!)
+            .ToArray();
+
+        Assert.NotEmpty(defined);
+        Assert.Equal(defined.Order(), hello.Features.Order());
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
     public async Task TheEngineBuildsAConsoleFromWhateverIsPluggedIn()
     {
         ConsoleState console = await client!.GetConsoleAsync(new Empty(), cancellationToken: Token);
