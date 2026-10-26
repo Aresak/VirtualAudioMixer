@@ -13,6 +13,7 @@ using Vam.Engine.Recording;
 using Vam.Engine.Modifiers.BuiltIn;
 using Vam.Engine.Windows.Devices.Wasapi;
 using Vam.Engine.Windows.Dsp;
+using Vam.Server.Logging;
 
 namespace Vam.Server.Engine;
 
@@ -34,6 +35,12 @@ namespace Vam.Server.Engine;
 /// </remarks>
 public sealed class VamEngine : IDisposable
 {
+    /// <summary>
+    /// Time per capture callback. Twenty milliseconds is what a shared-mode device period rounds to
+    /// on every machine this has run on, and asking for less only makes the device round it back up.
+    /// </summary>
+    const int CaptureBufferMilliseconds = 20;
+
     readonly EngineOptions options;
     readonly ILoggerFactory loggers;
     readonly ILogger<VamEngine> logger;
@@ -416,6 +423,125 @@ public sealed class VamEngine : IDisposable
         new RecordingCatalogue(loggers.CreateLogger<RecordingCatalogue>())
             .Read([options.RecordingDirectory, lastRecordingRoot], Recording?.Directory ?? string.Empty);
 
+    /// <summary>Where the engine keeps things.</summary>
+    /// <remarks>
+    /// The modifier folder is empty because nothing loads modifiers from disk yet. A path shown for
+    /// a folder nothing reads would be the console inventing a feature that does not exist.
+    /// </remarks>
+    public (string Recordings, string Logs, string Modifiers) Paths =>
+        (options.RecordingDirectory, options.LogDirectory ?? EngineLogging.DefaultDirectory, string.Empty);
+
+    /// <summary>The default recording root a session starts from.</summary>
+    public static string DefaultRecordingDirectory { get; } = new EngineOptions().RecordingDirectory;
+
+    /// <summary>Changes where sessions are written from now on.</summary>
+    /// <param name="path">The folder, or null for the default. It is created when the next session starts.</param>
+    /// <returns>Null when it was taken, otherwise why it was not.</returns>
+    /// <remarks>
+    /// Refused while a session is running. The files are open in the folder it started in, and
+    /// accepting a change that could not apply to them would leave the console showing one path and
+    /// the recording going to another.
+    /// </remarks>
+    public string? SetRecordingDirectory(string? path)
+    {
+        if (Recording is not null)
+        {
+            return "A recording is running. The folder changes when it stops.";
+        }
+
+        if (path is not null && string.IsNullOrWhiteSpace(path))
+        {
+            // Never read as the reset: an emptied box sent by mistake would move every recording.
+            return "No folder was given.";
+        }
+
+        string wanted = path ?? DefaultRecordingDirectory;
+
+        if (!Path.IsPathFullyQualified(wanted))
+        {
+            // A relative path lands beside whatever the engine's working directory happens to be,
+            // which for a service is nowhere an operator will look.
+            return "A recording folder has to be a full path.";
+        }
+
+        try
+        {
+            // Watched first. The watch is what the free-space figure is measured from, and a folder
+            // taken but not watched would leave the console reporting the old drive's space against
+            // the new folder's name.
+            disk?.Watch(wanted);
+        }
+        catch (ArgumentException)
+        {
+            return "That is not a path this machine can use.";
+        }
+
+        options.RecordingDirectory = wanted;
+
+        logger.LogInformation("Recordings now go to {Path}.", wanted);
+
+        return null;
+    }
+
+    /// <summary>What the next session writes. E3.</summary>
+    public CaptureSelection Capture => options.Capture;
+
+    /// <summary>How long a session is assumed to run, for the projection.</summary>
+    public TimeSpan ExpectedSessionDuration => options.ExpectedSessionDuration;
+
+    /// <summary>The formats the engine can actually write.</summary>
+    /// <remarks>
+    /// One, and the console offers what is here rather than a list of its own. A dropdown promising
+    /// a format nothing implements is worse than a dropdown with one entry in it.
+    /// </remarks>
+    public static IReadOnlyList<string> AvailableFormats { get; } = [CaptureSelection.WaveFormat];
+
+    /// <summary>
+    /// How large a session of the expected length would be, whether or not one is running.
+    /// </summary>
+    /// <remarks>
+    /// The question asked before a four-hour meeting is not how much disk is free, it is whether the
+    /// session fits, and that has to be answerable before anybody presses record.
+    /// </remarks>
+    public long ProjectedBytes
+    {
+        get
+        {
+            if (Recording is { } recording)
+            {
+                return recording.ProjectedBytes(options.ExpectedSessionDuration);
+            }
+
+            return Graph is { } graph ? ProjectedBytesFor(graph.Config) : 0;
+        }
+    }
+
+    /// <summary>Changes what a session writes, for the next one.</summary>
+    /// <param name="selection">What to capture, and in which format.</param>
+    public void SetCapture(CaptureSelection selection)
+    {
+        options.Capture = selection;
+
+        logger.LogInformation(
+            "Capture: inputs {Inputs}, stream bus {Stream}, all buses {Buses}, format {Format}. Takes effect at the next recording.",
+            selection.Inputs,
+            selection.StreamBus,
+            selection.AllBuses,
+            selection.Format);
+    }
+
+    long ProjectedBytesFor(GraphConfig config)
+    {
+        long total = 0;
+
+        foreach (PlannedTrack track in PlanTracks(config, options.Capture))
+        {
+            total += track.Format.BytesFor(options.ExpectedSessionDuration);
+        }
+
+        return total;
+    }
+
     /// <summary>The two startup behaviours an operator may change. H3 and E4.</summary>
     public (bool LoadLastConsole, bool RecordAutomatically) Startup =>
         (options.LoadLastConsole, options.RecordAutomatically);
@@ -604,7 +730,15 @@ public sealed class VamEngine : IDisposable
                 Dropouts = Dropouts,
                 EndpointIndex = index
             },
-            new CaptureOptions(ShareMode.Shared, TimeSpan.FromMilliseconds(20), width));
+            // The engine's rate, and the backend grants it or refuses to open at all. Before it was
+            // passed the channel was built for 48 kHz while the device was opened at whatever its
+            // mix format said, and a device presenting 44.1 kHz drained its ring for the length of
+            // the session against a servo with 500 ppm of authority.
+            new CaptureOptions(
+                options.CaptureShareMode,
+                TimeSpan.FromMilliseconds(CaptureBufferMilliseconds),
+                width,
+                options.SampleRate));
     }
 
     /// <summary>How many channels a strip's device actually produces.</summary>
@@ -621,13 +755,30 @@ public sealed class VamEngine : IDisposable
             {
                 if (device.Id == channel.DeviceId)
                 {
-                    return Math.Max(device.ChannelCount, 1);
+                    return Math.Max(WidthOf(device), 1);
                 }
             }
         }
 
         return Math.Max(channel.ChannelCount, 1);
     }
+
+    /// <summary>How wide to open one device, given which share mode the engine is asking for.</summary>
+    /// <remarks>
+    /// Windows presents almost every mono microphone as stereo, so asking for the presented width
+    /// while asking for exclusive mode declines exclusive on every real device: exclusive runs at
+    /// the hardware's own format, and a device that is mono underneath cannot grant a stereo one.
+    /// Asking for what the device actually is turns the switch from a setting that does nothing
+    /// into one that does what it says.
+    /// </remarks>
+    /// <param name="device">The endpoint.</param>
+    /// <returns>Channels to ask for.</returns>
+    int WidthOf(AudioDeviceInfo device) =>
+        options.CaptureShareMode == ShareMode.Exclusive
+        && device.NativeChannelCount > 0
+        && device.NativeSampleRate == options.SampleRate
+            ? device.NativeChannelCount
+            : device.ChannelCount;
 
     /// <summary>
     /// Starts recording now, into a folder of its own. J1.
@@ -691,38 +842,45 @@ public sealed class VamEngine : IDisposable
             root,
             DateTimeOffset.Now.ToString(RecordingCatalogue.FolderFormat, System.Globalization.CultureInfo.InvariantCulture));
 
-        Recording = new RecordingSession(
+        List<PlannedTrack> planned = PlanTracks(config, options.Capture);
+
+        if (planned.Count == 0)
+        {
+            // A folder with a timestamp on it and nothing in it, and an operator who believes the
+            // meeting is being recorded. The command handler refuses a selection that captures
+            // nothing; this catches the selection that captures something the console does not have.
+            logger.LogError("Recording did not start: nothing selected would be captured.");
+
+            return new DiskVerdict(false, 0, 0, "Nothing this session would capture is configured.");
+        }
+
+        RecordingSession session = new(
             directory,
             new DiskGuard(loggers.CreateLogger<DiskGuard>()),
             loggers.CreateLogger<RecordingSession>()
         );
 
-        foreach (ChannelConfig channel in config.Channels)
+        DiskVerdict verdict;
+
+        try
         {
-            Recording.AddTrack(channel.Name, new RecordingFormat
+            foreach (PlannedTrack track in planned)
             {
-                SampleRate = options.SampleRate,
-                ChannelCount = Math.Max(channel.ChannelCount, 1),
-                BlockFrames = options.BlockFrames
-            });
-        }
+                session.AddTrack(track.Name, track.Format, track.Source);
+            }
 
-        // E3. The stream bus, finished, beside the raw inputs — two different records and a public
-        // body wants both: one to reconstruct what was said, one to show what was broadcast. Added
-        // last, so its index is the channel count, which is where the compiler looks for it.
-        if (config.Buses.Count > 0)
+            verdict = session.Start(options.ExpectedSessionDuration);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
-            int primary = Math.Clamp(config.PrimaryBusIndex, 0, config.Buses.Count - 1);
+            // Assigned only once it is writing, so a folder that cannot be opened is reported and a
+            // retry starts afresh rather than finding a dead session in the way.
+            logger.LogError(error, "Recording did not start: {Directory} could not be written.", directory);
 
-            Recording.AddTrack($"{config.Buses[primary].Name} (bus)", new RecordingFormat
-            {
-                SampleRate = options.SampleRate,
-                ChannelCount = Math.Max(config.Buses[primary].ChannelCount, 1),
-                BlockFrames = options.BlockFrames
-            });
+            session.Dispose();
+
+            return new DiskVerdict(false, 0, 0, error.Message);
         }
-
-        DiskVerdict verdict = Recording.Start(options.ExpectedSessionDuration);
 
         if (!verdict.CanStart)
         {
@@ -730,11 +888,12 @@ public sealed class VamEngine : IDisposable
             // problem; a meeting that did not happen because of one is a worse problem.
             logger.LogError("Recording did not start: {Reason}", verdict.Description);
 
-            Recording.Dispose();
-            Recording = null;
+            session.Dispose();
 
             return verdict;
         }
+
+        Recording = session;
 
         Graph!.BindRecording(Recording);
 
@@ -744,6 +903,50 @@ public sealed class VamEngine : IDisposable
 
         return verdict;
     }
+
+    /// <summary>The tracks a session would open for this console and this selection. E3.</summary>
+    /// <remarks>
+    /// The stream bus, finished, beside the raw inputs — two different records and a public body
+    /// wants both. Each track carries which source it is; the graph binds its taps through that
+    /// rather than by counting into the list, because what the list contains is a choice.
+    /// </remarks>
+    List<PlannedTrack> PlanTracks(GraphConfig config, CaptureSelection capture)
+    {
+        List<PlannedTrack> planned = [];
+
+        if (capture.Inputs)
+        {
+            for (int index = 0; index < config.Channels.Count; index++)
+            {
+                planned.Add(new PlannedTrack(
+                    config.Channels[index].Name,
+                    FormatFor(config.Channels[index].ChannelCount),
+                    new RecordingSource(RecordingSourceKind.Channel, index)));
+            }
+        }
+
+        int primary = config.Buses.Count > 0 ? Math.Clamp(config.PrimaryBusIndex, 0, config.Buses.Count - 1) : -1;
+
+        for (int index = 0; index < config.Buses.Count; index++)
+        {
+            if (capture.AllBuses || (capture.StreamBus && index == primary))
+            {
+                planned.Add(new PlannedTrack(
+                    $"{config.Buses[index].Name} (bus)",
+                    FormatFor(config.Buses[index].ChannelCount),
+                    new RecordingSource(RecordingSourceKind.Bus, index)));
+            }
+        }
+
+        return planned;
+    }
+
+    RecordingFormat FormatFor(int channelCount) => new()
+    {
+        SampleRate = options.SampleRate,
+        ChannelCount = Math.Max(channelCount, 1),
+        BlockFrames = options.BlockFrames
+    };
 
     /// <summary>
     /// Points the meter publisher at the plan that is actually running.
@@ -1077,4 +1280,7 @@ public sealed class VamEngine : IDisposable
 
         sinceMeters = TimeSpan.Zero;
     }
+
+    /// <summary>One track a session would open: its name, its format and what it records.</summary>
+    readonly record struct PlannedTrack(string Name, RecordingFormat Format, RecordingSource Source);
 }

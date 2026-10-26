@@ -22,6 +22,7 @@ public partial class MixerView
     readonly HashSet<int> latched = [];
 
     IJSObjectReference? meters;
+    (MeterBallistics Ballistics, int FramesPerSecond)? pushed;
     byte[] scratch = [];
     int shape = -1;
     int pending;
@@ -40,6 +41,18 @@ public partial class MixerView
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         meters ??= await Js.InvokeAsync<IJSObjectReference>("import", "./_content/Vam.Ui/js/vam-meters.js");
+
+        // Pushed when they change rather than per frame. Both are read on the drawing path, so the
+        // meters have to be told; neither changes more than once in a while.
+        if (pushed != (Shell.Ballistics, Shell.MeterFramesPerSecond))
+        {
+            pushed = (Shell.Ballistics, Shell.MeterFramesPerSecond);
+
+            await meters.InvokeVoidAsync(
+                "settings",
+                Shell.Ballistics.ToString().ToLowerInvariant(),
+                Shell.MeterFramesPerSecond);
+        }
 
         int current = Fingerprint();
 

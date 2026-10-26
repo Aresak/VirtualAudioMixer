@@ -56,6 +56,22 @@ public sealed class RecordingSession : IDisposable
     /// <summary>The folder this session writes into.</summary>
     public string Directory => directory;
 
+    /// <summary>What the session has put on disk so far, across every track.</summary>
+    public long BytesWritten
+    {
+        get
+        {
+            long total = 0;
+
+            foreach (RecordingTrack track in tracks)
+            {
+                total += track.FramesWritten * track.Format.ChannelCount * WaveWriter.BytesPerSample;
+            }
+
+            return total;
+        }
+    }
+
     /// <summary>Whether the writer thread is running.</summary>
     public bool IsRecording => writer is not null;
 
@@ -68,7 +84,7 @@ public sealed class RecordingSession : IDisposable
     /// <param name="name">What this track is.</param>
     /// <param name="format">Its rate, channels and block size.</param>
     /// <returns>The track.</returns>
-    public RecordingTrack AddTrack(string name, RecordingFormat format)
+    public RecordingTrack AddTrack(string name, RecordingFormat format, RecordingSource source)
     {
         ArgumentNullException.ThrowIfNull(format);
 
@@ -80,7 +96,7 @@ public sealed class RecordingSession : IDisposable
         // Qualified, because this type has a Directory of its own and the folder is what is meant.
         System.IO.Directory.CreateDirectory(directory);
 
-        RecordingTrack track = new(name, Path.Combine(directory, $"{Sanitise(name)}.wav"), format);
+        RecordingTrack track = new(name, UniquePath(Sanitise(name)), format, source);
 
         tracks.Add(track);
 
@@ -176,7 +192,7 @@ public sealed class RecordingSession : IDisposable
         foreach (RecordingTrack track in tracks)
         {
             dropped += track.DroppedFrames;
-            seconds = track.SampleRate > 0 ? Math.Max(seconds, track.FramesWritten / (double)track.SampleRate) : seconds;
+            seconds = track.Format.SampleRate > 0 ? Math.Max(seconds, track.FramesWritten / (double)track.Format.SampleRate) : seconds;
         }
 
         SessionManifest manifest = new()
@@ -209,16 +225,42 @@ public sealed class RecordingSession : IDisposable
         stopping.Dispose();
     }
 
+    /// <summary>The track recording a given channel or bus, if this session is recording it.</summary>
+    /// <param name="source">Which channel or bus.</param>
+    /// <returns>Its track, or null when this session does not record it.</returns>
+    /// <remarks>
+    /// The graph binds its taps through this rather than by position: which tracks a session opens
+    /// is a choice now, and a tap bound by counting would write one source's audio into another
+    /// source's file.
+    /// </remarks>
+    public RecordingTrack? Find(RecordingSource source)
+    {
+        foreach (RecordingTrack track in tracks)
+        {
+            if (track.Source == source)
+            {
+                return track;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>How large this session is expected to become.</summary>
     /// <param name="duration">How long it is expected to run.</param>
     /// <returns>Bytes.</returns>
+    /// <remarks>
+    /// Per track, at that track's own format. A stereo bus costs twice what a mono microphone does,
+    /// and a projection that assumed one rate and one channel for everything was under by half on
+    /// the one number the disk guard exists to get right.
+    /// </remarks>
     public long ProjectedBytes(TimeSpan duration)
     {
         long total = 0;
 
         foreach (RecordingTrack track in tracks)
         {
-            total += (long)(DiskGuard.BytesPerSecond(48000, 1) * duration.TotalSeconds);
+            total += track.Format.BytesFor(duration);
         }
 
         return total;
@@ -234,6 +276,20 @@ public sealed class RecordingSession : IDisposable
         }
 
         return new string(cleaned);
+    }
+
+    /// <summary>A file no other track in this session writes to.</summary>
+    /// <remarks>Two buses may share a name, and opening the same file twice fails the whole session.</remarks>
+    string UniquePath(string stem)
+    {
+        string path = Path.Combine(directory, $"{stem}.wav");
+
+        for (int suffix = 2; tracks.Exists(track => string.Equals(track.Path, path, StringComparison.OrdinalIgnoreCase)); suffix++)
+        {
+            path = Path.Combine(directory, $"{stem} {suffix}.wav");
+        }
+
+        return path;
     }
 
     void Run()

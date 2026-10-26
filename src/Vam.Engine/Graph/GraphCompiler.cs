@@ -505,10 +505,17 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
             return;
         }
 
-        for (int channel = 0; channel < config.Channels.Count && channel < recording.Tracks.Count; channel++)
+        for (int channel = 0; channel < config.Channels.Count; channel++)
         {
+            // By source, never by position: a session that records the buses and not the inputs has
+            // a shorter track list, and counting into it would tap the wrong thing.
+            if (recording.Find(new RecordingSource(RecordingSourceKind.Channel, channel)) is not { } track)
+            {
+                continue;
+            }
+
             nodes.Add(new RecordingTapNode(
-                recording.Tracks[channel],
+                track,
                 layout.PreFaderPlane(channel),
                 layout.ChannelWidth(channel),
                 blockFrames));
@@ -532,24 +539,26 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
     /// </remarks>
     void AddBusRecordingTap(GraphConfig config, GraphLayout layout, RecordingSession? recording, List<AudioNode> nodes)
     {
-        if (recording is null || config.Buses.Count == 0)
+        if (recording is null)
         {
             return;
         }
 
-        int track = config.Channels.Count;
-        int bus = Math.Clamp(config.PrimaryBusIndex, 0, config.Buses.Count - 1);
-
-        if (track >= recording.Tracks.Count)
+        for (int bus = 0; bus < config.Buses.Count; bus++)
         {
-            return;
-        }
+            // Whichever buses the session opened a track for. Usually one, the primary; a session
+            // asked for all of them gets all of them, each into its own file.
+            if (recording.Find(new RecordingSource(RecordingSourceKind.Bus, bus)) is not { } track)
+            {
+                continue;
+            }
 
-        nodes.Add(new RecordingTapNode(
-            recording.Tracks[track],
-            layout.BusPlane(bus),
-            layout.BusWidth(bus),
-            blockFrames));
+            nodes.Add(new RecordingTapNode(
+                track,
+                layout.BusPlane(bus),
+                layout.BusWidth(bus),
+                blockFrames));
+        }
     }
 
     static AutomixParams BuildAutomix(GraphConfig config)

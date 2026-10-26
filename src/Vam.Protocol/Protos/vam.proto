@@ -79,6 +79,18 @@ message ConsoleState {
   // paying for a drift history nobody opened.
   EngineHealth health = 6;
   StartupOptions startup = 7;
+
+  // Where the engine keeps things. On the wire because they are the engine's paths, on the engine's
+  // disk, and a console across the room has no other way to know them.
+  EnginePaths paths = 8;
+}
+
+message EnginePaths {
+  string recordings = 1;
+  string logs = 2;
+  // Empty while nothing loads modifiers from disk. EPIC-20 is where that arrives, and a path shown
+  // for a folder nothing reads would be the console inventing a feature.
+  string modifiers = 3;
 }
 
 message StartupOptions {
@@ -119,6 +131,11 @@ message ChannelState {
   double drift_ppm = 15;
   // Present, absent, faulted.
   string device_state = 16;
+  // Which share mode the device was actually granted, and what the hardware itself runs at. An
+  // operator who can see that one microphone is being converted by Windows and the one beside it is
+  // not can explain why they sound different, which is the whole reason these travel.
+  string share_mode = 24;
+  int32 device_sample_rate = 25;
   repeated ModifierState chain = 17;
   // U5. Set by the operator, kept by the engine, so every console shows the same room the same way.
   string colour = 18;
@@ -216,6 +233,34 @@ message RecordingState {
   int64 free_bytes = 5;
   // E4. Whether the engine starts recording on its own.
   bool starts_automatically = 6;
+
+  // E3. What the next session writes. Stated rather than assumed: the engine already puts the
+  // primary bus in the folder beside the raw inputs, and a console that does not say so leaves the
+  // contents of a public record to be discovered by opening it.
+  RecordingCapture captures = 7;
+
+  // On disk so far, and where the session is heading. Free space alone does not answer the question
+  // asked before a four-hour meeting, which is whether it fits.
+  int64 bytes_written = 8;
+  int64 projected_bytes = 9;
+
+  // What the engine can actually write. One entry today; the console offers what is here rather
+  // than a list of its own that could promise a format nothing implements.
+  repeated string available_formats = 10;
+
+  // What the projection assumes, so the console can say what it is a projection of rather
+  // than showing a number with nothing attached to it.
+  int64 expected_seconds = 11;
+}
+
+// Named for the recording rather than for the devices: Vam.Engine already has a CaptureOptions
+// and it is about opening a microphone, not about what lands on disk.
+message RecordingCapture {
+  bool inputs = 1;
+  bool stream_bus = 2;
+  bool all_buses = 3;
+  // One of RecordingState.available_formats.
+  string format = 4;
 }
 
 message Command {
@@ -253,6 +298,8 @@ message Command {
     ApplyChainPreset apply_chain_preset = 26;
     DeleteChainPreset delete_chain_preset = 27;
     Shutdown shutdown = 33;
+    SetRecordingsPath set_recordings_path = 34;
+    SetCaptureOptions set_capture_options = 35;
   }
 }
 
@@ -313,6 +360,12 @@ message PastSession {
 }
 
 message SetRecording { bool recording = 1; string directory = 2; }
+// E3. What the next session writes. A session already running keeps the tracks it opened with -
+// tracks cannot be added to a file that is being written - so this takes effect at the next start.
+message SetCaptureOptions { RecordingCapture captures = 1; }
+// Where sessions go from now on. Refused while one is running: a session already writing into a
+// folder cannot be told it is somewhere else. Reset is its own flag so an empty path is never one.
+message SetRecordingsPath { string path = 1; bool reset = 2; }
 // H3 and E4. The two startup behaviours an operator may want to change, and nothing else — every
 // other setting on that view is deliberately not a choice.
 message SetStartupOptions {
@@ -359,6 +412,9 @@ message DeviceInfo {
   // Whether a strip is already using it. Two strips on one endpoint is legal and occasionally
   // wanted, so this informs rather than forbids.
   bool is_in_use = 7;
+  // What the hardware runs at, as opposed to what it presents. Zero when the backend cannot say.
+  // A speakerphone reports 48 kHz here and 16 kHz there, and picking it costs a conversion.
+  int32 native_sample_rate = 8;
 }
 
 message ChainPresetList {
@@ -407,6 +463,9 @@ message DeviceClock {
   int64 underruns = 9;
   int64 overruns = 10;
   string state = 11;
+  string share_mode = 12;
+  // What the hardware itself runs at, which is not the nominal rate when the system is converting.
+  double device_rate = 13;
 }
 
 // K1.

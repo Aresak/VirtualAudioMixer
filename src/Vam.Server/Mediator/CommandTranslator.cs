@@ -140,9 +140,19 @@ public static class CommandTranslator
             Command.KindOneofCase.SetRecording =>
                 new SetRecordingRequest(command.SetRecording.Recording, command.SetRecording.Directory),
 
+            Command.KindOneofCase.SetRecordingsPath => new SetRecordingsPathRequest(
+                command.SetRecordingsPath.Path,
+                command.SetRecordingsPath.Reset),
+
             Command.KindOneofCase.SetStartupOptions => new SetStartupOptionsRequest(
                 command.SetStartupOptions.LoadLastConsole,
                 command.SetStartupOptions.RecordAutomatically),
+
+            Command.KindOneofCase.SetCaptureOptions => new SetCaptureOptionsRequest(
+                command.SetCaptureOptions.Captures.Inputs,
+                command.SetCaptureOptions.Captures.StreamBus,
+                command.SetCaptureOptions.Captures.AllBuses,
+                command.SetCaptureOptions.Captures.Format),
 
             Command.KindOneofCase.Shutdown =>
                 new ShutdownRequest(command.Shutdown.Reason),

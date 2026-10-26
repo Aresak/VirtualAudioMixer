@@ -142,7 +142,8 @@ public sealed class MixerService(
 
                     // Informs rather than forbids. Two strips on one endpoint is legal and
                     // occasionally exactly what somebody wants.
-                    IsInUse = inUse.Contains(device.Id.Value)
+                    IsInUse = inUse.Contains(device.Id.Value),
+                    NativeSampleRate = device.NativeSampleRate
                 });
             }
         }
@@ -373,6 +374,13 @@ public sealed class MixerService(
         state.Automix = BuildAutomix(config);
         state.Recording = BuildRecording();
         state.Health = BuildHealth();
+        state.Paths = new EnginePaths
+        {
+            Recordings = engine.Paths.Recordings,
+            Logs = engine.Paths.Logs,
+            Modifiers = engine.Paths.Modifiers
+        };
+
         state.Startup = new StartupOptions
         {
             LoadLastConsole = engine.Startup.LoadLastConsole,
@@ -666,6 +674,8 @@ public sealed class MixerService(
             state.MeasuredSampleRate = telemetry.MeasuredSampleRate;
             state.DriftPpm = telemetry.DriftPpm;
             state.DeviceState = telemetry.State.ToString();
+            state.ShareMode = telemetry.ShareMode.ToString();
+            state.DeviceSampleRate = telemetry.DeviceSampleRate;
         }
 
         AddChannelChain(state, channel, sends, index);
@@ -709,8 +719,23 @@ public sealed class MixerService(
         {
             IsRecording = engine.Recording?.IsRecording ?? false,
             Directory = engine.RecordingDirectory,
-            FreeBytes = engine.FreeBytes
+            FreeBytes = engine.FreeBytes,
+            StartsAutomatically = engine.Startup.RecordAutomatically,
+            Captures = new RecordingCapture
+            {
+                Inputs = engine.Capture.Inputs,
+                StreamBus = engine.Capture.StreamBus,
+                AllBuses = engine.Capture.AllBuses,
+                Format = engine.Capture.Format
+            },
+
+            // Carried whether or not a session is running: the projection is what an operator reads
+            // before pressing record, not after.
+            ProjectedBytes = engine.ProjectedBytes,
+            ExpectedSeconds = (long)engine.ExpectedSessionDuration.TotalSeconds
         };
+
+        state.AvailableFormats.AddRange(VamEngine.AvailableFormats);
 
         if (engine.Recording is not { } recording)
         {
@@ -727,6 +752,8 @@ public sealed class MixerService(
             // Summed, because this one really is a total: a frame lost on any track is a frame lost.
             state.DroppedFrames += track.DroppedFrames;
         }
+
+        state.BytesWritten = recording.BytesWritten;
 
         return state;
     }

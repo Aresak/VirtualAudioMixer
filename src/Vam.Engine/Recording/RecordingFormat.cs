@@ -16,4 +16,10 @@ public sealed record RecordingFormat
 
     /// <summary>Frames the audio thread hands over at once.</summary>
     public required int BlockFrames { get; init; }
+
+    /// <summary>How many bytes a track in this format writes over a stretch of time.</summary>
+    /// <param name="duration">How long it records.</param>
+    /// <returns>Bytes.</returns>
+    public long BytesFor(TimeSpan duration) =>
+        (long)(DiskGuard.BytesPerSecond(SampleRate, ChannelCount) * duration.TotalSeconds);
 }
