@@ -41,6 +41,8 @@ const ALPHA = 0.88;
 const state = {
     canvas: null,
     colours: [],
+    start: '',
+    end: '',
     columns: [],
     shares: [],
     gains: [],
@@ -107,11 +109,8 @@ function drawScale(context, width, height) {
     context.fillStyle = LABEL;
     context.font = `${10 * ratio}px "IBM Plex Mono", ui-monospace, monospace`;
     context.textBaseline = 'alphabetic';
-    context.fillText('−30 s', 6 * ratio, height - (6 * ratio));
-
-    const now = 'now';
-
-    context.fillText(now, width - context.measureText(now).width - (6 * ratio), height - (6 * ratio));
+    context.fillText(state.start, 6 * ratio, height - (6 * ratio));
+    context.fillText(state.end, width - context.measureText(state.end).width - (6 * ratio), height - (6 * ratio));
 }
 
 function draw() {
@@ -202,11 +201,13 @@ function writeRows(view, channelCount) {
  * Called after a render that changes how many channels there are, and never per frame.
  *
  * @param {Array<string>} colours the colour of each strip, in strip order
+ * @param {string} start the label at the band's left end
+ * @param {string} end the label at its right end
  */
-export function bind(colours) {
+export function bind(colours, start, end) {
     unbind();
+    restyle(colours, start, end);
 
-    state.colours = colours || [];
     state.canvas = document.querySelector('canvas[data-vam-band]');
 
     document.querySelectorAll('[data-vam-axshare]').forEach(element => {
@@ -220,6 +221,20 @@ export function bind(colours) {
     state.redraw = setInterval(draw, REDRAW_MS);
 
     draw();
+}
+
+/**
+ * New colours or new labels, without dropping the history. Recolouring a strip or switching the
+ * language is not a reason to forget the last thirty seconds.
+ *
+ * @param {Array<string>} colours the colour of each strip, in strip order
+ * @param {string} start the label at the band's left end
+ * @param {string} end the label at its right end
+ */
+export function restyle(colours, start, end) {
+    state.colours = colours || [];
+    state.start = start || '';
+    state.end = end || '';
 }
 
 /**
@@ -246,6 +261,8 @@ export function unbind() {
     state.redraw = 0;
     state.canvas = null;
     state.colours = [];
+    state.start = '';
+    state.end = '';
     state.columns = [];
     state.shares = [];
     state.gains = [];

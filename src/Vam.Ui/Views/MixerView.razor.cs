@@ -6,6 +6,7 @@ using Vam.Protocol;
 using Vam.Protocol.V1;
 using Vam.Ui.Abstractions;
 using Vam.Ui.Components;
+using Vam.Ui.Extensions;
 using Vam.Ui.Localization;
 using Vam.Ui.Services;
 using Vam.Ui.State;
@@ -38,7 +39,7 @@ public partial class MixerView
         // A view is replaced by rendering the new one and disposing this one afterwards, so by the
         // time DisposeAsync runs the automix view may already have taken the slot.
         meterFrames = OnMeterFrame;
-        Session.MeterFrame = meterFrames;
+        Session.TakeMeterFrames(meterFrames);
     }
 
     /// <inheritdoc />
@@ -63,10 +64,7 @@ public partial class MixerView
     /// <summary>Stops drawing and lets go of the module.</summary>
     public async ValueTask DisposeAsync()
     {
-        if (ReferenceEquals(Session.MeterFrame, meterFrames))
-        {
-            Session.MeterFrame = null;
-        }
+        Session.ReleaseMeterFrames(meterFrames);
 
         Dispose();
 

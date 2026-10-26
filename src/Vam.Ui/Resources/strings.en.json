@@ -183,6 +183,8 @@
   "bus.role": "Role",
   "automix.band": "Last 30 seconds — who held the gain",
   "automix.bandWhy": "This band is how an operator learns to trust the automixer instead of reaching for the faders.",
+  "automix.bandStart": "−30 s",
+  "automix.bandEnd": "now",
   "automix.parameters": "Parameters",
   "automix.switchLives": "The global switch is in the status bar, one click from any view, and it turns amber while it is off so nobody forgets.",
   "help.depth": "How far the automixer may turn a channel down. It is a floor, not a gate: a microphone held at the floor is still in the mix, quietly, so somebody interrupting is heard immediately rather than after a gate opens.",

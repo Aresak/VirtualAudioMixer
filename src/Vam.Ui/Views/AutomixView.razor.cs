@@ -29,6 +29,7 @@ public partial class AutomixView
     MeterFrameHandler? meterFrames;
     byte[] scratch = [];
     int? shape;
+    int? look;
     int pending;
     int frameChannels;
 
@@ -45,7 +46,7 @@ public partial class AutomixView
         // Views are swapped by rendering the new one and disposing the old one afterwards, so the
         // mixer's teardown runs after this line and must not clear a handler it no longer owns.
         meterFrames = OnMeterFrame;
-        Session.MeterFrame = meterFrames;
+        Session.TakeMeterFrames(meterFrames);
     }
 
     /// <inheritdoc />
@@ -53,28 +54,28 @@ public partial class AutomixView
     {
         band ??= await Js.InvokeAsync<IJSObjectReference>("import", BandModule);
 
-        int current = Fingerprint();
+        int currentShape = Fingerprint();
+        int currentLook = Look();
 
-        if (current == shape)
+        if (currentShape != shape)
         {
-            return;
+            shape = currentShape;
+            look = currentLook;
+
+            await band.InvokeVoidAsync("bind", Colours(), L["automix.bandStart"], L["automix.bandEnd"]);
         }
+        else if (currentLook != look)
+        {
+            look = currentLook;
 
-        shape = current;
-
-        // Cast, and it matters: a string[] is assignable to the params object?[], so passing it
-        // bare hands JavaScript one argument per colour and the band draws every channel in the
-        // background colour. One argument that happens to be an array is what the module wants.
-        await band.InvokeVoidAsync("bind", (object)Colours());
+            await band.InvokeVoidAsync("restyle", Colours(), L["automix.bandStart"], L["automix.bandEnd"]);
+        }
     }
 
     /// <summary>Stops drawing and lets go of the module.</summary>
     public async ValueTask DisposeAsync()
     {
-        if (ReferenceEquals(Session.MeterFrame, meterFrames))
-        {
-            Session.MeterFrame = null;
-        }
+        Session.ReleaseMeterFrames(meterFrames);
 
         Dispose();
 
@@ -96,8 +97,7 @@ public partial class AutomixView
     /// The colour of every strip, in strip order, for the band and its legend.
     /// </summary>
     /// <remarks>
-    /// Sent on binding rather than read per frame. A colour changes when somebody picks one, which
-    /// is a console change and already forces a rebind through the fingerprint.
+    /// Sent on binding rather than read per frame, and again when somebody picks one.
     /// </remarks>
     string[] Colours()
     {
@@ -124,11 +124,24 @@ public partial class AutomixView
             // the row elements, and a binding that did not notice would keep writing into the two
             // that had just been thrown away.
             shapeOf.Add(channel.Index);
-            shapeOf.Add(channel.Colour);
-            shapeOf.Add(channel.ParticipatesInAutomix);
         }
 
         return shapeOf.ToHashCode();
+    }
+
+    /// <summary>What only needs restyling: the colours and the language of the axis labels.</summary>
+    int Look()
+    {
+        HashCode lookOf = new();
+
+        lookOf.Add(L.Current.Code);
+
+        foreach (ChannelState channel in Channels)
+        {
+            lookOf.Add(channel.Colour);
+        }
+
+        return lookOf.ToHashCode();
     }
 
     /// <summary>

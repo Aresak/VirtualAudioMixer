@@ -183,6 +183,8 @@
   "bus.role": "Role",
   "automix.band": "Posledních 30 sekund — kdo držel zesílení",
   "automix.bandWhy": "Tenhle pás je to, díky čemu se operátor naučí automixu věřit místo sahání po faderech.",
+  "automix.bandStart": "−30 s",
+  "automix.bandEnd": "teď",
   "automix.parameters": "Parametry",
   "automix.switchLives": "Globální vypínač je ve stavovém řádku, jedno kliknutí z jakéhokoli pohledu, a dokud je vypnutý, svítí jantarově, aby se na to nezapomnělo.",
   "help.depth": "Jak hluboko smí automix kanál stáhnout. Je to podlaha, ne brána: mikrofon držený na podlaze je pořád v mixu, potichu, takže když někdo skočí do řeči, je slyšet hned a ne až se otevře brána.",
