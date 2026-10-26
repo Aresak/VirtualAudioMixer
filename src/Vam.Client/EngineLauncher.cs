@@ -85,8 +85,11 @@ public sealed class EngineLauncher
                 continue;
             }
 
+            // The newest, because Debug and Release both build here and the first one found can be
+            // months older than the console asking for it.
             return Directory
                 .EnumerateFiles(Path.Combine(folder.FullName, "src", "Vam.Server"), Executable, SearchOption.AllDirectories)
+                .OrderByDescending(File.GetLastWriteTimeUtc)
                 .FirstOrDefault();
         }
 

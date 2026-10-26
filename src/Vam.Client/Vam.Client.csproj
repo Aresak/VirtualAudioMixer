@@ -38,4 +38,18 @@
     <ProjectReference Include="..\Vam.Ui\Vam.Ui.csproj" />
   </ItemGroup>
 
+  <!--
+    Builds the engine, and neither links nor copies it: the console starts it as a process, and in a
+    source checkout an engine left over from an older build would otherwise be the one it starts. Not
+    a ProjectReference, which puts a Vam.Server.exe without its dll beside the console.
+  -->
+  <Target Name="BuildEngine"
+          BeforeTargets="Build"
+          Condition="'$(BuildingSolutionFile)' != 'true'">
+    <MSBuild Projects="..\Vam.Server\Vam.Server.csproj"
+             Targets="Build"
+             Properties="Configuration=$(Configuration)"
+             RemoveProperties="RuntimeIdentifier;SelfContained;TargetFramework" />
+  </Target>
+
 </Project>

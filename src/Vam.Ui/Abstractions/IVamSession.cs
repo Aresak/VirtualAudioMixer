@@ -38,6 +38,16 @@ public interface IVamSession
     /// <summary>Frames in a block.</summary>
     int BlockFrames { get; }
 
+    /// <summary>
+    /// What the engine said it has, from <see cref="Vam.Protocol.EngineFeatures"/>. Empty for an
+    /// engine older than the list.
+    /// </summary>
+    /// <remarks>
+    /// An engine on another machine can be older than this console and still speak the same
+    /// protocol. What it lacks arrives as an absent field, so a view asks here before reading one.
+    /// </remarks>
+    IReadOnlySet<string> Features { get; }
+
     /// <summary>Engine events, newest first, capped.</summary>
     IReadOnlyList<EngineEvent> Events { get; }
 

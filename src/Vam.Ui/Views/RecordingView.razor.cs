@@ -6,6 +6,7 @@ using Vam.Protocol;
 using Vam.Protocol.V1;
 using Vam.Ui.Abstractions;
 using Vam.Ui.Components;
+using Vam.Ui.Extensions;
 using Vam.Ui.Localization;
 using Vam.Ui.Services;
 using Vam.Ui.State;
@@ -28,6 +29,10 @@ public partial class RecordingView
 
     RecordingState? Recording => Session.Console?.Recording;
 
+    RecordingCapture? Captures => Session.RecordingCaptures();
+
+    bool HasPastSessions => Session.CanListPastSessions();
+
     // Two separate questions, and both have to be yes: this host can show a folder at all, and the
     // engine whose folder it is runs on this machine.
     bool CanOpenFolders => Platform.CanOpenFolders && Connector.CanStopEngine;
@@ -43,6 +48,11 @@ public partial class RecordingView
         // Three outcomes, not two. The engine may be still coming up when this view is opened, and a
         // console that leaves "reading the folder" on screen for the life of the component is
         // claiming to still be working when it has given up.
+        if (!HasPastSessions)
+        {
+            return;
+        }
+
         PastSessionList? list = await Session.GetPastSessionsAsync();
 
         sessionsAsked = true;
@@ -78,7 +88,7 @@ public partial class RecordingView
 
     // Two reasons the button is missing, and they are different things to tell somebody.
     string NoOpenBecause => Platform.CanOpenFolders ? "recording.openElsewhere" : "recording.openNoHost";
-    EnginePaths? Paths => Session.Console?.Paths;
+    EnginePaths? Paths => Session.EnginePaths();
 
     string Duration(RecordingState recording)
     {
@@ -156,12 +166,12 @@ public partial class RecordingView
 
     Task OnFormatAsync(ChangeEventArgs arguments)
     {
-        if (Recording is not { } recording || arguments.Value is not string format)
+        if (Captures is not { } captures || arguments.Value is not string format)
         {
             return Task.CompletedTask;
         }
 
-        return SetCaptureAsync(new RecordingCapture(recording.Captures) { Format = format });
+        return SetCaptureAsync(new RecordingCapture(captures) { Format = format });
     }
 
     async Task SetAutoStartAsync(bool automatically)

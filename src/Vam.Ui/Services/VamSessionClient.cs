@@ -64,6 +64,9 @@ public sealed class VamSessionClient(
     public int BlockFrames { get; private set; }
 
     /// <inheritdoc />
+    public IReadOnlySet<string> Features { get; private set; } = new HashSet<string>();
+
+    /// <inheritdoc />
     public IReadOnlyList<EngineEvent> Events => events;
 
     /// <inheritdoc />
@@ -199,7 +202,14 @@ public sealed class VamSessionClient(
 
         try
         {
-            return await current.GetDiagnosticsAsync(new Empty(), cancellationToken: cancellationToken);
+            DiagnosticsState state = await current.GetDiagnosticsAsync(new Empty(), cancellationToken: cancellationToken);
+
+            // Absent on the wire is null here, and the view reads these without asking.
+            state.Clock ??= new ClockDiagnostics();
+            state.Callbacks ??= new CallbackDiagnostics();
+            state.Allocations ??= new AllocationDiagnostics();
+
+            return state;
         }
         catch (RpcException failure)
         {
@@ -378,6 +388,7 @@ public sealed class VamSessionClient(
         ServerName = hello.ServerName;
         SampleRate = hello.SampleRate;
         BlockFrames = hello.BlockFrames;
+        Features = hello.Features.ToHashSet(StringComparer.Ordinal);
 
         Console = await client.GetConsoleAsync(new Empty(), cancellationToken: cancellationToken);
 
