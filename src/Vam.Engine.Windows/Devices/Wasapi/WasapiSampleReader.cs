@@ -37,9 +37,9 @@ public sealed class WasapiSampleReader
         ArgumentOutOfRangeException.ThrowIfLessThan(maxFrames, 1);
 
         channelCount = format.Channels;
-        isFloat = IsFloat(format);
+        isFloat = WasapiSampleFormat.IsFloat(format);
 
-        if (!isFloat && format.BitsPerSample != 16)
+        if (!WasapiSampleFormat.IsConvertible(format))
         {
             throw new UnsupportedAudioFormatException(
                 $"No conversion is written for {format.BitsPerSample}-bit {format.Encoding}. "
@@ -97,18 +97,5 @@ public sealed class WasapiSampleReader
         }
 
         return destination;
-    }
-
-    static bool IsFloat(WaveFormat format)
-    {
-        if (format.Encoding == WaveFormatEncoding.IeeeFloat)
-        {
-            return true;
-        }
-
-        // Shared mode nearly always reports Extensible rather than a plain tag, and the encoding
-        // that matters is then the sub-format rather than the one on the face of it.
-        return format is WaveFormatExtensible extensible
-            && extensible.ToStandardWaveFormat().Encoding == WaveFormatEncoding.IeeeFloat;
     }
 }

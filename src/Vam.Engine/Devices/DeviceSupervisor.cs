@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using Vam.Engine.Devices.Abstractions;
+using Vam.Engine.Devices.Extensions;
 
 namespace Vam.Engine.Devices;
 
@@ -232,6 +233,8 @@ public sealed class DeviceSupervisor(
 
             ICaptureStream stream = backend.OpenCapture(device.DeviceId, device.CaptureOptions);
 
+            stream.RequireFormat(device.Channel.NominalSampleRate, device.Channel.ChannelCount);
+            device.Channel.DescribeStream(stream.Format);
             stream.Start(device.Channel.Write);
 
             device.Stream = stream;
@@ -263,6 +266,7 @@ public sealed class DeviceSupervisor(
         device.Stream?.Dispose();
         device.Stream = null;
         device.Channel.State = state;
+        device.Channel.DescribeStream(default);
     }
 
     string NameOf(AudioDeviceId deviceId, string fallback)

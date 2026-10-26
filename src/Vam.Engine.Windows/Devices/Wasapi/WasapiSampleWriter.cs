@@ -36,9 +36,9 @@ public sealed class WasapiSampleWriter
         ArgumentOutOfRangeException.ThrowIfLessThan(maxFrames, 1);
 
         channelCount = format.Channels;
-        isFloat = IsFloat(format);
+        isFloat = WasapiSampleFormat.IsFloat(format);
 
-        if (!isFloat && format.BitsPerSample != 16)
+        if (!WasapiSampleFormat.IsConvertible(format))
         {
             throw new UnsupportedAudioFormatException(
                 $"No conversion is written for {format.BitsPerSample}-bit {format.Encoding}. "
@@ -114,16 +114,5 @@ public sealed class WasapiSampleWriter
 
             destination[filled..].Clear();
         }
-    }
-
-    static bool IsFloat(WaveFormat format)
-    {
-        if (format.Encoding == WaveFormatEncoding.IeeeFloat)
-        {
-            return true;
-        }
-
-        return format is WaveFormatExtensible extensible
-            && extensible.ToStandardWaveFormat().Encoding == WaveFormatEncoding.IeeeFloat;
     }
 }

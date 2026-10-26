@@ -26,6 +26,10 @@ namespace Vam.Engine.Devices;
 /// <param name="OverrunCount">Buffers the device produced that would not fit. Monotonic.</param>
 /// <param name="UnderrunCount">Frames the mix graph asked for and got silence instead. Monotonic.</param>
 /// <param name="State">What the stream is currently doing.</param>
+/// <param name="ShareMode">The share mode the stream was granted, or shared when nothing is open.</param>
+/// <param name="DeviceSampleRate">
+/// The rate the hardware itself runs at, or 0 when it is not open or the backend cannot say.
+/// </param>
 public readonly record struct DeviceTelemetry(
     int NominalSampleRate,
     double MeasuredSampleRate,
@@ -34,4 +38,17 @@ public readonly record struct DeviceTelemetry(
     double FillPercentage,
     long OverrunCount,
     long UnderrunCount,
-    DeviceStreamState State);
+    DeviceStreamState State,
+    ShareMode ShareMode = ShareMode.Shared,
+    int DeviceSampleRate = 0)
+{
+    /// <summary>
+    /// Whether the operating system is converting this device's rate to the engine's.
+    /// </summary>
+    /// <remarks>
+    /// Not a fault, and the strip says so rather than warning about it. It is the arrangement the
+    /// 2026-09-16 decision chose for every device whose own converter does not run at the mix rate,
+    /// and the reason a speakerphone sounds duller than the microphone next to it.
+    /// </remarks>
+    public bool IsSystemConverting => DeviceSampleRate > 0 && DeviceSampleRate != NominalSampleRate;
+}

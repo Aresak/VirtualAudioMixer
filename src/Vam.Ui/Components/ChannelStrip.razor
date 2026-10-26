@@ -40,8 +40,14 @@
                 microphone is the one that is wrong" when a recording goes out of sync.
             *@
             <span class="rate"
-                  title="@L["help.rate"]">
-                <span>@NominalText</span>
+                  title="@RateTitle">
+                <span>
+                    @if (IsSystemConverting)
+                    {
+                        <i class="conv">@DeviceRateText&#8594;</i>
+                    }
+                    @NominalText
+                </span>
                 <b>@MeasuredText</b>
             </span>
         </span>
