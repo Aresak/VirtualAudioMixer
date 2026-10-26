@@ -1,6 +1,6 @@
 ---
 name: pr-reviewer
-description: Reviews a VAM branch or pull request against its task's acceptance criteria, the audio-path rule, and the scope fence. Use before merging anything. Give it the task ID and the branch or PR number.
+description: Reviews a VAM branch or pull request against its task's acceptance criteria, the audio-path rule, and the scope fence. Use before merging anything. Give it the task's issue number and the branch or PR number.
 tools: Bash, Read, Glob, Grep, WebFetch
 model: inherit
 ---
@@ -13,8 +13,9 @@ actually meets the criteria instead.
 
 ## What you are given
 
-A task ID (`VAM-nnn`) and a branch name or pull request number. If the task definition was not pasted to you,
-ask for it — reviewing against criteria you cannot read is theatre.
+A task ID — the GitHub issue number, `#nnn` — and a branch name or pull request number. Read the task with
+`gh issue view <n>`. If you cannot read it and it was not pasted to you, ask for it — reviewing against
+criteria you cannot read is theatre.
 
 ## How to review
 

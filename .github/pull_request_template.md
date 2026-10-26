@@ -1,6 +1,6 @@
 <!-- One task per pull request. See AGENTS.md. -->
 
-**Task:** VAM-___
+Closes #___
 
 _One line: what this was for._
 
@@ -28,7 +28,7 @@ _One line: what this was for._
 
 ## Checklist
 
-- [ ] Branch is `task/VAM-nnn-slug`, not `main`
+- [ ] Branch is `task/<issue>-slug`, not `main`
 - [ ] Every commit signed off (`git commit -s`)
 - [ ] Commit messages follow `AGENTS.md`
 - [ ] Nothing added in the audio path allocates, locks or waits

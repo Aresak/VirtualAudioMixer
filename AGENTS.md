@@ -22,12 +22,14 @@ Never commit to `main`. Ever. Not for a typo.
 
 ## The task workflow
 
-Work is tracked as tasks with stable IDs — `VAM-001`, `VAM-002`. Each has a scope, an explicit
-**out of scope**, acceptance criteria and a verification method.
+A task is a GitHub issue on this repository, and its ID is the issue number — `#42`, `#43`. There is
+no other prefix. Each has a scope, an explicit **out of scope**, acceptance criteria and a verification
+method. The pull request references the issue (`Closes #42`). The `VAM-nnn` IDs in old commits and in
+the vault's backlog are an earlier scheme; do not use them for new work.
 
 ```
 1. Pick a task that is Ready. Never one that is only in Backlog.
-2. git switch -c task/VAM-001-short-slug
+2. git switch -c task/42-short-slug
 3. Implement exactly what the task says. Nothing else.
 4. Run the tests. All of them, not the ones you think are relevant.
 5. Commit with a short, plain message. Sign off: git commit -s
