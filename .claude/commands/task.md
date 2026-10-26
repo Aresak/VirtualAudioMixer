@@ -1,15 +1,15 @@
 ---
 description: Implement one VAM task end to end — branch, implement, test, review, pull request.
-argument-hint: VAM-001 [paste the task definition if it is not in the repo]
+argument-hint: <issue number, e.g. 42> [paste the task definition if it is not in the repo]
 ---
 
-Implement task **$1** in this repository.
+Implement task **#$1** in this repository. A task is a GitHub issue; $1 is its number.
 
 Read `AGENTS.md` first. It is binding, including the parts you disagree with.
 
 ## The task definition
 
-If the definition of $1 was not given to you, **stop and ask for it.** Do not infer a task from its ID, from
+Read it with `gh issue view $1`. If you cannot read it and it was not given to you, **stop and ask for it.** Do not infer a task from its ID, from
 the epic, or from what seems sensible. A guessed task produces a pull request nobody can review against
 anything.
 
@@ -43,7 +43,7 @@ the change is small.
 
 **6. Pull request.** Push the branch and open it with `gh pr create`. The description must contain:
 
-- which task, and a one-line restatement of what it was for
+- `Closes #$1`, and a one-line restatement of what it was for
 - each acceptance criterion with how it was met, or why it could not be
 - what you ran and what it printed
 - any decision you made that the task left open

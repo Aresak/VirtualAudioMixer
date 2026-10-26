@@ -5,8 +5,8 @@ only repeats what must never be missed.
 
 ## Never
 
-- **Commit to `main`.** One task, one branch (`task/VAM-nnn-slug`), one pull request. No exceptions, not for
-  a typo
+- **Commit to `main`.** One task, one branch (`task/<issue>-slug`, `<issue>` being its GitHub issue number),
+  one pull request. No exceptions, not for a typo
 - **Allocate, lock or wait in the audio path.** See `docs/audio-path.md`. Enforced by a test
 - **Mention Claude or AI in a commit message.** No `Co-Authored-By` for a tool, no "generated with"
 - **Merge your own pull request.** Every pull request is reviewed first — use the `pr-reviewer` agent
