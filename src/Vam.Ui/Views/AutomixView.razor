@@ -1,4 +1,7 @@
 @inherits VamComponent
+@using Vam.Ui.Extensions
+@implements IAsyncDisposable
+@inject IJSRuntime Js
 
 <div class="view">
     <div class="pad">
@@ -22,8 +25,13 @@
 
             <AutomixBand />
 
+            @*
+                An empty band is worse than no band, so the one state that legitimately empties it
+                says so in words. Everything else that empties it is the room being quiet, which the
+                axis on the band already reads as.
+            *@
             <p class="sub"
-               style="margin-top:8px">@L["automix.bandWhy"]</p>
+               style="margin-top:8px">@(automix.IsBypassed ? L["automix.bandOff"] : L["automix.bandWhy"])</p>
 
             <div class="grid2">
                 <div class="card">
@@ -78,32 +86,44 @@
 
             <h2>@L["common.channel"]</h2>
 
-            <div class="tw">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>@L["common.channel"]</th>
-                            <th>@L["strip.automixOn"]</th>
-                            <th>@L["automix.share"]</th>
-                            <th>@L["automix.gain"]</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (ChannelState channel in Channels)
-                        {
-                            <tr>
-                                <td>@channel.Name</td>
-                                <td>
-                                    <span class="pill @(channel.ParticipatesInAutomix ? "ok" : "idle")">
-                                        @(channel.ParticipatesInAutomix ? L["common.yes"] : L["common.no"])
-                                    </span>
-                                </td>
-                                <td class="mono">@Share(automix, channel.Index)</td>
-                                <td class="mono">@Gain(automix, channel.Index)</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+            @*
+                A bar each rather than a column of numbers. Who is holding the gain is a comparison
+                between channels, and a person reads a comparison off lengths far faster than off
+                four percentages they have to sort in their head. The numbers are still there, at
+                the one place they answer a question a bar cannot: how far down the floor has taken
+                this channel.
+            *@
+            <div class="card">
+                @foreach (ChannelState channel in Channels)
+                {
+                    <div class="axrow"
+                         @key="channel.Index">
+                        <div class="n">
+                            <span class="swatch"
+                                  style="background:@channel.ToStripColour()"></span>
+                            <span>
+                                @channel.Name
+                            </span>
+                        </div>
+
+                        <div class="sharebar"
+                             title="@L["help.share"]">
+                            <i data-vam-axshare="@channel.Index"></i>
+                        </div>
+
+                        <div class="mono axgain"
+                             data-vam-axgain="@channel.Index">
+                            —
+                        </div>
+
+                        <div>
+                            <span class="pill @(channel.ParticipatesInAutomix ? "ok" : "idle")"
+                                  title="@L["strip.automixOn"]">
+                                @(channel.ParticipatesInAutomix ? L["automix.in"] : L["automix.out"])
+                            </span>
+                        </div>
+                    </div>
+                }
             </div>
         }
     </div>

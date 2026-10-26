@@ -91,6 +91,8 @@ public class VamLocalizerTests
         "send.lockedWhy",
         "bus.role.monitor",
         "automix.depth",
+        "automix.bandStart",
+        "automix.bandEnd",
         "recording.start",
         "diag.audioThread",
         "settings.language",

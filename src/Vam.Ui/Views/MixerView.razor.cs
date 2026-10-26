@@ -6,6 +6,7 @@ using Vam.Protocol;
 using Vam.Protocol.V1;
 using Vam.Ui.Abstractions;
 using Vam.Ui.Components;
+using Vam.Ui.Extensions;
 using Vam.Ui.Localization;
 using Vam.Ui.Services;
 using Vam.Ui.State;
@@ -22,6 +23,7 @@ public partial class MixerView
     readonly HashSet<int> latched = [];
 
     IJSObjectReference? meters;
+    MeterFrameHandler? meterFrames;
     (MeterBallistics Ballistics, int FramesPerSecond)? pushed;
     byte[] scratch = [];
     int shape = -1;
@@ -34,7 +36,11 @@ public partial class MixerView
     {
         base.OnInitialized();
 
-        Session.MeterFrame = OnMeterFrame;
+        // Held in a field so that letting go of it later can tell whether the slot is still ours.
+        // A view is replaced by rendering the new one and disposing this one afterwards, so by the
+        // time DisposeAsync runs the automix view may already have taken the slot.
+        meterFrames = OnMeterFrame;
+        Session.TakeMeterFrames(meterFrames);
     }
 
     /// <inheritdoc />
@@ -71,7 +77,7 @@ public partial class MixerView
     /// <summary>Stops drawing and lets go of the module.</summary>
     public async ValueTask DisposeAsync()
     {
-        Session.MeterFrame = null;
+        Session.ReleaseMeterFrames(meterFrames);
 
         Dispose();
 

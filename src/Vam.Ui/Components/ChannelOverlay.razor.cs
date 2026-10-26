@@ -6,6 +6,7 @@ using Vam.Protocol;
 using Vam.Protocol.V1;
 using Vam.Ui.Abstractions;
 using Vam.Ui.Components;
+using Vam.Ui.Extensions;
 using Vam.Ui.Localization;
 using Vam.Ui.Services;
 using Vam.Ui.State;
@@ -28,8 +29,7 @@ public partial class ChannelOverlay
             ? console.Channels[Shell.SelectedChannel]
             : null;
 
-    static string Colour(ChannelState channel) =>
-        string.IsNullOrWhiteSpace(channel.Colour) ? StripPalette.For(channel.Index) : channel.Colour;
+    static string Colour(ChannelState channel) => channel.ToStripColour();
 
     string Rates(ChannelState channel) =>
         Session.SampleRate.ToString(CultureInfo.InvariantCulture)

@@ -6,6 +6,7 @@ using Vam.Protocol;
 using Vam.Protocol.V1;
 using Vam.Ui.Abstractions;
 using Vam.Ui.Components;
+using Vam.Ui.Extensions;
 using Vam.Ui.Localization;
 using Vam.Ui.Services;
 using Vam.Ui.State;
@@ -58,7 +59,7 @@ public partial class ChannelStrip
 
     // U5. Falls back to a stable colour derived from the index rather than to grey, so a console
     // nobody has coloured is still one where the strips are told apart at a glance.
-    string Colour => string.IsNullOrWhiteSpace(Channel.Colour) ? StripPalette.For(Channel.Index) : Channel.Colour;
+    string Colour => Channel.ToStripColour();
 
     string DeviceLine => Channel.DeviceState switch
     {
