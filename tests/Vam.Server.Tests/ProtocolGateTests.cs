@@ -37,6 +37,9 @@ public class ProtocolGateTests : IAsyncLifetime
 {
     const string Speakerphone = "{11111111-2222-3333-4444-555555555555}";
 
+    /// <summary>The RMS of the null devices' full-scale tone.</summary>
+    const double ToneRmsDb = -3.01;
+
     readonly NullAudioBackend devices = new();
     readonly string workspace = Path.Combine(Path.GetTempPath(), "vam-server-" + Guid.NewGuid().ToString("n"));
 
@@ -108,17 +111,32 @@ public class ProtocolGateTests : IAsyncLifetime
     {
         Mixer.MixerClient live = client!;
 
-        Assert.True(await SawALevelAsync(live), "The meters were not moving to begin with.");
+        // A full-scale sine reads -3 dB RMS. Nothing else does: a reading nobody has measured yet is
+        // 0 dB and a dead meter falls to the floor, so neither can pass for signal here.
+        using SignalPump pump = new(devices);
 
-        await live.ApplyAsync(
-            new Command { AddBus = new AddBus { Name = "Councillor headphones", Role = "Monitor", ChannelCount = 2 } },
-            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(
+            await SawLevelsAsync(live, ToneRmsDb, ToneRmsDb),
+            "The meters were not moving to begin with.");
 
         // Adding a bus recompiles, and a recompile builds a new meter node with new cells. The
         // publisher held the old ones, so every meter in every console froze at the first structural
         // change and stayed frozen until the engine was restarted - while the audio itself carried on
         // perfectly, which is the worst way for this to fail.
-        Assert.True(await SawALevelAsync(live), "The meters stopped when the graph was rebuilt.");
+        await live.ApplyAsync(
+            new Command { AddBus = new AddBus { Name = "Councillor headphones", Role = "Monitor", ChannelCount = 2 } },
+            deadline: DateTime.UtcNow.AddSeconds(5),
+            cancellationToken: Token);
+
+        await live.ApplyAsync(
+            new Command { SetFader = new SetFader { ChannelIndex = 0, Decibels = -20 } },
+            deadline: DateTime.UtcNow.AddSeconds(5),
+            cancellationToken: Token);
+
+        // A level the meters never showed before the rebuild, beside one they still should.
+        Assert.True(
+            await SawLevelsAsync(live, ToneRmsDb - 20, ToneRmsDb),
+            "The meters stopped when the graph was rebuilt.");
     }
 
     [Fact]
@@ -189,11 +207,10 @@ public class ProtocolGateTests : IAsyncLifetime
         return -1;
     }
 
-    /// <summary>Reads meter frames until one shows a channel above silence, or gives up.</summary>
-    static async Task<bool> SawALevelAsync(Mixer.MixerClient live)
+    /// <summary>Reads meter frames until one shows both strips at the given RMS levels, or gives up.</summary>
+    static async Task<bool> SawLevelsAsync(Mixer.MixerClient live, double firstRmsDb, double secondRmsDb)
     {
-        using CancellationTokenSource giveUp =
-            CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        using CancellationTokenSource giveUp = CancellationTokenSource.CreateLinkedTokenSource(Token);
 
         giveUp.CancelAfter(TimeSpan.FromSeconds(5));
 
@@ -203,14 +220,12 @@ public class ProtocolGateTests : IAsyncLifetime
 
             while (await stream.ResponseStream.MoveNext(giveUp.Token))
             {
-                MeterFrame frame = stream.ResponseStream.Current;
+                ReadOnlySpan<byte> payload = stream.ResponseStream.Current.Payload.Span;
 
-                for (int channel = 0; channel < frame.ChannelCount; channel++)
+                if (Near(MeterFrameCodec.ReadChannel(payload, 0).RmsDb, firstRmsDb)
+                    && Near(MeterFrameCodec.ReadChannel(payload, 1).RmsDb, secondRmsDb))
                 {
-                    if (MeterFrameCodec.ReadChannel(frame.Payload.Span, channel).PeakDb > MeterFrameCodec.SilenceDb)
-                    {
-                        return true;
-                    }
+                    return true;
                 }
             }
         }
@@ -224,6 +239,8 @@ public class ProtocolGateTests : IAsyncLifetime
 
         return false;
     }
+
+    static bool Near(double actualDb, double expectedDb) => Math.Abs(actualDb - expectedDb) < 1.5;
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync()

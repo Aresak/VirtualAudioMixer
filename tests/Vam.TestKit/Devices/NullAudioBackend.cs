@@ -22,8 +22,11 @@ public sealed class NullAudioBackend : IAudioBackend
     readonly Dictionary<AudioDeviceId, NullDeviceOptions> options = [];
     readonly Dictionary<AudioDeviceId, AudioDeviceInfo> devices = [];
     readonly Dictionary<DeviceDirection, AudioDeviceId> defaults = [];
-    readonly List<NullCaptureStream> captureStreams = [];
-    readonly List<NullRenderStream> renderStreams = [];
+    readonly Lock opening = new();
+
+    // Copied on write: the engine opens streams on its control thread while a test reads these.
+    NullCaptureStream[] captureStreams = [];
+    NullRenderStream[] renderStreams = [];
 
     int nextDeviceNumber;
 
@@ -35,10 +38,10 @@ public sealed class NullAudioBackend : IAudioBackend
     public bool CanProvideTimebase => false;
 
     /// <summary>Capture streams opened so far, in the order they were opened.</summary>
-    public IReadOnlyList<NullCaptureStream> CaptureStreams => captureStreams;
+    public IReadOnlyList<NullCaptureStream> CaptureStreams => Volatile.Read(ref captureStreams);
 
     /// <summary>Render streams opened so far, in the order they were opened.</summary>
-    public IReadOnlyList<NullRenderStream> RenderStreams => renderStreams;
+    public IReadOnlyList<NullRenderStream> RenderStreams => Volatile.Read(ref renderStreams);
 
     /// <summary>
     /// Adds a device.
@@ -172,7 +175,11 @@ public sealed class NullAudioBackend : IAudioBackend
             captureOptions.ChannelCount);
 
         NullCaptureStream stream = new(deviceId, deviceOptions, format);
-        captureStreams.Add(stream);
+
+        lock (opening)
+        {
+            Volatile.Write(ref captureStreams, [.. captureStreams, stream]);
+        }
 
         return stream;
     }
@@ -189,7 +196,11 @@ public sealed class NullAudioBackend : IAudioBackend
             renderOptions.ChannelCount);
 
         NullRenderStream stream = new(deviceId, deviceOptions, format);
-        renderStreams.Add(stream);
+
+        lock (opening)
+        {
+            Volatile.Write(ref renderStreams, [.. renderStreams, stream]);
+        }
 
         return stream;
     }
@@ -207,8 +218,11 @@ public sealed class NullAudioBackend : IAudioBackend
             stream.Dispose();
         }
 
-        captureStreams.Clear();
-        renderStreams.Clear();
+        lock (opening)
+        {
+            captureStreams = [];
+            renderStreams = [];
+        }
     }
 
     static AudioStreamFormat FormatFor(
