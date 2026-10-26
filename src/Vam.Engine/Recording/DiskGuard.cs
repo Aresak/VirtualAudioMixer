@@ -41,21 +41,11 @@ public sealed class DiskGuard(ILogger<DiskGuard> logger)
     /// <returns>The verdict, with the numbers in it.</returns>
     public DiskVerdict CheckBeforeStart(string path, long projectedBytes)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-
-        long free;
-
-        try
-        {
-            free = new DriveInfo(System.IO.Path.GetPathRoot(System.IO.Path.GetFullPath(path))!).AvailableFreeSpace;
-        }
-        catch (Exception error)
+        if (FreeBytesAt(path) is not { } free)
         {
             // A path whose drive cannot be interrogated is not a reason to refuse to record. It is a
             // reason to say so and let the operator decide, because the alternative is a meeting
             // that goes unrecorded over a network share nobody could measure.
-            logger.LogWarning(error, "Could not read the free space at {Path}. Recording anyway.", path);
-
             return new DiskVerdict(true, 0, projectedBytes, "Free space could not be read; recording anyway.");
         }
 
@@ -84,26 +74,39 @@ public sealed class DiskGuard(ILogger<DiskGuard> logger)
     /// <returns>Whether the operator should be told.</returns>
     public bool IsRunningLow(string path)
     {
+        if (FreeBytesAt(path) is not { } free || free >= WarningBytes)
+        {
+            return false;
+        }
+
+        logger.LogWarning(
+            "Only {Free} is left at {Path}. The recording will stop when it runs out.",
+            Readable(free),
+            path);
+
+        return true;
+    }
+
+    /// <summary>
+    /// How much room is left where a recording goes.
+    /// </summary>
+    /// <param name="path">A folder on the drive to measure. It does not have to exist yet.</param>
+    /// <returns>Bytes free, or null when the drive could not be read.</returns>
+    public long? FreeBytesAt(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
         try
         {
-            long free = new DriveInfo(System.IO.Path.GetPathRoot(System.IO.Path.GetFullPath(path))!).AvailableFreeSpace;
-
-            if (free >= WarningBytes)
-            {
-                return false;
-            }
-
-            logger.LogWarning(
-                "Only {Free} is left at {Path}. The recording will stop when it runs out.",
-                Readable(free),
-                path);
-
-            return true;
+            return new DriveInfo(System.IO.Path.GetPathRoot(System.IO.Path.GetFullPath(path))!).AvailableFreeSpace;
         }
         catch (Exception error)
         {
+            // Null rather than zero. A share that cannot be measured is not a full disk, and the
+            // difference decides whether a recording is refused.
             logger.LogWarning(error, "Could not read the free space at {Path}.", path);
-            return false;
+
+            return null;
         }
     }
 

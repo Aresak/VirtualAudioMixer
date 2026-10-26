@@ -16,10 +16,11 @@ namespace Vam.Ui.Views;
 /// <summary>The code behind <c>RecordingView.razor</c>.</summary>
 public partial class RecordingView
 {
-    string directory = string.Empty;
     string refusal = string.Empty;
 
     RecordingState? Recording => Session.Console?.Recording;
+
+    EnginePaths? Paths => Session.Console?.Paths;
 
     string Duration(RecordingState recording)
     {
@@ -54,19 +55,13 @@ public partial class RecordingView
     static double DiskBar(RecordingState recording) =>
         recording.FreeBytes <= 0 ? 100 : Math.Clamp(100 - (recording.FreeBytes / (1024.0 * 1024 * 1024) / 10.0), 0, 100);
 
-    async Task PickAsync()
-    {
-        if (await Platform.PickFolderAsync(L["recording.folder"]) is { } chosen)
-        {
-            directory = chosen;
-        }
-    }
-
     async Task StartAsync()
     {
         CommandReply reply = await Session.ApplyAsync(new Command
         {
-            SetRecording = new SetRecording { Recording = true, Directory = directory }
+            // No folder: the engine records into the root it has been configured with, and that
+            // root has one home, on the settings view.
+            SetRecording = new SetRecording { Recording = true }
         });
 
         // The disk's answer in the disk's own words. "There is room for forty minutes" is something

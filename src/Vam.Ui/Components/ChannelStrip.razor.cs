@@ -69,12 +69,26 @@ public partial class ChannelStrip
     };
 
     string NominalText => Session.SampleRate > 0
-        ? (Session.SampleRate / 1000.0).ToString("0.#", CultureInfo.InvariantCulture) + "k"
+        ? Kilohertz(Session.SampleRate)
         : "—";
+
+    // A18. Windows converting a device is not a fault and does not get a warning colour, but an
+    // operator comparing two microphones that sound different is entitled to see which one is
+    // going through a converter. Nothing is drawn at all when nothing is being converted.
+    bool IsSystemConverting => Channel.DeviceSampleRate > 0 && Channel.DeviceSampleRate != Session.SampleRate;
+
+    string DeviceRateText => Kilohertz(Channel.DeviceSampleRate);
+
+    string RateTitle => IsSystemConverting
+        ? L.Format("strip.converting", DeviceRateText, NominalText)
+        : L["help.rate"];
 
     string MeasuredText => Channel.MeasuredSampleRate > 0
         ? (Channel.MeasuredSampleRate / 1000.0).ToString("0.000", CultureInfo.InvariantCulture)
         : "—";
+
+    static string Kilohertz(double rateHz) =>
+        (rateHz / 1000.0).ToString("0.#", CultureInfo.InvariantCulture) + "k";
 
     string DepthText => Session.Console?.Automix is { } automix
         ? automix.DepthDb.ToString("0", CultureInfo.InvariantCulture)
@@ -84,8 +98,23 @@ public partial class ChannelStrip
         ? automix.GainsDb[Channel.Index].ToString("0.0", CultureInfo.InvariantCulture)
         : "−∞";
 
-    string ChainTitle =>
-        $"{L["strip.chain"]}: {Channel.Chain.Count(link => !link.IsBypassed)}/{Channel.Chain.Count}";
+    string ChainTitle
+    {
+        get
+        {
+            string chain = $"{L["strip.chain"]}: {Channel.Chain.Count(link => !link.IsBypassed)}/{Channel.Chain.Count}";
+
+            if (Channel.PresetName.Length == 0)
+            {
+                return chain;
+            }
+
+            // The label on the bar is truncated to fit a 128px strip, so the full name lives here.
+            string preset = $"{chain} · {L["mixer.preset"]}: {Channel.PresetName}";
+
+            return Channel.IsPresetModified ? $"{preset} · {L["help.presetModified"]}" : preset;
+        }
+    }
 
     /// <summary>
     /// Where the gate opens, in decibels, or null when there is no gate in the chain.

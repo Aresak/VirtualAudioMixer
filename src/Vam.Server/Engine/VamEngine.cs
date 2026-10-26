@@ -13,6 +13,7 @@ using Vam.Engine.Recording;
 using Vam.Engine.Modifiers.BuiltIn;
 using Vam.Engine.Windows.Devices.Wasapi;
 using Vam.Engine.Windows.Dsp;
+using Vam.Server.Logging;
 
 namespace Vam.Server.Engine;
 
@@ -34,6 +35,12 @@ namespace Vam.Server.Engine;
 /// </remarks>
 public sealed class VamEngine : IDisposable
 {
+    /// <summary>
+    /// Time per capture callback. Twenty milliseconds is what a shared-mode device period rounds to
+    /// on every machine this has run on, and asking for less only makes the device round it back up.
+    /// </summary>
+    const int CaptureBufferMilliseconds = 20;
+
     readonly EngineOptions options;
     readonly ILoggerFactory loggers;
     readonly ILogger<VamEngine> logger;
@@ -42,6 +49,7 @@ public sealed class VamEngine : IDisposable
     readonly Dictionary<(int Channel, int Link), long> overruns = [];
 
     IAudioBackend? backend;
+    DiskSpaceWatch? disk;
     DropoutPump? dropoutPump;
     Thread? control;
     TimeSpan sinceCorrection;
@@ -170,6 +178,18 @@ public sealed class VamEngine : IDisposable
     /// <summary>The recording, if one is running.</summary>
     public RecordingSession? Recording { get; private set; }
 
+    /// <summary>The folder the running recording writes into, or empty when nothing is recording.</summary>
+    public string RecordingDirectory => Recording?.Directory ?? string.Empty;
+
+    /// <summary>
+    /// How much room is left where recordings go. E5.
+    /// </summary>
+    /// <remarks>
+    /// Measured on the session's own folder while one is running, and on the configured root the
+    /// rest of the time, so the console has a figure to show before anybody presses record.
+    /// </remarks>
+    public long FreeBytes => disk?.FreeBytes ?? 0;
+
     /// <summary>What virtual endpoints this machine has, and what to say when it has none. A6 and E2.</summary>
     public VirtualEndpointReport? VirtualEndpoints { get; private set; }
 
@@ -202,6 +222,10 @@ public sealed class VamEngine : IDisposable
         Graph.Overran += OnOverran;
 
         OpenDevices(config);
+
+        disk = new DiskSpaceWatch(new DiskGuard(loggers.CreateLogger<DiskGuard>()), options.RecordingDirectory);
+        disk.Start();
+
         StartRecording(config);
         StartClock(config);
         StartTelemetry(config);
@@ -300,6 +324,12 @@ public sealed class VamEngine : IDisposable
 
         Recording?.Stop();
         Clock?.Stop();
+
+        // Stopped here rather than only at disposal, so a restarted engine does not leave the
+        // previous watch's thread measuring a folder nothing writes to any more.
+        disk?.Dispose();
+        disk = null;
+
         BusOutputs?.Dispose();
         BusOutputs = null;
         Supervisor?.Dispose();
@@ -321,6 +351,8 @@ public sealed class VamEngine : IDisposable
 
         Recording?.Dispose();
         Clock?.Dispose();
+        disk?.Dispose();
+        disk = null;
         stopping.Dispose();
     }
 
@@ -376,6 +408,66 @@ public sealed class VamEngine : IDisposable
                 return automix.State;
             }
         }
+
+        return null;
+    }
+
+    /// <summary>Where the engine keeps things.</summary>
+    /// <remarks>
+    /// The modifier folder is empty because nothing loads modifiers from disk yet. A path shown for
+    /// a folder nothing reads would be the console inventing a feature that does not exist.
+    /// </remarks>
+    public (string Recordings, string Logs, string Modifiers) Paths =>
+        (options.RecordingDirectory, options.LogDirectory ?? EngineLogging.DefaultDirectory, string.Empty);
+
+    /// <summary>The default recording root a session starts from.</summary>
+    public static string DefaultRecordingDirectory { get; } = new EngineOptions().RecordingDirectory;
+
+    /// <summary>Changes where sessions are written from now on.</summary>
+    /// <param name="path">The folder, or null for the default. It is created when the next session starts.</param>
+    /// <returns>Null when it was taken, otherwise why it was not.</returns>
+    /// <remarks>
+    /// Refused while a session is running. The files are open in the folder it started in, and
+    /// accepting a change that could not apply to them would leave the console showing one path and
+    /// the recording going to another.
+    /// </remarks>
+    public string? SetRecordingDirectory(string? path)
+    {
+        if (Recording is not null)
+        {
+            return "A recording is running. The folder changes when it stops.";
+        }
+
+        if (path is not null && string.IsNullOrWhiteSpace(path))
+        {
+            // Never read as the reset: an emptied box sent by mistake would move every recording.
+            return "No folder was given.";
+        }
+
+        string wanted = path ?? DefaultRecordingDirectory;
+
+        if (!Path.IsPathFullyQualified(wanted))
+        {
+            // A relative path lands beside whatever the engine's working directory happens to be,
+            // which for a service is nowhere an operator will look.
+            return "A recording folder has to be a full path.";
+        }
+
+        try
+        {
+            // Watched first. The watch is what the free-space figure is measured from, and a folder
+            // taken but not watched would leave the console reporting the old drive's space against
+            // the new folder's name.
+            disk?.Watch(wanted);
+        }
+        catch (ArgumentException)
+        {
+            return "That is not a path this machine can use.";
+        }
+
+        options.RecordingDirectory = wanted;
+
+        logger.LogInformation("Recordings now go to {Path}.", wanted);
 
         return null;
     }
@@ -568,7 +660,15 @@ public sealed class VamEngine : IDisposable
                 Dropouts = Dropouts,
                 EndpointIndex = index
             },
-            new CaptureOptions(ShareMode.Shared, TimeSpan.FromMilliseconds(20), width));
+            // The engine's rate, and the backend grants it or refuses to open at all. Before it was
+            // passed the channel was built for 48 kHz while the device was opened at whatever its
+            // mix format said, and a device presenting 44.1 kHz drained its ring for the length of
+            // the session against a servo with 500 ppm of authority.
+            new CaptureOptions(
+                options.CaptureShareMode,
+                TimeSpan.FromMilliseconds(CaptureBufferMilliseconds),
+                width,
+                options.SampleRate));
     }
 
     /// <summary>How many channels a strip's device actually produces.</summary>
@@ -585,13 +685,30 @@ public sealed class VamEngine : IDisposable
             {
                 if (device.Id == channel.DeviceId)
                 {
-                    return Math.Max(device.ChannelCount, 1);
+                    return Math.Max(WidthOf(device), 1);
                 }
             }
         }
 
         return Math.Max(channel.ChannelCount, 1);
     }
+
+    /// <summary>How wide to open one device, given which share mode the engine is asking for.</summary>
+    /// <remarks>
+    /// Windows presents almost every mono microphone as stereo, so asking for the presented width
+    /// while asking for exclusive mode declines exclusive on every real device: exclusive runs at
+    /// the hardware's own format, and a device that is mono underneath cannot grant a stereo one.
+    /// Asking for what the device actually is turns the switch from a setting that does nothing
+    /// into one that does what it says.
+    /// </remarks>
+    /// <param name="device">The endpoint.</param>
+    /// <returns>Channels to ask for.</returns>
+    int WidthOf(AudioDeviceInfo device) =>
+        options.CaptureShareMode == ShareMode.Exclusive
+        && device.NativeChannelCount > 0
+        && device.NativeSampleRate == options.SampleRate
+            ? device.NativeChannelCount
+            : device.ChannelCount;
 
     /// <summary>
     /// Starts recording now, into a folder of its own. J1.
@@ -631,6 +748,8 @@ public sealed class VamEngine : IDisposable
         Recording.Stop();
         Recording.Dispose();
         Recording = null;
+
+        disk?.Watch(options.RecordingDirectory);
 
         logger.LogInformation("Recording stopped.");
 
@@ -699,6 +818,8 @@ public sealed class VamEngine : IDisposable
         }
 
         Graph!.BindRecording(Recording);
+
+        disk?.Watch(directory);
 
         return verdict;
     }

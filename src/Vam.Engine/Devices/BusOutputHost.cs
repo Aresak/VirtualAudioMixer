@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Vam.Engine.Devices.Abstractions;
+using Vam.Engine.Devices.Extensions;
 
 namespace Vam.Engine.Devices;
 
@@ -129,7 +130,14 @@ public sealed class BusOutputHost(IAudioBackend backend, ILoggerFactory loggers)
 
             IRenderStream stream = backend.OpenRender(
                 request.DeviceId,
-                new RenderOptions(ShareMode.Shared, block, Math.Max(request.ChannelCount, 1)));
+                new RenderOptions(
+                    ShareMode.Shared,
+                    block,
+                    Math.Max(request.ChannelCount, 1),
+                    options.NominalSampleRate));
+
+            stream.RequireFormat(options.NominalSampleRate, channel.ChannelCount);
+            channel.DescribeStream(stream.Format);
 
             // The delegate is created once, here, and stored. Creating one per callback would
             // allocate inside the audio path.

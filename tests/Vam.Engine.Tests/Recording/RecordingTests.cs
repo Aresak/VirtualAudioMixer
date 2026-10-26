@@ -148,6 +148,66 @@ public class RecordingTests : IDisposable
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
+    public void TheDiskSpaceWatchHasAFigureBeforeAnybodyAsks()
+    {
+        Directory.CreateDirectory(directory);
+
+        using DiskSpaceWatch watch = new(new DiskGuard(NullLogger<DiskGuard>.Instance), directory);
+
+        // Measured when the watch is built rather than at its first pass. A console connecting to a
+        // running engine would otherwise draw 0 GB, and the guard "enough space for 0.0 h", until
+        // half a minute had gone by.
+        Assert.True(watch.FreeBytes > 0);
+        Assert.Equal(directory, watch.Directory);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void TheFigureIsTakenAgainWhileTheSessionRuns()
+    {
+        Directory.CreateDirectory(directory);
+
+        using DiskSpaceWatch watch = new(
+            new DiskGuard(NullLogger<DiskGuard>.Instance),
+            directory,
+            TimeSpan.FromMilliseconds(50)
+        );
+
+        DateTimeOffset first = watch.MeasuredAt;
+
+        watch.Start();
+
+        // The whole point of the watch. A figure taken once when the recording started says nothing
+        // about the hour that fills the disk up, which is the hour the operator needs warning in.
+        Assert.True(
+            SpinWait.SpinUntil(() => watch.MeasuredAt > first, TimeSpan.FromSeconds(5)),
+            "The disk was never measured a second time."
+        );
+
+        Assert.True(watch.FreeBytes > 0);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void AFolderThatCannotBeMeasuredLeavesTheLastFigureStanding()
+    {
+        Directory.CreateDirectory(directory);
+
+        using DiskSpaceWatch watch = new(new DiskGuard(NullLogger<DiskGuard>.Instance), directory);
+
+        long known = watch.FreeBytes;
+
+        // A path no platform will measure. Which path it is does not matter; that the reading fails
+        // does.
+        watch.Watch("unreadable" + (char)0 + "path");
+
+        // Zero is what the console draws as a disk with no room at all, and a share that could not
+        // be reached is not that.
+        Assert.Equal(known, watch.FreeBytes);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
     public void ASessionWithRoomStartsAndWritesEveryStrip()
     {
         using RecordingSession session = new(

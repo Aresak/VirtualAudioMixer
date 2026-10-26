@@ -44,7 +44,12 @@ builder.Services.AddGrpc();
 // into thirty places. It owns everything above the snapshot swap and nothing below it.
 builder.Services.AddVamMediator();
 
-builder.Services.AddSingleton(new EngineOptions());
+// The log folder comes from the same configuration the logging was built from, so the console is
+// told where the engine is actually writing rather than where it would write by default.
+builder.Services.AddSingleton(new EngineOptions
+{
+    LogDirectory = builder.Configuration["Vam:LogDirectory"]
+});
 builder.Services.AddSingleton<VamEngine>();
 
 WebApplication app = builder.Build();

@@ -52,6 +52,9 @@ public sealed class RecordingSession : IDisposable
     /// <summary>The tracks being written.</summary>
     public IReadOnlyList<RecordingTrack> Tracks => tracks;
 
+    /// <summary>The folder this session writes into.</summary>
+    public string Directory => directory;
+
     /// <summary>Whether the writer thread is running.</summary>
     public bool IsRecording => writer is not null;
 
@@ -73,7 +76,8 @@ public sealed class RecordingSession : IDisposable
             throw new InvalidOperationException("Tracks cannot be added while recording.");
         }
 
-        Directory.CreateDirectory(directory);
+        // Qualified, because this type has a Directory of its own and the folder is what is meant.
+        System.IO.Directory.CreateDirectory(directory);
 
         RecordingTrack track = new(name, Path.Combine(directory, $"{Sanitise(name)}.wav"), format);
 

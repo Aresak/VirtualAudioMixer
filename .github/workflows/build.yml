@@ -24,10 +24,10 @@ jobs:
 
     steps:
       - name: Check out
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up the SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           # Pinned by the same file the developers use, so CI cannot drift onto a
           # different SDK than the one the build was verified against.
@@ -36,8 +36,11 @@ jobs:
       - name: Restore
         run: dotnet restore
 
+      # Not --no-restore: Vam.Client is MAUI, and its Windows RuntimeIdentifier is only
+      # injected during build, so the win-x64 runtime pack is not there after a plain
+      # restore. The build has to be allowed to fetch it.
       - name: Build
-        run: dotnet build --no-restore --configuration Release
+        run: dotnet build --configuration Release
 
       # Long-running tests are excluded by default through VAM_LONGRUNNING, which is
       # not set here. See CONTRIBUTING.md.
