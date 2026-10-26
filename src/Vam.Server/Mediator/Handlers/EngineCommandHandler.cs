@@ -112,7 +112,7 @@ public sealed class EngineCommandHandler(
     {
         // The engine's own words. "That is not a path this machine can use" is something an operator
         // can act on; "refused" is not.
-        return Replies.DoneAsync(engine.SetRecordingDirectory(request.Path) is { } problem
+        return Replies.DoneAsync(engine.SetRecordingDirectory(request.Reset ? null : request.Path) is { } problem
             ? Replies.Refused(problem)
             : Replies.Accepted());
     }

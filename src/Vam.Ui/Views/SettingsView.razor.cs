@@ -6,6 +6,7 @@ using Vam.Protocol;
 using Vam.Protocol.V1;
 using Vam.Ui.Abstractions;
 using Vam.Ui.Components;
+using Vam.Ui.Extensions;
 using Vam.Ui.Localization;
 using Vam.Ui.Services;
 using Vam.Ui.State;
@@ -56,21 +57,23 @@ public partial class SettingsView
         }
     }
 
-    Task ResetRecordingsAsync()
-    {
-        // An empty path is the reset, and the engine reads it as one: back to the folder it would
-        // have used with nobody telling it anything.
-        recordings = string.Empty;
+    Task ResetRecordingsAsync() => SendRecordingsAsync(new SetRecordingsPath { Reset = true });
 
-        return ApplyRecordingsAsync();
+    Task ApplyRecordingsAsync()
+    {
+        if (Typed.ToRecordingsPath() is not { } command)
+        {
+            pathProblem = L["settings.noFolder"];
+
+            return Task.CompletedTask;
+        }
+
+        return SendRecordingsAsync(command);
     }
 
-    async Task ApplyRecordingsAsync()
+    async Task SendRecordingsAsync(SetRecordingsPath command)
     {
-        CommandReply reply = await Session.ApplyAsync(new Command
-        {
-            SetRecordingsPath = new SetRecordingsPath { Path = recordings }
-        });
+        CommandReply reply = await Session.ApplyAsync(new Command { SetRecordingsPath = command });
 
         // Typed goes back to showing the engine's answer, whatever the engine made of it.
         recordings = string.Empty;

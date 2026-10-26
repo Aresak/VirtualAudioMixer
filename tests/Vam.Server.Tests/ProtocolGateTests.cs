@@ -434,10 +434,26 @@ public class ProtocolGateTests : IAsyncLifetime
 
         Assert.Equal(moved, after.Paths.Recordings);
 
-        // Empty is the reset the console sends, and it comes back as the engine's own default rather
-        // than as a refusal or as an empty path taken literally.
+        CommandReply started = await client.ApplyAsync(
+            new Command { SetRecording = new SetRecording { Recording = true } },
+            cancellationToken: Token
+        );
+
+        Assert.True(started.Accepted, started.Reason);
+
+        // The session itself goes there, not just the path the console is shown.
+        ConsoleState recording = await client.GetConsoleAsync(new Empty(), cancellationToken: Token);
+
+        Assert.StartsWith(moved, recording.Recording.Directory, StringComparison.Ordinal);
+
+        await client.ApplyAsync(
+            new Command { SetRecording = new SetRecording { Recording = false } },
+            cancellationToken: Token
+        );
+
+        // Reset is its own flag, and comes back as the engine's own default.
         CommandReply reset = await client.ApplyAsync(
-            new Command { SetRecordingsPath = new SetRecordingsPath { Path = string.Empty } },
+            new Command { SetRecordingsPath = new SetRecordingsPath { Reset = true } },
             cancellationToken: Token
         );
 
@@ -453,14 +469,47 @@ public class ProtocolGateTests : IAsyncLifetime
         // for a service is nowhere an operator will look.
         Assert.False(relative.Accepted);
 
-        CommandReply whitespace = await client.ApplyAsync(
-            new Command { SetRecordingsPath = new SetRecordingsPath { Path = "   " } },
+
+        // Put it back, so the order tests run in cannot matter.
+        await client.ApplyAsync(
+            new Command { SetRecordingsPath = new SetRecordingsPath { Path = Path.Combine(workspace, "recordings") } },
+            cancellationToken: Token
+        );
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public async Task ApplyingTheShownFolderKeepsItAndAnEmptyOneIsNotAReset()
+    {
+        string moved = Path.Combine(workspace, "kept");
+
+        await client!.ApplyAsync(
+            new Command { SetRecordingsPath = new SetRecordingsPath { Path = moved } },
             cancellationToken: Token
         );
 
-        Assert.True(whitespace.Accepted, whitespace.Reason);
+        // What the console sends when Apply is pressed on an untouched box: the path it shows.
+        string shown = (await client.GetConsoleAsync(new Empty(), cancellationToken: Token)).Paths.Recordings;
 
-        // Put it back, so the order tests run in cannot matter.
+        CommandReply applied = await client.ApplyAsync(
+            new Command { SetRecordingsPath = new SetRecordingsPath { Path = shown } },
+            cancellationToken: Token
+        );
+
+        Assert.True(applied.Accepted, applied.Reason);
+        Assert.Equal(moved, (await client.GetConsoleAsync(new Empty(), cancellationToken: Token)).Paths.Recordings);
+
+        foreach (string empty in new[] { string.Empty, "   " })
+        {
+            CommandReply refused = await client.ApplyAsync(
+                new Command { SetRecordingsPath = new SetRecordingsPath { Path = empty } },
+                cancellationToken: Token
+            );
+
+            Assert.False(refused.Accepted);
+            Assert.Equal(moved, (await client.GetConsoleAsync(new Empty(), cancellationToken: Token)).Paths.Recordings);
+        }
+
         await client.ApplyAsync(
             new Command { SetRecordingsPath = new SetRecordingsPath { Path = Path.Combine(workspace, "recordings") } },
             cancellationToken: Token

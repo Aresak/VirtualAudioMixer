@@ -43,6 +43,12 @@ const BALLISTICS_VU = 'vu';
 const PPM_FALL_DB_PER_S = 24;
 const VU_SECONDS = 0.3;
 
+// What the engine publishes at. A ceiling at or above it is no ceiling.
+const ENGINE_FRAMES_PER_SECOND = 25;
+
+// Frames arrive with jitter, and one slightly early must not count as one too soon.
+const DRAW_TOLERANCE = 0.9;
+
 // Buses share the ballistics store with the strips, above anything a channel index can reach.
 const BUS_BAR_BASE = 1000;
 
@@ -93,7 +99,9 @@ export function settings(ballistics, framesPerSecond) {
         ? ballistics
         : BALLISTICS_RMS;
 
-    state.minDrawSeconds = framesPerSecond > 0 ? 1 / framesPerSecond : 0;
+    state.minDrawSeconds = framesPerSecond > 0 && framesPerSecond < ENGINE_FRAMES_PER_SECOND
+        ? DRAW_TOLERANCE / framesPerSecond
+        : 0;
     state.bars = [];
 
     // The next frame draws whatever the ceiling says. Somebody who just changed how the meters move

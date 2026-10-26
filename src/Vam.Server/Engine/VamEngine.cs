@@ -418,23 +418,27 @@ public sealed class VamEngine : IDisposable
     public static string DefaultRecordingDirectory { get; } = new EngineOptions().RecordingDirectory;
 
     /// <summary>Changes where sessions are written from now on.</summary>
-    /// <param name="path">The folder. It is created when the next session starts.</param>
+    /// <param name="path">The folder, or null for the default. It is created when the next session starts.</param>
     /// <returns>Null when it was taken, otherwise why it was not.</returns>
     /// <remarks>
     /// Refused while a session is running. The files are open in the folder it started in, and
     /// accepting a change that could not apply to them would leave the console showing one path and
     /// the recording going to another.
     /// </remarks>
-    public string? SetRecordingDirectory(string path)
+    public string? SetRecordingDirectory(string? path)
     {
         if (Recording is not null)
         {
             return "A recording is running. The folder changes when it stops.";
         }
 
-        // Empty is the reset: back to what the engine would have used with nobody telling it
-        // anything. The console sends it for exactly that and has nothing else to send.
-        string wanted = string.IsNullOrWhiteSpace(path) ? DefaultRecordingDirectory : path;
+        if (path is not null && string.IsNullOrWhiteSpace(path))
+        {
+            // Never read as the reset: an emptied box sent by mistake would move every recording.
+            return "No folder was given.";
+        }
+
+        string wanted = path ?? DefaultRecordingDirectory;
 
         if (!Path.IsPathFullyQualified(wanted))
         {

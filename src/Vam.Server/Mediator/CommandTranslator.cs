@@ -141,7 +141,8 @@ public static class CommandTranslator
                 new SetRecordingRequest(command.SetRecording.Recording, command.SetRecording.Directory),
 
             Command.KindOneofCase.SetRecordingsPath => new SetRecordingsPathRequest(
-                command.SetRecordingsPath.Path),
+                command.SetRecordingsPath.Path,
+                command.SetRecordingsPath.Reset),
 
             Command.KindOneofCase.SetStartupOptions => new SetStartupOptionsRequest(
                 command.SetStartupOptions.LoadLastConsole,
