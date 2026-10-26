@@ -168,9 +168,32 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   line-height: 1;
 }
 
-.rail button:hover { color: var(--ink-dim); background: rgba(255, 255, 255, .03); }
+.rail button:not(:disabled):hover { color: var(--ink-dim); background: rgba(255, 255, 255, .03); }
 .rail button.on { color: var(--brass); border-left-color: var(--brass); background: rgba(214, 166, 74, .07); }
 .rail .sep { height: 1px; background: var(--line-soft); margin: 6px 10px; }
+
+/* The rail item, so a tooltip has something hoverable to sit on when its button is disabled.
+   A button sizes to its own content even as a flex container, so the width comes back here. */
+.rail .item { display: block; }
+.rail .item > button { width: 100%; }
+
+/* U2: a destination with a place in the rail but no view behind it yet. Disabled rather than
+   pressable, so nothing tabs into something that is not there; the dot says which phase it waits
+   for and the tooltip spells it out. */
+.rail button:disabled { opacity: .45; cursor: default; }
+
+.rail .phase {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--line);
+}
+
+.rail .phase.p1 { background: var(--brass-dim); }
+.rail .phase.pl { background: #4a3d6b; }
 
 /* ---------- views ---------- */
 
