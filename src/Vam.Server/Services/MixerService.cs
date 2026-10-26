@@ -201,12 +201,12 @@ public sealed class MixerService(
     /// </remarks>
     public override async Task<PastSessionList> ListPastSessions(Empty request, ServerCallContext context)
     {
-        IReadOnlyList<RecordedSession> sessions =
+        RecordedSessionList sessions =
             await Task.Run(engine.ReadPastSessions, context.CancellationToken);
 
-        PastSessionList list = new() { Truncated = sessions.Count >= RecordingCatalogue.Limit };
+        PastSessionList list = new() { Truncated = sessions.Truncated };
 
-        foreach (RecordedSession session in sessions)
+        foreach (RecordedSession session in sessions.Sessions)
         {
             list.Sessions.Add(new PastSession
             {

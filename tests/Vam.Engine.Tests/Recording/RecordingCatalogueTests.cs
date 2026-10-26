@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Vam.Engine.Recording;
 using Vam.TestKit.Harness;
@@ -30,7 +31,7 @@ public class RecordingCatalogueTests : IDisposable
         WriteSession("2026-05-27_19-00-00", tracks: 2, bytesEach: 1000);
         WriteSession("2026-08-28_18-30-00", tracks: 6, bytesEach: 2000);
 
-        IReadOnlyList<RecordedSession> sessions = catalogue.Read(root);
+        IReadOnlyList<RecordedSession> sessions = catalogue.Read([root]).Sessions;
 
         Assert.Equal(2, sessions.Count);
 
@@ -56,7 +57,7 @@ public class RecordingCatalogueTests : IDisposable
             Path.Combine(directory, SessionManifest.FileName),
             """{"StartedAt":"2026-08-28T18:30:00+00:00","DurationSeconds":6432,"Tracks":3,"DroppedFrames":17}""");
 
-        RecordedSession session = Assert.Single(catalogue.Read(root));
+        RecordedSession session = Assert.Single(catalogue.Read([root]).Sessions);
 
         Assert.Equal(TimeSpan.FromSeconds(6432), session.Duration);
         Assert.Equal(17, session.DroppedFrames);
@@ -70,7 +71,7 @@ public class RecordingCatalogueTests : IDisposable
         // listing a meeting nobody has.
         Directory.CreateDirectory(Path.Combine(root, "2026-08-28_18-30-00"));
 
-        Assert.Empty(catalogue.Read(root));
+        Assert.Empty(catalogue.Read([root]).Sessions);
     }
 
     [Fact]
@@ -79,8 +80,56 @@ public class RecordingCatalogueTests : IDisposable
     {
         // The rest of the recording view has to keep working. An operator about to start a meeting
         // does not care that last month's folder is on a disk nobody has plugged in.
-        Assert.Empty(catalogue.Read(Path.Combine(root, "nowhere")));
-        Assert.Empty(catalogue.Read(string.Empty));
+        Assert.Empty(catalogue.Read([Path.Combine(root, "nowhere")]).Sessions);
+        Assert.Empty(catalogue.Read([string.Empty]).Sessions);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void TheSessionBeingRecordedIsNotAPastOne()
+    {
+        string running = WriteSession("2026-08-28_18-30-00", tracks: 2, bytesEach: 100);
+        WriteSession("2026-05-27_19-00-00", tracks: 2, bytesEach: 100);
+
+        // Compared as a full path and without regard to case, as Windows compares it.
+        RecordedSession session = Assert.Single(
+            catalogue.Read([root], running.ToUpperInvariant() + Path.DirectorySeparatorChar).Sessions);
+
+        Assert.Equal(new DateTime(2026, 5, 27, 19, 0, 0), session.StartedAt.DateTime);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void EveryRootIsReadAndTheSameRootOnlyOnce()
+    {
+        string elsewhere = Path.Combine(root, "elsewhere");
+
+        WriteSession("2026-05-27_19-00-00", tracks: 1, bytesEach: 100);
+        WriteSession(Path.Combine("elsewhere", "2026-08-28_18-30-00"), tracks: 1, bytesEach: 100);
+
+        IReadOnlyList<RecordedSession> sessions = catalogue.Read([root, elsewhere, root.ToUpperInvariant()]).Sessions;
+
+        Assert.Equal(2, sessions.Count);
+        Assert.Equal(new DateTime(2026, 8, 28, 18, 30, 0), sessions[0].StartedAt.DateTime);
+    }
+
+    [Theory]
+    [Trait("Category", TestCategories.Unit)]
+    [InlineData(RecordingCatalogue.Limit, false)]
+    [InlineData(RecordingCatalogue.Limit + 1, true)]
+    public void TheListSaysItWasCutOnlyWhenSomethingWasLeftOut(int count, bool truncated)
+    {
+        DateTime first = new(2026, 1, 1, 9, 0, 0);
+
+        for (int session = 0; session < count; session++)
+        {
+            WriteSession(first.AddDays(session).ToString(RecordingCatalogue.FolderFormat, CultureInfo.InvariantCulture), tracks: 1, bytesEach: 10);
+        }
+
+        RecordedSessionList list = catalogue.Read([root]);
+
+        Assert.Equal(RecordingCatalogue.Limit, list.Sessions.Count);
+        Assert.Equal(truncated, list.Truncated);
     }
 
     string WriteSession(string name, int tracks, int bytesEach)

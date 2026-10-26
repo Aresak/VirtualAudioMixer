@@ -49,6 +49,7 @@ public sealed class VamEngine : IDisposable
     TimeSpan sinceMeters;
     object? meterPlan;
     TimeSpan sinceLoad;
+    string lastRecordingRoot = string.Empty;
 
     readonly IAudioBackend? supplied;
 
@@ -406,10 +407,14 @@ public sealed class VamEngine : IDisposable
     }
 
     /// <summary>What is already on disk under the recording root. E3.</summary>
-    /// <returns>Recent sessions, newest first.</returns>
-    /// <remarks>Reads the folder on the calling thread. The service calls it off its own.</remarks>
-    public IReadOnlyList<RecordedSession> ReadPastSessions() =>
-        new RecordingCatalogue(loggers.CreateLogger<RecordingCatalogue>()).Read(options.RecordingDirectory);
+    /// <returns>Recent sessions, newest first, without the one being recorded right now.</returns>
+    /// <remarks>
+    /// Reads the folder on the calling thread. The service calls it off its own. The root the last
+    /// recording went into is read as well, so a session recorded somewhere else is still listed.
+    /// </remarks>
+    public RecordedSessionList ReadPastSessions() =>
+        new RecordingCatalogue(loggers.CreateLogger<RecordingCatalogue>())
+            .Read([options.RecordingDirectory, lastRecordingRoot], Recording?.Directory ?? string.Empty);
 
     /// <summary>The two startup behaviours an operator may change. H3 and E4.</summary>
     public (bool LoadLastConsole, bool RecordAutomatically) Startup =>
@@ -732,6 +737,8 @@ public sealed class VamEngine : IDisposable
         }
 
         Graph!.BindRecording(Recording);
+
+        lastRecordingRoot = root;
 
         disk?.Watch(directory);
 

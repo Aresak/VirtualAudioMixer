@@ -35,9 +35,6 @@ public sealed class RecordingSession : IDisposable
     Thread? writer;
     bool isStopped;
 
-    // Every track is written from the same clock, so one rate describes the session.
-    int sampleRate;
-
     /// <summary>Prepares a session in a folder.</summary>
     /// <param name="directory">Where the files go.</param>
     /// <param name="guard">What decides whether there is room.</param>
@@ -82,8 +79,6 @@ public sealed class RecordingSession : IDisposable
 
         // Qualified, because this type has a Directory of its own and the folder is what is meant.
         System.IO.Directory.CreateDirectory(directory);
-
-        sampleRate = format.SampleRate;
 
         RecordingTrack track = new(name, Path.Combine(directory, $"{Sanitise(name)}.wav"), format);
 
@@ -176,18 +171,18 @@ public sealed class RecordingSession : IDisposable
         }
 
         long dropped = 0;
-        long frames = 0;
+        double seconds = 0;
 
         foreach (RecordingTrack track in tracks)
         {
             dropped += track.DroppedFrames;
-            frames = Math.Max(frames, track.FramesWritten);
+            seconds = track.SampleRate > 0 ? Math.Max(seconds, track.FramesWritten / (double)track.SampleRate) : seconds;
         }
 
         SessionManifest manifest = new()
         {
             StartedAt = StartedAt,
-            DurationSeconds = sampleRate > 0 ? frames / (double)sampleRate : 0,
+            DurationSeconds = seconds,
             DroppedFrames = dropped
         };
 

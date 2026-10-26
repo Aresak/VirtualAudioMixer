@@ -62,7 +62,11 @@ public partial class RecordingView
     // wrote a manifest has files to count and nothing that remembers how long it ran.
     static string Ran(PastSession session) => session.DurationSeconds < 0
         ? "—"
-        : TimeSpan.FromSeconds(session.DurationSeconds).ToString(@"h\:mm\:ss", CultureInfo.InvariantCulture);
+        : Hours(TimeSpan.FromSeconds(session.DurationSeconds));
+
+    // Total hours, so a session that ran past midnight does not wrap to a short one.
+    static string Hours(TimeSpan ran) =>
+        string.Create(CultureInfo.InvariantCulture, $"{(int)ran.TotalHours:00}:{ran.Minutes:00}:{ran.Seconds:00}");
 
     async Task OpenAsync(PastSession session)
     {

@@ -25,43 +25,61 @@ public sealed class RecordingCatalogue(ILogger<RecordingCatalogue> logger)
     /// <summary>How many to report. The table is a list of recent sessions, not an archive.</summary>
     public const int Limit = 50;
 
-    /// <summary>Reads the sessions under a root, newest first.</summary>
-    /// <param name="root">Where recordings go.</param>
-    /// <returns>What is there, or nothing when the root cannot be read.</returns>
+    /// <summary>Reads the sessions under one or more roots, newest first.</summary>
+    /// <param name="roots">Where recordings go. The same folder named twice is read once.</param>
+    /// <param name="excluding">The folder being recorded into right now, which is not a past session.</param>
+    /// <returns>What is there, or nothing for a root that cannot be read.</returns>
     /// <remarks>
-    /// A root that is missing, unreadable or on a network share that is not answering returns an
-    /// empty list rather than throwing. The rest of the recording view has to keep working: an
-    /// operator about to start a meeting does not care that last month's folder is on a disk nobody
-    /// has plugged in.
+    /// A root that is missing, unreadable or on a network share that is not answering adds nothing
+    /// rather than throwing. The rest of the recording view has to keep working: an operator about
+    /// to start a meeting does not care that last month's folder is on a disk nobody has plugged in.
     /// </remarks>
-    public IReadOnlyList<RecordedSession> Read(string root)
+    public RecordedSessionList Read(IEnumerable<string> roots, string excluding = "")
     {
-        if (root.Length == 0 || !Directory.Exists(root))
+        HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+
+        if (excluding.Length > 0)
         {
-            return [];
+            seen.Add(Normalise(excluding));
+        }
+
+        List<RecordedSession> sessions = [];
+
+        foreach (string root in roots.Where(root => root.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            ReadRoot(root, seen, sessions);
+        }
+
+        sessions.Sort(static (left, right) => right.StartedAt.CompareTo(left.StartedAt));
+
+        return sessions.Count > Limit
+            ? new RecordedSessionList { Sessions = sessions[..Limit], Truncated = true }
+            : new RecordedSessionList { Sessions = sessions };
+    }
+
+    static string Normalise(string directory) =>
+        Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
+
+    void ReadRoot(string root, HashSet<string> seen, List<RecordedSession> sessions)
+    {
+        if (!Directory.Exists(root))
+        {
+            return;
         }
 
         try
         {
-            List<RecordedSession> sessions = [];
-
             foreach (string directory in Directory.EnumerateDirectories(root))
             {
-                if (Describe(directory) is { } session)
+                if (seen.Add(Normalise(directory)) && Describe(directory) is { } session)
                 {
                     sessions.Add(session);
                 }
             }
-
-            sessions.Sort(static (left, right) => right.StartedAt.CompareTo(left.StartedAt));
-
-            return sessions.Count > Limit ? sessions[..Limit] : sessions;
         }
         catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
         {
             logger.LogWarning(failure, "The recordings under {Root} could not be listed.", root);
-
-            return [];
         }
     }
 
