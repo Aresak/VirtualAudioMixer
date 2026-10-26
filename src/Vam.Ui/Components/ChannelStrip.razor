@@ -122,6 +122,26 @@
     <div class="chainbar"
          @onclick="Open"
          title="@ChainTitle">
+        @*
+            B12. On the strip: outside the overlay nothing is selected, and the strips show every channel at once.
+        *@
+        @if (Channel.PresetName.Length > 0)
+        {
+            <span class="pre @(Channel.IsPresetModified ? "mod" : null)">
+                @Channel.PresetName
+            </span>
+
+            @*
+                The marker is its own element so the name's ellipsis cannot be what removes it. An
+                operator about to press save needs to know whether they are saving their work or
+                saving over it, and that is the one part of this label that must not be truncated.
+            *@
+            @if (Channel.IsPresetModified)
+            {
+                <span class="mark">*</span>
+            }
+        }
+
         @if (Channel.Chain.Count == 0)
         {
             <span class="seg byp"></span>
