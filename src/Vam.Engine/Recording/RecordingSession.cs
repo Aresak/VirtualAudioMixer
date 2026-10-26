@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
 namespace Vam.Engine.Recording;
@@ -172,6 +173,47 @@ public sealed class RecordingSession : IDisposable
         }
 
         Report();
+        WriteManifest();
+    }
+
+    // Written when the session closes, into the session's own folder. Everything else in the table a
+    // later console shows can be counted off the files; what a session lost cannot, and a recording
+    // that dropped frames looks exactly like one that did not.
+    void WriteManifest()
+    {
+        if (tracks.Count == 0)
+        {
+            return;
+        }
+
+        long dropped = 0;
+        double seconds = 0;
+
+        foreach (RecordingTrack track in tracks)
+        {
+            dropped += track.DroppedFrames;
+            seconds = track.Format.SampleRate > 0 ? Math.Max(seconds, track.FramesWritten / (double)track.Format.SampleRate) : seconds;
+        }
+
+        SessionManifest manifest = new()
+        {
+            StartedAt = StartedAt,
+            DurationSeconds = seconds,
+            DroppedFrames = dropped
+        };
+
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(directory, SessionManifest.FileName),
+                JsonSerializer.Serialize(manifest));
+        }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
+        {
+            // The recording is already closed and on disk. A manifest that could not be written
+            // costs a column in a table; failing the stop would cost the files.
+            logger.LogWarning(failure, "The session manifest for {Directory} could not be written.", directory);
+        }
     }
 
     /// <inheritdoc />

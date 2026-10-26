@@ -56,6 +56,7 @@ public sealed class VamEngine : IDisposable
     TimeSpan sinceMeters;
     object? meterPlan;
     TimeSpan sinceLoad;
+    string lastRecordingRoot = string.Empty;
 
     readonly IAudioBackend? supplied;
 
@@ -411,6 +412,16 @@ public sealed class VamEngine : IDisposable
 
         return null;
     }
+
+    /// <summary>What is already on disk under the recording root. E3.</summary>
+    /// <returns>Recent sessions, newest first, without the one being recorded right now.</returns>
+    /// <remarks>
+    /// Reads the folder on the calling thread. The service calls it off its own. The root the last
+    /// recording went into is read as well, so a session recorded somewhere else is still listed.
+    /// </remarks>
+    public RecordedSessionList ReadPastSessions() =>
+        new RecordingCatalogue(loggers.CreateLogger<RecordingCatalogue>())
+            .Read([options.RecordingDirectory, lastRecordingRoot], Recording?.Directory ?? string.Empty);
 
     /// <summary>Where the engine keeps things.</summary>
     /// <remarks>
@@ -829,7 +840,7 @@ public sealed class VamEngine : IDisposable
     {
         string directory = Path.Combine(
             root,
-            DateTimeOffset.Now.ToString("yyyy-MM-dd_HH-mm-ss", System.Globalization.CultureInfo.InvariantCulture));
+            DateTimeOffset.Now.ToString(RecordingCatalogue.FolderFormat, System.Globalization.CultureInfo.InvariantCulture));
 
         List<PlannedTrack> planned = PlanTracks(config, options.Capture);
 
@@ -885,6 +896,8 @@ public sealed class VamEngine : IDisposable
         Recording = session;
 
         Graph!.BindRecording(Recording);
+
+        lastRecordingRoot = root;
 
         disk?.Watch(directory);
 

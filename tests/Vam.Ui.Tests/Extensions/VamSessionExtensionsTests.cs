@@ -100,5 +100,8 @@ public class VamSessionExtensionsTests
 
         public ValueTask<DiagnosticsState?> GetDiagnosticsAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+
+        public ValueTask<PastSessionList?> GetPastSessionsAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }
