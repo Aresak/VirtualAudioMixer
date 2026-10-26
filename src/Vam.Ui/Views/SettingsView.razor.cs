@@ -28,7 +28,7 @@ public partial class SettingsView
 
     StartupOptions? Startup => Session.Console?.Startup;
 
-    EnginePaths? Paths => Session.Console?.Paths;
+    EnginePaths? Paths => Session.EnginePaths();
 
     static IEnumerable<MeterBallistics> Ballistics => Enum.GetValues<MeterBallistics>();
 

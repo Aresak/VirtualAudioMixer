@@ -1,4 +1,5 @@
 using Vam.Protocol;
+using Vam.Protocol.V1;
 using Vam.Ui.Abstractions;
 
 namespace Vam.Ui.Extensions;
@@ -19,6 +20,36 @@ public static class VamSessionExtensions
         ArgumentNullException.ThrowIfNull(session);
 
         return session.Features.Contains(feature);
+    }
+
+    /// <summary>What the next recording captures, or null when the engine is too old to say.</summary>
+    /// <param name="session">The session.</param>
+    public static RecordingCapture? RecordingCaptures(this IVamSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+
+        return session.Supports(EngineFeatures.RecordingCaptures) ? session.Console?.Recording?.Captures : null;
+    }
+
+    /// <summary>The engine's paths, or null when it is not connected or too old to send them.</summary>
+    /// <param name="session">The session.</param>
+    public static EnginePaths? EnginePaths(this IVamSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+
+        return session.Supports(EngineFeatures.EnginePaths) ? session.Console?.Paths : null;
+    }
+
+    /// <summary>
+    /// Whether past sessions can be asked for. True before connecting, when there is no engine yet
+    /// to be older than this console.
+    /// </summary>
+    /// <param name="session">The session.</param>
+    public static bool CanListPastSessions(this IVamSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+
+        return session.Connection != ConnectionState.Connected || session.Supports(EngineFeatures.PastSessions);
     }
 
     /// <summary>Whether the connected engine lacks something this console knows, so is older than it.</summary>

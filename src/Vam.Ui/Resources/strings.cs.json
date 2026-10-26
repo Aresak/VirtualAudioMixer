@@ -279,6 +279,7 @@
   "settings.interface": "Rozhraní",
   "settings.startup": "Spuštění",
   "settings.paths": "Cesty",
+  "settings.pathsOlderEngine": "Tento engine je starší než konzole a neříká, kde má své složky.",
   "settings.recordings": "Nahrávky",
   "settings.logs": "Logy",
   "settings.modifiers": "Modifikátory",

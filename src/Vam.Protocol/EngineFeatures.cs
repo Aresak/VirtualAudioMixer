@@ -13,7 +13,7 @@ public static class EngineFeatures
     /// <summary><c>ConsoleState.paths</c> and <c>SetRecordingsPath</c>.</summary>
     public const string EnginePaths = "engine.paths";
 
-    /// <summary>The share mode and the device and native rates on channels, buses and devices.</summary>
+    /// <summary>The share mode and the device and native rates on channels, devices and device clocks.</summary>
     public const string ShareMode = "device.share-mode";
 
     /// <summary>

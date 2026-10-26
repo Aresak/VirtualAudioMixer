@@ -279,6 +279,7 @@
   "settings.interface": "Interface",
   "settings.startup": "Startup",
   "settings.paths": "Paths",
+  "settings.pathsOlderEngine": "This engine is older than the console and does not say where it keeps things.",
   "settings.recordings": "Recordings",
   "settings.logs": "Logs",
   "settings.modifiers": "Modifiers",

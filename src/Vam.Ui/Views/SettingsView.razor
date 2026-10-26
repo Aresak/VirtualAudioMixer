@@ -236,7 +236,7 @@
 
                 @if (Paths is not { } paths)
                 {
-                    <p class="sub">@L["mixer.notConnected"]</p>
+                    <p class="sub">@(Session.Console is null ? L["mixer.notConnected"] : L["settings.pathsOlderEngine"])</p>
                 }
                 else
                 {

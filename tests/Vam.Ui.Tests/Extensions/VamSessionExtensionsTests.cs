@@ -90,6 +90,54 @@ public class VamSessionExtensionsTests
         Assert.False(session.IsOlderEngine());
     }
 
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void AnOlderEngineHasNoCaptureOptionsEvenWhenItsMessageIsThere()
+    {
+        // The crash this exists for: an engine from before the list sends a recording with no
+        // captures, and the view read straight through it.
+        FakeSession older = new()
+        {
+            Connection = ConnectionState.Connected,
+            Console = new ConsoleState { Recording = new RecordingState() }
+        };
+
+        Assert.Null(older.RecordingCaptures());
+        Assert.Null(older.EnginePaths());
+        Assert.False(older.CanListPastSessions());
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void ACurrentEngineThatLeftAMessageOutIsNotReadThrough()
+    {
+        FakeSession current = new()
+        {
+            Connection = ConnectionState.Connected,
+            Features = EngineFeatures.All.ToHashSet(),
+            Console = new ConsoleState { Recording = new RecordingState() }
+        };
+
+        Assert.Null(current.RecordingCaptures());
+        Assert.Null(current.EnginePaths());
+        Assert.True(current.CanListPastSessions());
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void ACurrentEngineGivesItsCaptureOptions()
+    {
+        RecordingCapture captures = new() { Inputs = true, Format = "wav24" };
+        FakeSession current = new()
+        {
+            Connection = ConnectionState.Connected,
+            Features = EngineFeatures.All.ToHashSet(),
+            Console = new ConsoleState { Recording = new RecordingState { Captures = captures } }
+        };
+
+        Assert.Same(captures, current.RecordingCaptures());
+    }
+
     sealed class FakeSession : IVamSession
     {
         public event Action? Changed
@@ -102,7 +150,7 @@ public class VamSessionExtensionsTests
 
         public string StatusMessage => throw new NotSupportedException();
 
-        public ConsoleState? Console => throw new NotSupportedException();
+        public ConsoleState? Console { get; init; }
 
         public string ServerName => throw new NotSupportedException();
 

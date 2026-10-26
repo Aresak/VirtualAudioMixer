@@ -29,14 +29,9 @@ public partial class RecordingView
 
     RecordingState? Recording => Session.Console?.Recording;
 
-    // Null from an engine older than this console, which sends no capture options at all.
-    RecordingCapture? Captures => Session.Supports(EngineFeatures.RecordingCaptures)
-        ? Recording?.Captures
-        : null;
+    RecordingCapture? Captures => Session.RecordingCaptures();
 
-    // Asked only once connected: before then there is no engine to be older than this console.
-    bool HasPastSessions => Session.Connection != ConnectionState.Connected
-        || Session.Supports(EngineFeatures.PastSessions);
+    bool HasPastSessions => Session.CanListPastSessions();
 
     // Two separate questions, and both have to be yes: this host can show a folder at all, and the
     // engine whose folder it is runs on this machine.
@@ -93,7 +88,7 @@ public partial class RecordingView
 
     // Two reasons the button is missing, and they are different things to tell somebody.
     string NoOpenBecause => Platform.CanOpenFolders ? "recording.openElsewhere" : "recording.openNoHost";
-    EnginePaths? Paths => Session.Console?.Paths;
+    EnginePaths? Paths => Session.EnginePaths();
 
     string Duration(RecordingState recording)
     {
