@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using Vam.Engine.Devices;
 using Vam.Engine.Devices.Abstractions;
 using Vam.Engine.Windows.Devices.Wasapi;
-using Vam.TestKit.Devices;
 using Vam.TestKit.Dsp;
 using Vam.TestKit.Harness;
 using Xunit;
@@ -18,6 +18,13 @@ namespace Vam.Engine.Windows.Tests.Devices;
 /// read as mono at half rate, an octave down, and it was audible immediately - but no test could
 /// disagree, because <c>NullAudioBackend</c> honours whatever channel count it is handed. A fake
 /// can only confirm that the code does what the code says.
+/// </para>
+/// <para>
+/// Captured the way the engine captures: a <see cref="DeviceSupervisor"/> opens the device into a
+/// <see cref="DeviceInputChannel"/>, which checks the granted format and writes into its ring, and
+/// the tone is read back out with <see cref="DeviceInputChannel.Pull"/> at the ring's own width. The
+/// width itself is the engine's rule restated rather than called - <c>VamEngine</c> keeps it private
+/// - so a wrong rule there is not caught here; a ring and a stream that disagree is.
 /// </para>
 /// <para>
 /// Pitch, not level. Level depends on gain staging and on what sits between the two endpoints;
@@ -39,8 +46,17 @@ public class LoopbackToneTests(ITestOutputHelper output)
     /// </summary>
     const float SilenceFloor = 0.0005f;
 
-    /// <summary>Seconds of slack on the sink, so a device that runs fast does not overflow it.</summary>
-    const double SinkHeadroomSeconds = 1.0;
+    /// <summary>The engine's rate, which the capture is opened at and the ring is drained at.</summary>
+    const int MixRateHz = 48000;
+
+    /// <summary>What the engine pulls per block.</summary>
+    const int BlockFrames = 480;
+
+    /// <summary>
+    /// Seconds of slack in the ring, so a device that runs fast does not overflow it. The ring holds
+    /// the whole tone and is drained afterwards, so nothing here races the device thread.
+    /// </summary>
+    const double RingHeadroomSeconds = 1.0;
 
     static readonly TimeSpan BufferDuration = TimeSpan.FromMilliseconds(20);
     static readonly TimeSpan ToneDuration = TimeSpan.FromSeconds(2);
@@ -141,38 +157,73 @@ public class LoopbackToneTests(ITestOutputHelper output)
         AudioDeviceInfo renderDevice,
         AudioDeviceInfo captureDevice)
     {
+        // VamEngine.WidthOf in shared mode: the device's own count, never the strip's.
+        int width = captureDevice.ChannelCount;
+
         using IRenderStream render = backend.OpenRender(
             renderDevice.Id,
             new RenderOptions(ShareMode.Shared, BufferDuration));
 
-        using ICaptureStream capture = backend.OpenCapture(
+        using DeviceSupervisor supervisor = new(backend, new DeviceInputChannelRegistry(), NullLoggerFactory.Instance);
+
+        // Track opens the stream, requires its format and starts it writing into the channel's ring.
+        DeviceInputChannel channel = supervisor.Track(
             captureDevice.Id,
-            new CaptureOptions(ShareMode.Shared, BufferDuration));
+            new DeviceInputChannelOptions
+            {
+                NominalSampleRate = MixRateHz,
+                ChannelCount = width,
+                BlockFrames = BlockFrames,
+                RingCapacityFrames = (int)(MixRateHz * (ToneDuration.TotalSeconds + RingHeadroomSeconds)),
+                TargetFillFrames = MixRateHz / 40
+            },
+            new CaptureOptions(ShareMode.Shared, BufferDuration, width, MixRateHz));
+
+        Assert.True(
+            channel.State == DeviceStreamState.Running,
+            $"The engine would not open {captureDevice.FriendlyName} at {MixRateHz} Hz {width} ch.");
 
         output.WriteLine($"out {renderDevice.FriendlyName,-44} {Describe(render.Format)}");
-        output.WriteLine($"in  {captureDevice.FriendlyName,-44} {Describe(capture.Format)}");
-
-        CaptureSink sink = new(
-            (int)(capture.Format.SampleRate * (ToneDuration.TotalSeconds + SinkHeadroomSeconds))
-            * capture.Format.ChannelCount);
+        output.WriteLine($"in  {captureDevice.FriendlyName,-44} {MixRateHz} Hz {width} ch into the ring");
 
         RenderProbe probe = new(render.Format.SampleRate, render.Format.ChannelCount, ToneHz);
 
-        // Capture first. A tone that has already finished playing cannot be measured.
-        capture.Start(sink.OnSamplesCaptured);
         render.Start(probe.OnBufferNeeded);
 
         Thread.Sleep(ToneDuration);
 
         render.Stop();
-        capture.Stop();
+        supervisor.Forget(captureDevice.Id);
+
+        float[] captured = Drain(channel);
 
         // Names the device before the analyser complains about an empty buffer. An endpoint that
         // opens, reports itself running and never ticks is a real failure mode, not a broken test.
         Assert.True(
-            sink.TotalFrames > 0,
+            captured.Length > 0,
             $"{captureDevice.FriendlyName} delivered nothing across {ToneDuration.TotalSeconds:F0} s.");
 
-        return new ToneAnalyser(capture.Format.SampleRate, capture.Format.ChannelCount).Measure(sink.Written);
+        return new ToneAnalyser(MixRateHz, channel.ChannelCount).Measure(captured);
+    }
+
+    /// <summary>Reads everything the ring holds, a block at a time, as the mix thread would.</summary>
+    /// <param name="channel">The channel the device wrote into.</param>
+    /// <returns>The captured audio, interleaved at the channel's width.</returns>
+    static float[] Drain(DeviceInputChannel channel)
+    {
+        List<float> captured = [];
+        float[] block = new float[BlockFrames * channel.ChannelCount];
+
+        while (true)
+        {
+            int produced = channel.Pull(block);
+
+            captured.AddRange(block.AsSpan(0, produced * channel.ChannelCount));
+
+            if (produced < BlockFrames)
+            {
+                return [.. captured];
+            }
+        }
     }
 }

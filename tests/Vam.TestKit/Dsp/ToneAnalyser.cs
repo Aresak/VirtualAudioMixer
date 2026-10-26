@@ -50,6 +50,13 @@ public sealed class ToneAnalyser(int sampleRate, int channelCount)
     /// </summary>
     const int Candidates = 3;
 
+    /// <summary>
+    /// Frames the capture must hold. Greedy loudest-first placement can strand the third window
+    /// when there is only room for exactly three, so this is enough for any placement: each window
+    /// taken rules out less than two windows' worth of starts, and five leaves one over.
+    /// </summary>
+    const int MinimumFrames = WindowFrames * ((2 * Candidates) - 1);
+
     /// <summary>Below this there is no pitch to find, only rumble and any DC the device carries.</summary>
     const double LowestFrequencyHz = 20.0;
 
@@ -64,12 +71,10 @@ public sealed class ToneAnalyser(int sampleRate, int channelCount)
     public ToneMeasurement Measure(ReadOnlySpan<float> interleaved, int channel = 0)
     {
         int frameCount = interleaved.Length / channelCount;
-        int needed = WindowFrames * Candidates;
-
-        if (frameCount < needed)
+        if (frameCount < MinimumFrames)
         {
             throw new ArgumentException(
-                $"Measuring needs {needed} frames and the capture has {frameCount}.",
+                $"Measuring needs {MinimumFrames} frames and the capture has {frameCount}.",
                 nameof(interleaved));
         }
 
@@ -150,6 +155,12 @@ public sealed class ToneAnalyser(int sampleRate, int channelCount)
                 bestEnergy = energy;
                 best = start;
             }
+        }
+
+        if (bestEnergy < 0.0)
+        {
+            throw new InvalidOperationException(
+                $"No window of {WindowFrames} frames is left that does not overlap one already measured.");
         }
 
         return best;

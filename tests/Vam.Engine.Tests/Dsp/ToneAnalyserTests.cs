@@ -90,22 +90,59 @@ public class ToneAnalyserTests
         Assert.Equal(ToneHz / 2.0, new ToneAnalyser(SampleRate, 1).Measure(stereo).FrequencyHz, ToleranceHz);
     }
 
-    [Fact]
+    [Theory]
     [Trait("Category", TestCategories.Unit)]
-    public void OneLoudTransientDoesNotBecomeTheMeasurement()
+    [InlineData(107.0)]
+    [InlineData(3100.0)]
+    public void OneLoudTransientDoesNotBecomeTheMeasurement(double burstHz)
     {
         // Taken from a real acoustic run: a knock on the desk read as 107 Hz at twelve times the
-        // level of the tone, because the loudest window is the wrong window exactly when something
-        // has gone wrong. Three non-overlapping windows mean a single event spoils at most one.
+        // level of the tone. One burst below the tone and one above, so only the middle of the three
+        // readings passes both - not the loudest window, not the lowest reading, not the highest.
         float[] audio = Tone(ToneHz, 1);
-        Random noise = new(Seed: 1);
 
-        for (int frame = 20000; frame < 22000; frame++)
-        {
-            audio[frame] = (float)((noise.NextDouble() * 2.0) - 1.0) * 6f;
-        }
+        AddBurst(audio, burstHz, 20000);
 
         Assert.Equal(ToneHz, new ToneAnalyser(SampleRate, 1).Measure(audio).FrequencyHz, ToleranceHz);
+    }
+
+    [Theory]
+    [Trait("Category", TestCategories.Unit)]
+    [InlineData(1000.0)]
+    [InlineData(1250.0)]
+    public void AToneBetweenBinsIsReadToAQuarterOfAHertz(double frequencyHz)
+    {
+        // Both sit near a third of a bin off centre. The parabola reads them to a tenth of a hertz
+        // through a Hann window and is a whole hertz out through a rectangular one.
+        Assert.Equal(frequencyHz, new ToneAnalyser(SampleRate, 1).Measure(Tone(frequencyHz, 1)).FrequencyHz, 0.25);
+    }
+
+    [Theory]
+    [Trait("Category", TestCategories.Unit)]
+    [InlineData(2000)]
+    [InlineData(6000)]
+    [InlineData(18000)]
+    [InlineData(34000)]
+    public void AtTheShortestLengthAcceptedTheThreeWindowsStillCannotOverlap(int burstStart)
+    {
+        float[] audio = Tone(ToneHz, 1, 5 * 8192);
+
+        AddBurst(audio, 107.0, burstStart);
+
+        Assert.Equal(ToneHz, new ToneAnalyser(SampleRate, 1).Measure(audio).FrequencyHz, ToleranceHz);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void TooLittleRoomForThreeSeparateWindowsIsRefused()
+    {
+        // Three windows' worth exactly. Loudest-first placement put the burst's window in the
+        // middle, found no room left for the third, and quietly measured an overlapping one.
+        float[] audio = Tone(ToneHz, 1, 3 * 8192);
+
+        AddBurst(audio, 107.0, 2000);
+
+        Assert.Throws<ArgumentException>(() => new ToneAnalyser(SampleRate, 1).Measure(audio));
     }
 
     [Fact]
@@ -117,9 +154,9 @@ public class ToneAnalyserTests
         Assert.Throws<ArgumentException>(() => analyser.Measure(new float[100]));
     }
 
-    static float[] Tone(double frequencyHz, int channelCount)
+    static float[] Tone(double frequencyHz, int channelCount, int frames = Frames)
     {
-        float[] audio = new float[Frames * channelCount];
+        float[] audio = new float[frames * channelCount];
 
         for (int channel = 0; channel < channelCount; channel++)
         {
@@ -129,6 +166,15 @@ public class ToneAnalyserTests
         return audio;
     }
 
+    static void AddBurst(float[] audio, double frequencyHz, int start)
+    {
+        double increment = 2.0 * Math.PI * frequencyHz / SampleRate;
+
+        for (int frame = 0; frame < 3000; frame++)
+        {
+            audio[start + frame] += (float)(Math.Sin(increment * frame) * 6.0);
+        }
+    }
     static void Fill(Span<float> audio, double frequencyHz, int channelCount, int channel)
     {
         double increment = 2.0 * Math.PI * frequencyHz / SampleRate;
