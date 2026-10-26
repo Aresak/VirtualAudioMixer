@@ -42,6 +42,25 @@ jobs:
       - name: Build
         run: dotnet build --configuration Release
 
+      # An engine outlives the console and holds its own output open. Building the console
+      # with one running must still work (#61), so hold the engine open and touch what it
+      # copies, then build the console.
+      - name: Build the console while an engine is running
+        shell: pwsh
+        run: |
+          $output = (Get-ChildItem src/Vam.Server/bin/Release -Recurse -Filter Vam.Server.dll | Select-Object -First 1).Directory
+          (Get-Item src/Vam.Engine/Devices/DeviceRegistry.cs).LastWriteTime = Get-Date
+          $locks = Get-ChildItem $output -File |
+            Where-Object { $_.Name -like 'Vam.*' -and $_.Extension -in '.dll', '.exe' } |
+            ForEach-Object { [IO.File]::Open($_.FullName, 'Open', 'Read', 'Read') }
+          try {
+            dotnet build src/Vam.Client --configuration Release
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          finally {
+            $locks | ForEach-Object { $_.Dispose() }
+          }
+
       # Long-running tests are excluded by default through VAM_LONGRUNNING, which is
       # not set here. See CONTRIBUTING.md.
       - name: Test
