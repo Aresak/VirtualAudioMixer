@@ -1,3 +1,5 @@
+using Vam.Engine.Devices.Abstractions;
+
 namespace Vam.Server.Engine;
 
 /// <summary>
@@ -43,11 +45,21 @@ public sealed record EngineOptions
             "presets.json");
 
     /// <summary>Where recordings go.</summary>
-    public string RecordingDirectory { get; init; } =
+    public string RecordingDirectory { get; set; } =
         Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
             "VAM",
             "recordings");
+
+    /// <summary>
+    /// Where the engine writes its log, or null for the default.
+    /// </summary>
+    /// <remarks>
+    /// Carried here so the console can be told the truth. The host configures logging before the
+    /// engine exists, and a console shown the default folder while the engine writes somewhere else
+    /// is a console sending somebody to an empty directory during an incident.
+    /// </remarks>
+    public string? LogDirectory { get; init; }
 
     /// <summary>Whether to record from the moment the engine starts. E4.</summary>
     public bool RecordAutomatically { get; set; } = true;
@@ -76,4 +88,22 @@ public sealed record EngineOptions
 
     /// <summary>Whether to open real devices. False runs the engine with nothing plugged in.</summary>
     public bool UseRealDevices { get; init; } = true;
+
+    /// <summary>
+    /// The share mode every capture device is asked for.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Shared, and deliberately so. Exclusive mode locks every other application out of a
+    /// microphone - Teams, OBS, a browser - for as long as the engine holds it, and whether that is
+    /// the right trade depends on what else runs on the machine in the room. It is a decision for
+    /// somebody holding the hardware, not a default.
+    /// </para>
+    /// <para>
+    /// Asking for it is safe wherever it is asked for: a device whose own format does not run at
+    /// <see cref="SampleRate"/> is opened shared anyway, because exclusive mode would deliver a rate
+    /// nothing in the engine converts. See the decision of 2026-09-16.
+    /// </para>
+    /// </remarks>
+    public ShareMode CaptureShareMode { get; init; } = ShareMode.Shared;
 }

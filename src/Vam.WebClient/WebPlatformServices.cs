@@ -45,4 +45,12 @@ public sealed class WebPlatformServices : IPlatformServices
         get => null;
         set { }
     }
+
+    /// <inheritdoc />
+    /// <remarks>False and unchangeable, because this host cannot start an engine at all.</remarks>
+    public bool StartsEngineAutomatically
+    {
+        get => false;
+        set { }
+    }
 }

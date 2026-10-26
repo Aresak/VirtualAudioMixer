@@ -25,6 +25,7 @@ public sealed class EngineCommandHandler(
     IRequestHandler<ShutdownRequest, CommandReply>,
     IRequestHandler<SetRecordingRequest, CommandReply>,
     IRequestHandler<SetStartupOptionsRequest, CommandReply>,
+    IRequestHandler<SetRecordingsPathRequest, CommandReply>,
     IRequestHandler<SetCaptureOptionsRequest, CommandReply>,
     IRequestHandler<ClearClipRequest, CommandReply>,
     IRequestHandler<SaveChainPresetRequest, CommandReply>,
@@ -101,6 +102,20 @@ public sealed class EngineCommandHandler(
         engine.SetStartup(request.LoadLastConsole, request.RecordAutomatically);
 
         return Replies.DoneAsync(Replies.Accepted());
+    }
+
+    /// <inheritdoc />
+    public Task<CommandReply> Handle(
+        SetRecordingsPathRequest request,
+        IMediatorContext context,
+        CancellationToken cancellationToken
+    )
+    {
+        // The engine's own words. "That is not a path this machine can use" is something an operator
+        // can act on; "refused" is not.
+        return Replies.DoneAsync(engine.SetRecordingDirectory(request.Reset ? null : request.Path) is { } problem
+            ? Replies.Refused(problem)
+            : Replies.Accepted());
     }
 
     /// <inheritdoc />

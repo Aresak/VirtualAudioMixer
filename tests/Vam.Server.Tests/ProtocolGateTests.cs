@@ -38,6 +38,9 @@ public class ProtocolGateTests : IAsyncLifetime
 {
     const string Speakerphone = "{11111111-2222-3333-4444-555555555555}";
 
+    /// <summary>The RMS of the null devices' full-scale tone.</summary>
+    const double ToneRmsDb = -3.01;
+
     readonly NullAudioBackend devices = new();
     readonly string workspace = Path.Combine(Path.GetTempPath(), "vam-server-" + Guid.NewGuid().ToString("n"));
 
@@ -114,17 +117,32 @@ public class ProtocolGateTests : IAsyncLifetime
     {
         Mixer.MixerClient live = client!;
 
-        Assert.True(await SawALevelAsync(live), "The meters were not moving to begin with.");
+        // A full-scale sine reads -3 dB RMS. Nothing else does: a reading nobody has measured yet is
+        // 0 dB and a dead meter falls to the floor, so neither can pass for signal here.
+        using SignalPump pump = new(devices);
 
-        await live.ApplyAsync(
-            new Command { AddBus = new AddBus { Name = "Councillor headphones", Role = "Monitor", ChannelCount = 2 } },
-            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(
+            await SawLevelsAsync(live, ToneRmsDb, ToneRmsDb),
+            "The meters were not moving to begin with.");
 
         // Adding a bus recompiles, and a recompile builds a new meter node with new cells. The
         // publisher held the old ones, so every meter in every console froze at the first structural
         // change and stayed frozen until the engine was restarted - while the audio itself carried on
         // perfectly, which is the worst way for this to fail.
-        Assert.True(await SawALevelAsync(live), "The meters stopped when the graph was rebuilt.");
+        await live.ApplyAsync(
+            new Command { AddBus = new AddBus { Name = "Councillor headphones", Role = "Monitor", ChannelCount = 2 } },
+            deadline: DateTime.UtcNow.AddSeconds(5),
+            cancellationToken: Token);
+
+        await live.ApplyAsync(
+            new Command { SetFader = new SetFader { ChannelIndex = 0, Decibels = -20 } },
+            deadline: DateTime.UtcNow.AddSeconds(5),
+            cancellationToken: Token);
+
+        // A level the meters never showed before the rebuild, beside one they still should.
+        Assert.True(
+            await SawLevelsAsync(live, ToneRmsDb - 20, ToneRmsDb),
+            "The meters stopped when the graph was rebuilt.");
     }
 
     [Fact]
@@ -195,11 +213,10 @@ public class ProtocolGateTests : IAsyncLifetime
         return -1;
     }
 
-    /// <summary>Reads meter frames until one shows a channel above silence, or gives up.</summary>
-    static async Task<bool> SawALevelAsync(Mixer.MixerClient live)
+    /// <summary>Reads meter frames until one shows both strips at the given RMS levels, or gives up.</summary>
+    static async Task<bool> SawLevelsAsync(Mixer.MixerClient live, double firstRmsDb, double secondRmsDb)
     {
-        using CancellationTokenSource giveUp =
-            CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        using CancellationTokenSource giveUp = CancellationTokenSource.CreateLinkedTokenSource(Token);
 
         giveUp.CancelAfter(TimeSpan.FromSeconds(5));
 
@@ -209,14 +226,12 @@ public class ProtocolGateTests : IAsyncLifetime
 
             while (await stream.ResponseStream.MoveNext(giveUp.Token))
             {
-                MeterFrame frame = stream.ResponseStream.Current;
+                ReadOnlySpan<byte> payload = stream.ResponseStream.Current.Payload.Span;
 
-                for (int channel = 0; channel < frame.ChannelCount; channel++)
+                if (Near(MeterFrameCodec.ReadChannel(payload, 0).RmsDb, firstRmsDb)
+                    && Near(MeterFrameCodec.ReadChannel(payload, 1).RmsDb, secondRmsDb))
                 {
-                    if (MeterFrameCodec.ReadChannel(frame.Payload.Span, channel).PeakDb > MeterFrameCodec.SilenceDb)
-                    {
-                        return true;
-                    }
+                    return true;
                 }
             }
         }
@@ -230,6 +245,8 @@ public class ProtocolGateTests : IAsyncLifetime
 
         return false;
     }
+
+    static bool Near(double actualDb, double expectedDb) => Math.Abs(actualDb - expectedDb) < 1.5;
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
@@ -618,6 +635,141 @@ public class ProtocolGateTests : IAsyncLifetime
 
         Assert.False(reply.Accepted);
         Assert.Contains("flac24", reply.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public async Task TheEnginesPathsAreOnTheWireAndTheRecordingFolderCanBeMoved()
+    {
+        ConsoleState before = await client!.GetConsoleAsync(new Empty(), cancellationToken: Token);
+
+        // A console across the room has no other way to know where the engine keeps things.
+        Assert.Equal(Path.Combine(workspace, "recordings"), before.Paths.Recordings);
+        Assert.NotEqual(string.Empty, before.Paths.Logs);
+
+        // Empty while nothing loads modifiers from disk. A path here would be the console inventing
+        // a feature that does not exist.
+        Assert.Equal(string.Empty, before.Paths.Modifiers);
+
+        string moved = Path.Combine(workspace, "elsewhere");
+
+        CommandReply accepted = await client.ApplyAsync(
+            new Command { SetRecordingsPath = new SetRecordingsPath { Path = moved } },
+            cancellationToken: Token
+        );
+
+        Assert.True(accepted.Accepted, accepted.Reason);
+
+        ConsoleState after = await client.GetConsoleAsync(new Empty(), cancellationToken: Token);
+
+        Assert.Equal(moved, after.Paths.Recordings);
+
+        CommandReply started = await client.ApplyAsync(
+            new Command { SetRecording = new SetRecording { Recording = true } },
+            cancellationToken: Token
+        );
+
+        Assert.True(started.Accepted, started.Reason);
+
+        // The session itself goes there, not just the path the console is shown.
+        ConsoleState recording = await client.GetConsoleAsync(new Empty(), cancellationToken: Token);
+
+        Assert.StartsWith(moved, recording.Recording.Directory, StringComparison.Ordinal);
+
+        await client.ApplyAsync(
+            new Command { SetRecording = new SetRecording { Recording = false } },
+            cancellationToken: Token
+        );
+
+        // Reset is its own flag, and comes back as the engine's own default.
+        CommandReply reset = await client.ApplyAsync(
+            new Command { SetRecordingsPath = new SetRecordingsPath { Reset = true } },
+            cancellationToken: Token
+        );
+
+        Assert.True(reset.Accepted, reset.Reason);
+        Assert.Equal(VamEngine.DefaultRecordingDirectory, (await client.GetConsoleAsync(new Empty(), cancellationToken: Token)).Paths.Recordings);
+
+        CommandReply relative = await client.ApplyAsync(
+            new Command { SetRecordingsPath = new SetRecordingsPath { Path = "somewhere-relative" } },
+            cancellationToken: Token
+        );
+
+        // A relative path lands beside whatever the engine's working directory happens to be, which
+        // for a service is nowhere an operator will look.
+        Assert.False(relative.Accepted);
+
+
+        // Put it back, so the order tests run in cannot matter.
+        await client.ApplyAsync(
+            new Command { SetRecordingsPath = new SetRecordingsPath { Path = Path.Combine(workspace, "recordings") } },
+            cancellationToken: Token
+        );
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public async Task ApplyingTheShownFolderKeepsItAndAnEmptyOneIsNotAReset()
+    {
+        string moved = Path.Combine(workspace, "kept");
+
+        await client!.ApplyAsync(
+            new Command { SetRecordingsPath = new SetRecordingsPath { Path = moved } },
+            cancellationToken: Token
+        );
+
+        // What the console sends when Apply is pressed on an untouched box: the path it shows.
+        string shown = (await client.GetConsoleAsync(new Empty(), cancellationToken: Token)).Paths.Recordings;
+
+        CommandReply applied = await client.ApplyAsync(
+            new Command { SetRecordingsPath = new SetRecordingsPath { Path = shown } },
+            cancellationToken: Token
+        );
+
+        Assert.True(applied.Accepted, applied.Reason);
+        Assert.Equal(moved, (await client.GetConsoleAsync(new Empty(), cancellationToken: Token)).Paths.Recordings);
+
+        foreach (string empty in new[] { string.Empty, "   " })
+        {
+            CommandReply refused = await client.ApplyAsync(
+                new Command { SetRecordingsPath = new SetRecordingsPath { Path = empty } },
+                cancellationToken: Token
+            );
+
+            Assert.False(refused.Accepted);
+            Assert.Equal(moved, (await client.GetConsoleAsync(new Empty(), cancellationToken: Token)).Paths.Recordings);
+        }
+
+        await client.ApplyAsync(
+            new Command { SetRecordingsPath = new SetRecordingsPath { Path = Path.Combine(workspace, "recordings") } },
+            cancellationToken: Token
+        );
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public async Task TheRecordingFolderCannotMoveWhileASessionIsWritingIntoIt()
+    {
+        CommandReply started = await client!.ApplyAsync(
+            new Command { SetRecording = new SetRecording { Recording = true } },
+            cancellationToken: Token
+        );
+
+        Assert.True(started.Accepted, started.Reason);
+
+        CommandReply refused = await client.ApplyAsync(
+            new Command { SetRecordingsPath = new SetRecordingsPath { Path = Path.Combine(workspace, "nope") } },
+            cancellationToken: Token
+        );
+
+        // The files are open in the folder the session started in. Accepting would leave the console
+        // showing one path and the recording going to another.
+        Assert.False(refused.Accepted);
+
+        await client.ApplyAsync(
+            new Command { SetRecording = new SetRecording { Recording = false } },
+            cancellationToken: Token
+        );
     }
 
     [Fact]

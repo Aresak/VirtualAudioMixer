@@ -81,6 +81,10 @@ public sealed class BusOutputChannel
     /// <returns>The ratio now in force.</returns>
     public double UpdateCorrection(TimeSpan elapsed) => channel.UpdateCorrection(elapsed);
 
+    /// <summary>Records what the stream underneath this output was granted. Control thread.</summary>
+    /// <param name="format">What the backend granted.</param>
+    public void DescribeStream(AudioStreamFormat format) => channel.DescribeStream(format);
+
     /// <summary>This output's clock and buffer state, for the diagnostics view.</summary>
     /// <returns>The current figures.</returns>
     public DeviceTelemetry GetTelemetry() => channel.GetTelemetry();
