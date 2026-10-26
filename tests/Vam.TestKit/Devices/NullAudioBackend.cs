@@ -76,7 +76,7 @@ public sealed class NullAudioBackend : IAudioBackend
             direction,
             deviceOptions.ChannelCount,
             deviceOptions.NominalSampleRate,
-            deviceOptions.SupportsExclusiveMode,
+            deviceOptions.SupportsExclusiveMode && !deviceOptions.IsVirtual,
             deviceOptions.IsVirtual,
             deviceOptions.ContainerId,
             deviceOptions.DeviceSampleRate,
@@ -247,7 +247,9 @@ public sealed class NullAudioBackend : IAudioBackend
 
         // Exclusive is the mode a device can refuse, and refusing it must be visible rather than
         // silent - a session that fell back to shared is a session with a different latency budget.
+        // A virtual endpoint never grants it, as in the real backend.
         bool canTakeExclusive = deviceOptions.SupportsExclusiveMode
+            && !deviceOptions.IsVirtual
             && rate == deviceOptions.DeviceSampleRate
             && channels == deviceOptions.DeviceChannelCount;
 

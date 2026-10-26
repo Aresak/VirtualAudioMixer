@@ -74,6 +74,22 @@ public class ShareModeAndRateTests
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
+    public void AVirtualEndpointIsOpenedSharedEvenWhenExclusiveIsAskedFor()
+    {
+        using NullAudioBackend backend = new();
+        AudioDeviceInfo device = backend.AddDevice(DeviceDirection.Capture, VirtualCable);
+
+        using Fixture fixture = new(backend);
+        DeviceInputChannel channel = fixture.Track(device.Id, ShareMode.Exclusive);
+
+        // Its format matches, so only being virtual keeps it shared: Teams or OBS still need it.
+        Assert.False(device.SupportsExclusiveMode);
+        Assert.Equal(DeviceStreamState.Running, channel.State);
+        Assert.Equal(ShareMode.Shared, channel.GetTelemetry().ShareMode);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
     public void ADeviceReportsItsOwnFormatSeparatelyFromTheOneItPresents()
     {
         using NullAudioBackend backend = new();
@@ -153,6 +169,9 @@ public class ShareModeAndRateTests
             NominalSampleRate: MixRateHz,
             NativeSampleRate: SpeakerphoneRateHz,
             NativeChannelCount: 1);
+
+    static NullDeviceOptions VirtualCable =>
+        new("CABLE Output (VB-Audio Virtual Cable)", ChannelCount: 1, NominalSampleRate: MixRateHz, IsVirtual: true);
 
     static NullDeviceOptions AsioLikeSpeakerphone => Speakerphone with { CanConvertRate = false };
 

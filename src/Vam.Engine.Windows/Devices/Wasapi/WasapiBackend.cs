@@ -179,7 +179,8 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
     /// The whole of the 2026-09-16 decision sits in the second branch. Exclusive mode runs at the
     /// device's own format, and a device whose own format is not the engine's would be granted a
     /// rate nothing between here and the mix graph converts. Windows converting it in shared mode is
-    /// the deliberate answer, not a fallback that failed.
+    /// the deliberate answer, not a fallback that failed. A virtual endpoint, or a sample format no
+    /// conversion is written for, is shared for the same reason.
     /// </remarks>
     /// <param name="deviceName">For the log line.</param>
     /// <param name="request">What the engine needs.</param>
@@ -187,6 +188,30 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
     /// <returns>Whether to try.</returns>
     bool CanTakeExclusive(string deviceName, StreamRequest request, WaveFormat native)
     {
+        if (IsVirtual(deviceName))
+        {
+            logger.LogInformation(
+                "{DeviceName} is a virtual endpoint, and other applications must keep using it, so it is opened "
+                + "shared rather than exclusively.",
+                deviceName);
+
+            return false;
+        }
+
+        // Exclusive delivers the device's own format, so it must be one the sample reader converts,
+        // or the open succeeds and the stream is refused straight after, on every retry.
+        if (!WasapiSampleFormat.IsConvertible(native))
+        {
+            logger.LogInformation(
+                "{DeviceName} runs at {NativeBits}-bit {NativeEncoding} of its own, which VAM has no conversion "
+                + "for, so it is opened shared and Windows converts instead.",
+                deviceName,
+                native.BitsPerSample,
+                native.Encoding);
+
+            return false;
+        }
+
         bool rateMatches = request.SampleRate is 0 || request.SampleRate == native.SampleRate;
         bool widthMatches = request.ChannelCount is 0 || request.ChannelCount == native.Channels;
 
