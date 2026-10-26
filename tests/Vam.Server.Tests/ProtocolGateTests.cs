@@ -426,6 +426,141 @@ public class ProtocolGateTests : IAsyncLifetime
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
+    public async Task TheEnginesPathsAreOnTheWireAndTheRecordingFolderCanBeMoved()
+    {
+        ConsoleState before = await client!.GetConsoleAsync(new Empty(), cancellationToken: Token);
+
+        // A console across the room has no other way to know where the engine keeps things.
+        Assert.Equal(Path.Combine(workspace, "recordings"), before.Paths.Recordings);
+        Assert.NotEqual(string.Empty, before.Paths.Logs);
+
+        // Empty while nothing loads modifiers from disk. A path here would be the console inventing
+        // a feature that does not exist.
+        Assert.Equal(string.Empty, before.Paths.Modifiers);
+
+        string moved = Path.Combine(workspace, "elsewhere");
+
+        CommandReply accepted = await client.ApplyAsync(
+            new Command { SetRecordingsPath = new SetRecordingsPath { Path = moved } },
+            cancellationToken: Token
+        );
+
+        Assert.True(accepted.Accepted, accepted.Reason);
+
+        ConsoleState after = await client.GetConsoleAsync(new Empty(), cancellationToken: Token);
+
+        Assert.Equal(moved, after.Paths.Recordings);
+
+        CommandReply started = await client.ApplyAsync(
+            new Command { SetRecording = new SetRecording { Recording = true } },
+            cancellationToken: Token
+        );
+
+        Assert.True(started.Accepted, started.Reason);
+
+        // The session itself goes there, not just the path the console is shown.
+        ConsoleState recording = await client.GetConsoleAsync(new Empty(), cancellationToken: Token);
+
+        Assert.StartsWith(moved, recording.Recording.Directory, StringComparison.Ordinal);
+
+        await client.ApplyAsync(
+            new Command { SetRecording = new SetRecording { Recording = false } },
+            cancellationToken: Token
+        );
+
+        // Reset is its own flag, and comes back as the engine's own default.
+        CommandReply reset = await client.ApplyAsync(
+            new Command { SetRecordingsPath = new SetRecordingsPath { Reset = true } },
+            cancellationToken: Token
+        );
+
+        Assert.True(reset.Accepted, reset.Reason);
+        Assert.Equal(VamEngine.DefaultRecordingDirectory, (await client.GetConsoleAsync(new Empty(), cancellationToken: Token)).Paths.Recordings);
+
+        CommandReply relative = await client.ApplyAsync(
+            new Command { SetRecordingsPath = new SetRecordingsPath { Path = "somewhere-relative" } },
+            cancellationToken: Token
+        );
+
+        // A relative path lands beside whatever the engine's working directory happens to be, which
+        // for a service is nowhere an operator will look.
+        Assert.False(relative.Accepted);
+
+
+        // Put it back, so the order tests run in cannot matter.
+        await client.ApplyAsync(
+            new Command { SetRecordingsPath = new SetRecordingsPath { Path = Path.Combine(workspace, "recordings") } },
+            cancellationToken: Token
+        );
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public async Task ApplyingTheShownFolderKeepsItAndAnEmptyOneIsNotAReset()
+    {
+        string moved = Path.Combine(workspace, "kept");
+
+        await client!.ApplyAsync(
+            new Command { SetRecordingsPath = new SetRecordingsPath { Path = moved } },
+            cancellationToken: Token
+        );
+
+        // What the console sends when Apply is pressed on an untouched box: the path it shows.
+        string shown = (await client.GetConsoleAsync(new Empty(), cancellationToken: Token)).Paths.Recordings;
+
+        CommandReply applied = await client.ApplyAsync(
+            new Command { SetRecordingsPath = new SetRecordingsPath { Path = shown } },
+            cancellationToken: Token
+        );
+
+        Assert.True(applied.Accepted, applied.Reason);
+        Assert.Equal(moved, (await client.GetConsoleAsync(new Empty(), cancellationToken: Token)).Paths.Recordings);
+
+        foreach (string empty in new[] { string.Empty, "   " })
+        {
+            CommandReply refused = await client.ApplyAsync(
+                new Command { SetRecordingsPath = new SetRecordingsPath { Path = empty } },
+                cancellationToken: Token
+            );
+
+            Assert.False(refused.Accepted);
+            Assert.Equal(moved, (await client.GetConsoleAsync(new Empty(), cancellationToken: Token)).Paths.Recordings);
+        }
+
+        await client.ApplyAsync(
+            new Command { SetRecordingsPath = new SetRecordingsPath { Path = Path.Combine(workspace, "recordings") } },
+            cancellationToken: Token
+        );
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public async Task TheRecordingFolderCannotMoveWhileASessionIsWritingIntoIt()
+    {
+        CommandReply started = await client!.ApplyAsync(
+            new Command { SetRecording = new SetRecording { Recording = true } },
+            cancellationToken: Token
+        );
+
+        Assert.True(started.Accepted, started.Reason);
+
+        CommandReply refused = await client.ApplyAsync(
+            new Command { SetRecordingsPath = new SetRecordingsPath { Path = Path.Combine(workspace, "nope") } },
+            cancellationToken: Token
+        );
+
+        // The files are open in the folder the session started in. Accepting would leave the console
+        // showing one path and the recording going to another.
+        Assert.False(refused.Accepted);
+
+        await client.ApplyAsync(
+            new Command { SetRecording = new SetRecording { Recording = false } },
+            cancellationToken: Token
+        );
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
     public async Task TheConsoleSurvivesBeingSavedAndLoaded()
     {
         await client!.ApplyAsync(

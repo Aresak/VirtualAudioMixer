@@ -137,15 +137,60 @@
                     </span>
                     <span class="v">@L["settings.themeFixed"]</span>
 
+                    @*
+                        Both are the console's own choice: the engine sends peak and average every
+                        frame and knows nothing about how either is drawn, so changing these costs a
+                        canvas and no protocol.
+                    *@
                     <span class="k">
                         @L["settings.ballistics"]
                         <InlineHelp Title="@L["settings.ballistics"]"
                                     Body="@L["help.ballistics"]" />
                     </span>
-                    <span class="v">@L["settings.ballisticsValue"]</span>
+                    <span class="v row"
+                          style="gap:5px">
+                        @foreach (MeterBallistics choice in Ballistics)
+                        {
+                            <button type="button"
+                                    class="chip @(Shell.Ballistics == choice ? "on" : null)"
+                                    @key="choice"
+                                    @onclick="() => Shell.Ballistics = choice">
+                                @L[$"settings.ballistics.{choice.ToString().ToLowerInvariant()}"]
+                            </button>
+                        }
+                    </span>
 
-                    <span class="k">@L["settings.meterRate"]</span>
-                    <span class="v">25 / s</span>
+                    @*
+                        Not a choice, and the reason is worth saying rather than leaving as a missing
+                        row somebody files a bug about. The mockup offers dBFS against dBu; this
+                        console prints no absolute level for either to apply to — the meters carry no
+                        numbers, the faders are gains, and a modifier's threshold is in the unit that
+                        modifier declared.
+                    *@
+                    <span class="k">
+                        @L["settings.levelScale"]
+                        <InlineHelp Title="@L["settings.levelScale"]"
+                                    Body="@L["help.levelScale"]" />
+                    </span>
+                    <span class="v">@L["settings.levelScaleFixed"]</span>
+
+                    <span class="k">
+                        @L["settings.meterRate"]
+                        <InlineHelp Title="@L["settings.meterRate"]"
+                                    Body="@L["help.meterRate"]" />
+                    </span>
+                    <span class="v row"
+                          style="gap:5px">
+                        @foreach (int rate in MeterRates)
+                        {
+                            <button type="button"
+                                    class="chip @(Shell.MeterFramesPerSecond == rate ? "on" : null)"
+                                    @key="rate"
+                                    @onclick="() => Shell.MeterFramesPerSecond = rate">
+                                @L.Format("settings.perSecond", rate)
+                            </button>
+                        }
+                    </span>
                 </div>
             </div>
 
@@ -168,7 +213,82 @@
                         Checked="Startup?.RecordAutomatically ?? true"
                         Changed="value => SetStartupAsync(Startup?.LoadLastConsole ?? true, value)" />
 
+                <div style="height:8px"></div>
+
+                @*
+                    This one is the console's, not the engine's: it decides whether this console
+                    starts an engine when it finds none. A host that cannot start one at all does not
+                    offer it.
+                *@
+                @if (Platform.CanStartEngine)
+                {
+                    <Switch Label="@L["settings.autoStartEngine"]"
+                            Help="@L["help.autoStartEngine"]"
+                            Checked="Platform.StartsEngineAutomatically"
+                            Changed="value => Platform.StartsEngineAutomatically = value" />
+                }
+
                 <p class="note">@L["settings.startupWhy"]</p>
+            </div>
+
+            <div class="card">
+                <h2>@L["settings.paths"]</h2>
+
+                @if (Paths is not { } paths)
+                {
+                    <p class="sub">@L["mixer.notConnected"]</p>
+                }
+                else
+                {
+                    @*
+                        The engine's paths, on the engine's disk. A console across the room has no
+                        other way to know them, and the one it can change is the one a session has
+                        not already opened files in.
+                    *@
+                    <label class="field">
+                        <span class="k">@L["settings.recordings"]</span>
+                        <input type="text"
+                               value="@Typed"
+                               spellcheck="false"
+                               autocomplete="off"
+                               @onchange="OnRecordingsTyped" />
+                    </label>
+
+                    <div class="row">
+                        @if (Platform.CanPickFolders)
+                        {
+                            <button type="button"
+                                    class="btn"
+                                    @onclick="BrowseAsync">@L["settings.browse"]</button>
+                        }
+
+                        <button type="button"
+                                class="btn"
+                                @onclick="ApplyRecordingsAsync">@L["settings.apply"]</button>
+
+                        <button type="button"
+                                class="btn"
+                                @onclick="ResetRecordingsAsync">@L["settings.reset"]</button>
+                    </div>
+
+                    <div class="kv"
+                         style="margin-top:12px">
+                        <span class="k">@L["settings.logs"]</span>
+                        <span class="v mono">@paths.Logs</span>
+
+                        <span class="k">@L["settings.modifiers"]</span>
+                        <span class="v">
+                            @(paths.Modifiers.Length > 0 ? paths.Modifiers : L["settings.noModifierFolder"])
+                        </span>
+                    </div>
+
+                    <p class="note">@L["settings.pathsWhy"]</p>
+
+                    @if (pathProblem.Length > 0)
+                    {
+                        <p class="note bad">@pathProblem</p>
+                    }
+                }
             </div>
 
             <div class="card">
