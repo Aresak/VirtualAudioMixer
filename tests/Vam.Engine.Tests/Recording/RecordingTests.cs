@@ -370,6 +370,80 @@ public class RecordingTests : IDisposable
         Assert.DoesNotContain(read, sample => Math.Abs(sample - 0.4f) < 0.01f);
     }
 
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void TheProjectionCountsEachTrackAtItsOwnWidth()
+    {
+        using RecordingSession session = new(
+            directory,
+            new DiskGuard(NullLogger<DiskGuard>.Instance),
+            NullLogger<RecordingSession>.Instance
+        );
+
+        session.AddTrack(
+            "Mayor 180 degrees",
+            new RecordingFormat { SampleRate = SampleRate, ChannelCount = 1, BlockFrames = BlockFrames },
+            new RecordingSource(RecordingSourceKind.Channel, 0));
+        session.AddTrack(
+            "Stream (bus)",
+            new RecordingFormat { SampleRate = SampleRate, ChannelCount = 2, BlockFrames = BlockFrames },
+            new RecordingSource(RecordingSourceKind.Bus, 0));
+
+        TimeSpan duration = TimeSpan.FromMinutes(10);
+        long mono = DiskGuard.BytesPerSecond(SampleRate, 1) * (long)duration.TotalSeconds;
+
+        // A mono microphone and a stereo bus are three mono tracks' worth, not two.
+        Assert.Equal(3 * mono, session.ProjectedBytes(duration));
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void BytesWrittenGrowsWithTheFramesWritten()
+    {
+        using RecordingSession session = new(
+            directory,
+            new DiskGuard(NullLogger<DiskGuard>.Instance),
+            NullLogger<RecordingSession>.Instance
+        );
+
+        RecordingTrack track = session.AddTrack(
+            "Stream (bus)",
+            new RecordingFormat { SampleRate = SampleRate, ChannelCount = 2, BlockFrames = BlockFrames },
+            new RecordingSource(RecordingSourceKind.Bus, 0));
+
+        Assert.Equal(0, session.BytesWritten);
+
+        float[] block = new float[BlockFrames * 2];
+
+        for (int count = 1; count <= 3; count++)
+        {
+            Assert.True(track.Capture(block, BlockFrames));
+            track.Drain();
+
+            Assert.Equal(count * BlockFrames * 2L * WaveWriter.BytesPerSample, session.BytesWritten);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void TwoTracksWithOneNameGetTwoFiles()
+    {
+        using RecordingSession session = new(
+            directory,
+            new DiskGuard(NullLogger<DiskGuard>.Instance),
+            NullLogger<RecordingSession>.Instance
+        );
+
+        RecordingFormat format = new() { SampleRate = SampleRate, ChannelCount = 2, BlockFrames = BlockFrames };
+
+        RecordingTrack first = session.AddTrack("Stream (bus)", format, new RecordingSource(RecordingSourceKind.Bus, 0));
+        RecordingTrack second = session.AddTrack("Stream (bus)", format, new RecordingSource(RecordingSourceKind.Bus, 1));
+
+        Assert.NotEqual(first.Path, second.Path, StringComparer.OrdinalIgnoreCase);
+        Assert.True(File.Exists(first.Path));
+        Assert.True(File.Exists(second.Path));
+    }
+
     static ConsoleFixture Build(RecordingSession session)
     {
         GraphConfig config = new();

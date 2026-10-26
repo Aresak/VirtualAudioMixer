@@ -95,7 +95,7 @@ public sealed class RecordingSession : IDisposable
         // Qualified, because this type has a Directory of its own and the folder is what is meant.
         System.IO.Directory.CreateDirectory(directory);
 
-        RecordingTrack track = new(name, Path.Combine(directory, $"{Sanitise(name)}.wav"), format, source);
+        RecordingTrack track = new(name, UniquePath(Sanitise(name)), format, source);
 
         tracks.Add(track);
 
@@ -218,8 +218,7 @@ public sealed class RecordingSession : IDisposable
 
         foreach (RecordingTrack track in tracks)
         {
-            total += (long)(DiskGuard.BytesPerSecond(track.Format.SampleRate, track.Format.ChannelCount)
-                * duration.TotalSeconds);
+            total += track.Format.BytesFor(duration);
         }
 
         return total;
@@ -235,6 +234,20 @@ public sealed class RecordingSession : IDisposable
         }
 
         return new string(cleaned);
+    }
+
+    /// <summary>A file no other track in this session writes to.</summary>
+    /// <remarks>Two buses may share a name, and opening the same file twice fails the whole session.</remarks>
+    string UniquePath(string stem)
+    {
+        string path = Path.Combine(directory, $"{stem}.wav");
+
+        for (int suffix = 2; tracks.Exists(track => string.Equals(track.Path, path, StringComparison.OrdinalIgnoreCase)); suffix++)
+        {
+            path = Path.Combine(directory, $"{stem} {suffix}.wav");
+        }
+
+        return path;
     }
 
     void Run()

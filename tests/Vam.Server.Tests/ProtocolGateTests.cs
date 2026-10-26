@@ -510,6 +510,85 @@ public class ProtocolGateTests : IAsyncLifetime
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
+    public async Task TwoBusesWithOneNameRecordTwoFiles()
+    {
+        ConsoleState console = await client!.GetConsoleAsync(new Empty(), cancellationToken: Token);
+
+        CommandReply added = await client.ApplyAsync(
+            new Command { AddBus = new AddBus { Name = console.Buses[0].Name, Role = "Monitor", ChannelCount = 2 } },
+            cancellationToken: Token
+        );
+
+        Assert.True(added.Accepted, added.Reason);
+
+        await client.ApplyAsync(new Command
+        {
+            SetCaptureOptions = new SetCaptureOptions
+            {
+                Captures = new RecordingCapture { Inputs = false, AllBuses = true, Format = "wav24" }
+            }
+        }, cancellationToken: Token);
+
+        CommandReply started = await client.ApplyAsync(
+            new Command { SetRecording = new SetRecording { Recording = true } },
+            cancellationToken: Token
+        );
+
+        Assert.True(started.Accepted, started.Reason);
+
+        IReadOnlyList<RecordingTrack> tracks = engine!.Recording!.Tracks;
+
+        // The second file used to be opened over the first, which threw with the session half made.
+        Assert.Equal(console.Buses.Count + 1, tracks.Count);
+        Assert.Equal(tracks.Count, tracks.Select(track => track.Path.ToUpperInvariant()).Distinct().Count());
+        Assert.All(tracks, track => Assert.True(File.Exists(track.Path), track.Path));
+
+        await client.ApplyAsync(
+            new Command { SetRecording = new SetRecording { Recording = false } },
+            cancellationToken: Token
+        );
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public async Task ARecordingThatCannotOpenItsFilesLeavesNothingRecording()
+    {
+        // A file where the folder should be, so no track can be opened.
+        Directory.CreateDirectory(workspace);
+
+        string blocked = Path.Combine(workspace, "not-a-folder");
+
+        await File.WriteAllTextAsync(blocked, string.Empty, Token);
+
+        CommandReply refused = await client!.ApplyAsync(
+            new Command { SetRecording = new SetRecording { Recording = true, Directory = blocked } },
+            cancellationToken: Token
+        );
+
+        Assert.False(refused.Accepted);
+        Assert.Null(engine!.Recording);
+
+        ConsoleState state = await client.GetConsoleAsync(new Empty(), cancellationToken: Token);
+
+        Assert.False(state.Recording.IsRecording);
+
+        // And the next attempt is a real one, not "Already recording." with nothing writing.
+        CommandReply retried = await client.ApplyAsync(
+            new Command { SetRecording = new SetRecording { Recording = true } },
+            cancellationToken: Token
+        );
+
+        Assert.True(retried.Accepted, retried.Reason);
+        Assert.True(engine.Recording!.IsRecording);
+
+        await client.ApplyAsync(
+            new Command { SetRecording = new SetRecording { Recording = false } },
+            cancellationToken: Token
+        );
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
     public async Task ARecordingThatCapturesNothingIsRefused()
     {
         CommandReply reply = await client!.ApplyAsync(new Command

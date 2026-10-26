@@ -454,25 +454,11 @@ public sealed class VamEngine : IDisposable
 
     long ProjectedBytesFor(GraphConfig config)
     {
-        double seconds = options.ExpectedSessionDuration.TotalSeconds;
         long total = 0;
 
-        if (options.Capture.Inputs)
+        foreach (PlannedTrack track in PlanTracks(config, options.Capture))
         {
-            foreach (ChannelConfig channel in config.Channels)
-            {
-                total += (long)(DiskGuard.BytesPerSecond(options.SampleRate, Math.Max(channel.ChannelCount, 1)) * seconds);
-            }
-        }
-
-        int primary = config.Buses.Count > 0 ? Math.Clamp(config.PrimaryBusIndex, 0, config.Buses.Count - 1) : -1;
-
-        for (int index = 0; index < config.Buses.Count; index++)
-        {
-            if (options.Capture.AllBuses || (options.Capture.StreamBus && index == primary))
-            {
-                total += (long)(DiskGuard.BytesPerSecond(options.SampleRate, Math.Max(config.Buses[index].ChannelCount, 1)) * seconds);
-            }
+            total += track.Format.BytesFor(options.ExpectedSessionDuration);
         }
 
         return total;
@@ -753,66 +739,45 @@ public sealed class VamEngine : IDisposable
             root,
             DateTimeOffset.Now.ToString("yyyy-MM-dd_HH-mm-ss", System.Globalization.CultureInfo.InvariantCulture));
 
-        Recording = new RecordingSession(
-            directory,
-            new DiskGuard(loggers.CreateLogger<DiskGuard>()),
-            loggers.CreateLogger<RecordingSession>()
-        );
+        List<PlannedTrack> planned = PlanTracks(config, options.Capture);
 
-        if (options.Capture.Inputs)
-        {
-            for (int index = 0; index < config.Channels.Count; index++)
-            {
-                Recording.AddTrack(
-                    config.Channels[index].Name,
-                    new RecordingFormat
-                    {
-                        SampleRate = options.SampleRate,
-                        ChannelCount = Math.Max(config.Channels[index].ChannelCount, 1),
-                        BlockFrames = options.BlockFrames
-                    },
-                    new RecordingSource(RecordingSourceKind.Channel, index));
-            }
-        }
-
-        // E3. The stream bus, finished, beside the raw inputs — two different records and a public
-        // body wants both: one to reconstruct what was said, one to show what was broadcast. Each
-        // track carries which source it is; the graph binds its taps through that rather than by
-        // counting into the list, because what the list contains is a choice.
-        int primary = config.Buses.Count > 0 ? Math.Clamp(config.PrimaryBusIndex, 0, config.Buses.Count - 1) : -1;
-
-        for (int index = 0; index < config.Buses.Count; index++)
-        {
-            if (!options.Capture.AllBuses && !(options.Capture.StreamBus && index == primary))
-            {
-                continue;
-            }
-
-            Recording.AddTrack(
-                $"{config.Buses[index].Name} (bus)",
-                new RecordingFormat
-                {
-                    SampleRate = options.SampleRate,
-                    ChannelCount = Math.Max(config.Buses[index].ChannelCount, 1),
-                    BlockFrames = options.BlockFrames
-                },
-                new RecordingSource(RecordingSourceKind.Bus, index));
-        }
-
-        if (Recording.Tracks.Count == 0)
+        if (planned.Count == 0)
         {
             // A folder with a timestamp on it and nothing in it, and an operator who believes the
             // meeting is being recorded. The command handler refuses a selection that captures
             // nothing; this catches the selection that captures something the console does not have.
             logger.LogError("Recording did not start: nothing selected would be captured.");
 
-            Recording.Dispose();
-            Recording = null;
-
             return new DiskVerdict(false, 0, 0, "Nothing this session would capture is configured.");
         }
 
-        DiskVerdict verdict = Recording.Start(options.ExpectedSessionDuration);
+        RecordingSession session = new(
+            directory,
+            new DiskGuard(loggers.CreateLogger<DiskGuard>()),
+            loggers.CreateLogger<RecordingSession>()
+        );
+
+        DiskVerdict verdict;
+
+        try
+        {
+            foreach (PlannedTrack track in planned)
+            {
+                session.AddTrack(track.Name, track.Format, track.Source);
+            }
+
+            verdict = session.Start(options.ExpectedSessionDuration);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            // Assigned only once it is writing, so a folder that cannot be opened is reported and a
+            // retry starts afresh rather than finding a dead session in the way.
+            logger.LogError(error, "Recording did not start: {Directory} could not be written.", directory);
+
+            session.Dispose();
+
+            return new DiskVerdict(false, 0, 0, error.Message);
+        }
 
         if (!verdict.CanStart)
         {
@@ -820,11 +785,12 @@ public sealed class VamEngine : IDisposable
             // problem; a meeting that did not happen because of one is a worse problem.
             logger.LogError("Recording did not start: {Reason}", verdict.Description);
 
-            Recording.Dispose();
-            Recording = null;
+            session.Dispose();
 
             return verdict;
         }
+
+        Recording = session;
 
         Graph!.BindRecording(Recording);
 
@@ -832,6 +798,50 @@ public sealed class VamEngine : IDisposable
 
         return verdict;
     }
+
+    /// <summary>The tracks a session would open for this console and this selection. E3.</summary>
+    /// <remarks>
+    /// The stream bus, finished, beside the raw inputs — two different records and a public body
+    /// wants both. Each track carries which source it is; the graph binds its taps through that
+    /// rather than by counting into the list, because what the list contains is a choice.
+    /// </remarks>
+    List<PlannedTrack> PlanTracks(GraphConfig config, CaptureSelection capture)
+    {
+        List<PlannedTrack> planned = [];
+
+        if (capture.Inputs)
+        {
+            for (int index = 0; index < config.Channels.Count; index++)
+            {
+                planned.Add(new PlannedTrack(
+                    config.Channels[index].Name,
+                    FormatFor(config.Channels[index].ChannelCount),
+                    new RecordingSource(RecordingSourceKind.Channel, index)));
+            }
+        }
+
+        int primary = config.Buses.Count > 0 ? Math.Clamp(config.PrimaryBusIndex, 0, config.Buses.Count - 1) : -1;
+
+        for (int index = 0; index < config.Buses.Count; index++)
+        {
+            if (capture.AllBuses || (capture.StreamBus && index == primary))
+            {
+                planned.Add(new PlannedTrack(
+                    $"{config.Buses[index].Name} (bus)",
+                    FormatFor(config.Buses[index].ChannelCount),
+                    new RecordingSource(RecordingSourceKind.Bus, index)));
+            }
+        }
+
+        return planned;
+    }
+
+    RecordingFormat FormatFor(int channelCount) => new()
+    {
+        SampleRate = options.SampleRate,
+        ChannelCount = Math.Max(channelCount, 1),
+        BlockFrames = options.BlockFrames
+    };
 
     /// <summary>
     /// Points the meter publisher at the plan that is actually running.
@@ -1165,4 +1175,7 @@ public sealed class VamEngine : IDisposable
 
         sinceMeters = TimeSpan.Zero;
     }
+
+    /// <summary>One track a session would open: its name, its format and what it records.</summary>
+    readonly record struct PlannedTrack(string Name, RecordingFormat Format, RecordingSource Source);
 }
