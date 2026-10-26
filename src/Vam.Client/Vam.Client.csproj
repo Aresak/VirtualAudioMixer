@@ -42,14 +42,70 @@
     Builds the engine, and neither links nor copies it: the console starts it as a process, and in a
     source checkout an engine left over from an older build would otherwise be the one it starts. Not
     a ProjectReference, which puts a Vam.Server.exe without its dll beside the console.
+
+    A running engine holds its output open and is meant to outlive the console, so while one runs
+    the engine is skipped with a message. Building it anyway fails the console's build (#61).
   -->
+  <UsingTask TaskName="VamFileIsLocked"
+             TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <Path ParameterType="System.String" Required="true" />
+      <Locked ParameterType="System.Boolean" Output="true" />
+    </ParameterGroup>
+    <Task>
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        if (System.IO.File.Exists(Path))
+        {
+            try
+            {
+                using (System.IO.File.Open(Path, System.IO.FileMode.Open, System.IO.FileAccess.ReadWrite, System.IO.FileShare.None))
+                {
+                }
+            }
+            catch (System.IO.IOException)
+            {
+                Locked = true;
+            }
+            catch (System.UnauthorizedAccessException)
+            {
+                Locked = true;
+            }
+        }
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
   <Target Name="BuildEngine"
           BeforeTargets="Build"
           Condition="'$(BuildingSolutionFile)' != 'true'">
-    <MSBuild Projects="..\Vam.Server\Vam.Server.csproj"
+    <PropertyGroup>
+      <EngineProject>..\Vam.Server\Vam.Server.csproj</EngineProject>
+      <EngineProperties>Configuration=$(Configuration)</EngineProperties>
+    </PropertyGroup>
+
+    <MSBuild Projects="$(EngineProject)"
+             Targets="GetTargetPath"
+             Properties="$(EngineProperties)"
+             RemoveProperties="RuntimeIdentifier;SelfContained;TargetFramework">
+      <Output TaskParameter="TargetOutputs"
+              PropertyName="EngineAssembly" />
+    </MSBuild>
+
+    <VamFileIsLocked Path="$(EngineAssembly)">
+      <Output TaskParameter="Locked"
+              PropertyName="EngineIsRunning" />
+    </VamFileIsLocked>
+
+    <Message Importance="high"
+             Text="Vam.Server was not rebuilt: an engine is running from $(EngineAssembly). Stop it to build a new one."
+             Condition="'$(EngineIsRunning)' == 'true'" />
+
+    <MSBuild Projects="$(EngineProject)"
              Targets="Build"
-             Properties="Configuration=$(Configuration)"
-             RemoveProperties="RuntimeIdentifier;SelfContained;TargetFramework" />
+             Properties="$(EngineProperties)"
+             RemoveProperties="RuntimeIdentifier;SelfContained;TargetFramework"
+             Condition="'$(EngineIsRunning)' != 'true'" />
   </Target>
 
 </Project>
