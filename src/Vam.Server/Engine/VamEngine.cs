@@ -11,6 +11,7 @@ using Vam.Engine.Graph.Nodes;
 using Vam.Engine.Metering;
 using Vam.Engine.Modifiers;
 using Vam.Engine.Recording;
+using Vam.Engine.Recording.Flac;
 using Vam.Engine.Modifiers.BuiltIn;
 using Vam.Engine.Windows.Devices.Wasapi;
 using Vam.Engine.Windows.Dsp;
@@ -567,10 +568,10 @@ public sealed class VamEngine : IDisposable
 
     /// <summary>The formats the engine can actually write.</summary>
     /// <remarks>
-    /// One, and the console offers what is here rather than a list of its own. A dropdown promising
-    /// a format nothing implements is worse than a dropdown with one entry in it.
+    /// The console offers what is here rather than a list of its own. A dropdown promising a format
+    /// nothing implements is worse than a dropdown with one entry in it.
     /// </remarks>
-    public static IReadOnlyList<string> AvailableFormats { get; } = [CaptureSelection.WaveFormat];
+    public static IReadOnlyList<string> AvailableFormats { get; } = [CaptureSelection.WaveFormat, CaptureSelection.FlacFormat];
 
     /// <summary>
     /// How large a session of the expected length would be, whether or not one is running.
@@ -1050,7 +1051,7 @@ public sealed class VamEngine : IDisposable
             {
                 planned.Add(new PlannedTrack(
                     config.Channels[index].Name,
-                    FormatFor(config.Channels[index].ChannelCount),
+                    FormatFor(config.Channels[index].ChannelCount, capture.Format),
                     new RecordingSource(RecordingSourceKind.Channel, index)));
             }
         }
@@ -1063,7 +1064,7 @@ public sealed class VamEngine : IDisposable
             {
                 planned.Add(new PlannedTrack(
                     $"{config.Buses[index].Name} (bus)",
-                    FormatFor(config.Buses[index].ChannelCount),
+                    FormatFor(config.Buses[index].ChannelCount, capture.Format),
                     new RecordingSource(RecordingSourceKind.Bus, index)));
             }
         }
@@ -1071,11 +1072,15 @@ public sealed class VamEngine : IDisposable
         return planned;
     }
 
-    RecordingFormat FormatFor(int channelCount) => new()
+    // FLAC carries at most eight channels; a wider track stays WAV rather than not being recorded.
+    RecordingFormat FormatFor(int channelCount, string format) => new()
     {
         SampleRate = options.SampleRate,
         ChannelCount = Math.Max(channelCount, 1),
-        BlockFrames = options.BlockFrames
+        BlockFrames = options.BlockFrames,
+        Container = format == CaptureSelection.FlacFormat && channelCount <= FlacFrameEncoder.MaxChannels
+            ? RecordingContainer.Flac
+            : RecordingContainer.Wave
     };
 
     /// <summary>

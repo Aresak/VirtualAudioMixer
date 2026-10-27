@@ -102,9 +102,8 @@
                             <span class="k">@L["recording.format"]</span>
                             <span class="v">
                                 @*
-                                    What the engine can write, not what the console imagines. One entry
-                                    today, and the control is here so the second one needs no console
-                                    change.
+                                    What the engine can write, not what the console imagines. An older
+                                    engine lists WAV alone, and the control is then disabled.
                                 *@
                                 <select value="@current.Format"
                                         disabled="@(recording.AvailableFormats.Count < 2 || recording.IsRecording)"
