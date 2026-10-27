@@ -49,6 +49,9 @@ public sealed class BusOutputChannel
     /// <summary>Frames waiting to be played.</summary>
     public int FillFrames => channel.FillFrames;
 
+    /// <summary>Whether the ring is still filling to the setpoint after <see cref="BeginPriming"/>.</summary>
+    public bool IsPriming => channel.IsPriming;
+
     /// <summary>What the device's stream is doing. Set by the supervisor.</summary>
     public DeviceStreamState State
     {
@@ -88,6 +91,12 @@ public sealed class BusOutputChannel
     /// <summary>This output's clock and buffer state, for the diagnostics view.</summary>
     /// <returns>The current figures.</returns>
     public DeviceTelemetry GetTelemetry() => channel.GetTelemetry();
+
+    /// <summary>
+    /// Holds the device on silence, and the servo idle, until the mix has filled the ring to the
+    /// setpoint. Control thread, before the stream starts.
+    /// </summary>
+    public void BeginPriming() => channel.BeginPriming();
 
     /// <summary>Discards everything buffered. For a device that disappeared and came back.</summary>
     public void Reset() => channel.Reset();

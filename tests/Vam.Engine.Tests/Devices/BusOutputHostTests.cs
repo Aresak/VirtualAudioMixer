@@ -85,6 +85,45 @@ public class BusOutputHostTests
         Assert.True(dropouts.TotalRecorded > 0);
     }
 
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void AnOutputThatOpensIsPrimedBeforeItsServoRuns()
+    {
+        using NullAudioBackend backend = new();
+        using RecordingLoggerFactory loggers = new();
+        using BusOutputHost host = new(backend, loggers);
+        DropoutLog dropouts = new();
+
+        AudioDeviceInfo device = backend.AddDevice(
+            DeviceDirection.Render,
+            new NullDeviceOptions("Monitor headphones", ChannelCount));
+
+        host.Reconcile([new BusOutputRequest(1, device.Id, ChannelCount)], CreateOptions(dropouts));
+
+        BusOutputChannel channel = host.ChannelOf(1)!;
+        NullRenderStream stream = backend.RenderStreams[0];
+        float[] block = new float[BlockFrames * ChannelCount];
+
+        Assert.True(channel.IsPriming);
+
+        // Three seconds of the mix writing a block and the device draining one, with a correction
+        // every quarter of a second.
+        for (int tick = 1; tick <= 1200; tick++)
+        {
+            channel.WriteBlock(block, BlockFrames);
+            stream.Pump(TimeSpan.FromSeconds(BlockFrames / 48000.0));
+
+            if (tick % 100 == 0)
+            {
+                host.UpdateCorrections(Interval);
+            }
+        }
+
+        Assert.False(channel.IsPriming);
+        Assert.Equal(0, loggers.CountMentioning("ppm limit"));
+        Assert.Equal(0, dropouts.TotalRecorded);
+    }
+
     static DeviceInputChannelOptions CreateOptions(DropoutLog dropouts) =>
         new()
         {
