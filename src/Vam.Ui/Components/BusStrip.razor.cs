@@ -82,18 +82,11 @@ public partial class BusStrip
 
     void Open() => Shell.OpenBus(Bus.Index);
 
-    async Task OnGainAsync(ChangeEventArgs arguments)
-    {
-        if (!double.TryParse(arguments.Value?.ToString(), CultureInfo.InvariantCulture, out double raw))
-        {
-            return;
-        }
-
+    async Task OnGainAsync(double position) =>
         await Session.ApplyAsync(new Command
         {
-            SetBusGain = new SetBusGain { BusIndex = Bus.Index, Decibels = FaderScale.ToDecibels(raw / 1000.0) }
+            SetBusGain = new SetBusGain { BusIndex = Bus.Index, Decibels = FaderScale.ToDecibels(position / 1000.0) }
         });
-    }
 
     async Task ToggleMuteAsync() =>
         await Session.ApplyAsync(new Command

@@ -35,11 +35,11 @@
         <div class="fader">
             <div class="unity"
                  aria-hidden="true"></div>
-            <input type="range"
-                   min="0" max="1000" step="1"
-                   value="@Position"
-                   aria-label="@(Bus.Name + " " + L["bus.gain"])"
-                   @oninput="OnGainAsync" />
+            <Slider Value="Position"
+                    Label="@(Bus.Name + " " + L["bus.gain"])"
+                    Maximum="1000"
+                    Step="1"
+                    Changed="OnGainAsync" />
         </div>
     </div>
 

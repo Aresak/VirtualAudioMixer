@@ -60,7 +60,9 @@ function onPointerDown(event) {
 
     // Refused, but the slider still takes focus, so somebody who meant to adjust it can carry on
     // with the arrow keys rather than being left with a control that ignored them.
+    // Not passed on either, so the slider's own handlers do not think it is being held.
     event.preventDefault();
+    event.stopPropagation();
     slider.focus();
 }
 

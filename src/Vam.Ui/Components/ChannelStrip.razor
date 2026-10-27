@@ -100,11 +100,11 @@
         <div class="fader">
             <div class="unity"
                  aria-hidden="true"></div>
-            <input type="range"
-                   min="0" max="1000" step="1"
-                   value="@FaderPosition"
-                   aria-label="@(Channel.Name + " " + L["strip.fader"])"
-                   @oninput="OnFaderAsync" />
+            <Slider Value="FaderPosition"
+                    Label="@(Channel.Name + " " + L["strip.fader"])"
+                    Maximum="1000"
+                    Step="1"
+                    Changed="OnFaderAsync" />
         </div>
     </div>
 

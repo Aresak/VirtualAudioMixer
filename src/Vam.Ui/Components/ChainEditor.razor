@@ -108,11 +108,13 @@
                             </span>
                             <span class="mono">@Format(parameter)</span>
                         </div>
-                        <input type="range"
-                               min="@parameter.Minimum" max="@parameter.Maximum" step="@Step(parameter)"
-                               value="@parameter.Value"
-                               aria-label="@(link.Name + " " + parameter.Name)"
-                               @oninput="argument => SetParameterAsync(position, parameter, argument)" />
+                        <Slider Value="parameter.Value"
+                                Label="@(link.Name + " " + parameter.Name)"
+                                Minimum="parameter.Minimum"
+                                Maximum="parameter.Maximum"
+                                Step="Step(parameter)"
+                                Changed="value => SetParameterAsync(position, parameter, value)"
+                                @key="parameter.Id" />
                     </div>
                 }
             </div>

@@ -1,0 +1,18 @@
+@*
+    Every slider in the console. One command in flight at a time, and a reply that arrives while the
+    pointer holds it does not move it. See SliderDrag for why.
+*@
+
+<input type="range"
+       min="@Text(Minimum)"
+       max="@Text(Maximum)"
+       step="@Text(Step)"
+       value="@Text(drag.Draw(Value))"
+       aria-label="@Label"
+       @onpointerdown="drag.Hold"
+       @onpointerup="ReleaseAsync"
+       @onpointercancel="ReleaseAsync"
+       @onchange="ReleaseAsync"
+       @onkeydown="ReleaseAsync"
+       @onblur="ReleaseAsync"
+       @oninput="OnInputAsync" />

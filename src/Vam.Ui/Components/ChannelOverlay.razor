@@ -132,10 +132,12 @@
                             top of the travel with nothing left for a quieter one. Cutting stays at
                             twenty-four: nothing arrives so hot that more is useful.
                         *@
-                        <input type="range" min="-24" max="36" step="0.5"
-                               value="@channel.TrimDb"
-                               aria-label="@L["strip.trim"]"
-                               @oninput="argument => SetTrimAsync(channel, argument)" />
+                        <Slider Value="channel.TrimDb"
+                                Label="@L["strip.trim"]"
+                                Minimum="-24"
+                                Maximum="36"
+                                Step="0.5"
+                                Changed="decibels => SetTrimAsync(channel, decibels)" />
                     </div>
 
                     <Switch Label="@L["strip.polarity"]"
@@ -160,10 +162,12 @@
                                                               Body="@L["help.pan"]" /></span>
                             <span class="mono">@PanText(channel)</span>
                         </div>
-                        <input type="range" min="-1" max="1" step="0.02"
-                               value="@channel.Pan"
-                               aria-label="@L["strip.pan"]"
-                               @oninput="argument => SetPanAsync(channel, argument)" />
+                        <Slider Value="channel.Pan"
+                                Label="@L["strip.pan"]"
+                                Minimum="-1"
+                                Maximum="1"
+                                Step="0.02"
+                                Changed="pan => SetPanAsync(channel, pan)" />
                     </div>
                 </div>
             </div>
@@ -202,10 +206,11 @@
                             <span>@L["strip.fader"]</span>
                             <span class="mono">@FaderScale.Format(channel.FaderDb) dB</span>
                         </div>
-                        <input type="range" min="0" max="1000" step="1"
-                               value="@((int)Math.Round(FaderScale.ToPosition(channel.FaderDb) * 1000))"
-                               aria-label="@L["strip.fader"]"
-                               @oninput="argument => SetFaderAsync(channel, argument)" />
+                        <Slider Value="Math.Round(FaderScale.ToPosition(channel.FaderDb) * 1000)"
+                                Label="@L["strip.fader"]"
+                                Maximum="1000"
+                                Step="1"
+                                Changed="position => SetFaderAsync(channel, position)" />
                     </div>
 
                     <div style="border-top:1px solid var(--line-soft);margin:10px 0 9px"></div>
@@ -230,10 +235,12 @@
                                                                  Body="@L["help.weight"]" /></span>
                             <span class="mono">@channel.AutomixWeight.ToString("0.00", CultureInfo.InvariantCulture)</span>
                         </div>
-                        <input type="range" min="0.25" max="4" step="0.05"
-                               value="@channel.AutomixWeight"
-                               aria-label="@L["strip.weight"]"
-                               @oninput="argument => SetWeightAsync(channel, argument)" />
+                        <Slider Value="channel.AutomixWeight"
+                                Label="@L["strip.weight"]"
+                                Minimum="0.25"
+                                Maximum="4"
+                                Step="0.05"
+                                Changed="weight => SetWeightAsync(channel, weight)" />
                     </div>
                 </div>
             </div>

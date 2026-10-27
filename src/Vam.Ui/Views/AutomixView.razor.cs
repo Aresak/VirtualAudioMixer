@@ -202,15 +202,11 @@ public partial class AutomixView
         }
     }
 
-    Task SetDepthAsync(ChangeEventArgs arguments) =>
-        double.TryParse(arguments.Value?.ToString(), CultureInfo.InvariantCulture, out double depth)
-            ? SendAsync(Automix?.IsBypassed ?? true, depth, Automix?.ResponseMs ?? 120)
-            : Task.CompletedTask;
+    Task SetDepthAsync(double depth) =>
+        SendAsync(Automix?.IsBypassed ?? true, depth, Automix?.ResponseMs ?? 120);
 
-    Task SetResponseAsync(ChangeEventArgs arguments) =>
-        double.TryParse(arguments.Value?.ToString(), CultureInfo.InvariantCulture, out double response)
-            ? SendAsync(Automix?.IsBypassed ?? true, Automix?.DepthDb ?? -15, response)
-            : Task.CompletedTask;
+    Task SetResponseAsync(double response) =>
+        SendAsync(Automix?.IsBypassed ?? true, Automix?.DepthDb ?? -15, response);
 
     async Task SendAsync(bool bypassed, double depth, double response) =>
         await Session.ApplyAsync(new Command

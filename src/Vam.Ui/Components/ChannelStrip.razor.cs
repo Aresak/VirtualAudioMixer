@@ -175,20 +175,11 @@ public partial class ChannelStrip
 
     void Open() => Shell.OpenChannel(Channel.Index);
 
-    async Task OnFaderAsync(ChangeEventArgs arguments)
-    {
-        if (!double.TryParse(arguments.Value?.ToString(), CultureInfo.InvariantCulture, out double raw))
-        {
-            return;
-        }
-
-        double decibels = FaderScale.ToDecibels(raw / 1000.0);
-
+    async Task OnFaderAsync(double position) =>
         await Session.ApplyAsync(new Command
         {
-            SetFader = new SetFader { ChannelIndex = Channel.Index, Decibels = decibels }
+            SetFader = new SetFader { ChannelIndex = Channel.Index, Decibels = FaderScale.ToDecibels(position / 1000.0) }
         });
-    }
 
     Task ToggleMuteAsync() => SetFlagAsync("Muted", !Channel.IsMuted);
 
