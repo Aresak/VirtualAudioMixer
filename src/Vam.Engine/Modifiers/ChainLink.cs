@@ -12,4 +12,8 @@ namespace Vam.Engine.Modifiers;
 /// </remarks>
 /// <param name="LinkId">Stable identity of this link, assigned when it was added and persisted.</param>
 /// <param name="Modifier">The instance, with its state.</param>
-public readonly record struct ChainLink(string LinkId, Modifier Modifier);
+/// <param name="IsPrepared">
+/// Kept from a chain of the same shape, so it is not prepared again. The audio thread may still be
+/// inside it through the snapshot being replaced.
+/// </param>
+public readonly record struct ChainLink(string LinkId, Modifier Modifier, bool IsPrepared = false);

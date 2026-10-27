@@ -290,25 +290,21 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
         for (int channel = 0; channel < config.Channels.Count; channel++)
         {
             ModifierChain? existing = ChainFor(previous, channel);
+            int width = layout.ChannelWidth(channel);
             List<ChainLink> links = [];
 
             foreach (ModifierSetting setting in config.Channels[channel].Chain)
             {
-                // Kept if we already have it. A reorder that minted fresh instances would restart
-                // every filter history and envelope in the chain, and a denoise restarting
-                // mid-sentence is audible - which is exactly what a reorder must not be.
-                Modifier? modifier = existing?.Find(setting.LinkId) ?? registry?.Create(setting.ModifierId);
-
                 // An identifier nobody registered is left out rather than throwing. A configuration
                 // naming a third-party modifier that is not installed should open with a gap in the
                 // chain, not refuse to open at all - a session has to start.
-                if (modifier is not null)
+                if (LinkFor(setting, existing, width) is { } link)
                 {
-                    links.Add(new ChainLink(setting.LinkId, modifier));
+                    links.Add(link);
                 }
             }
 
-            chains.Add(new ModifierChain(links, layout.ChannelWidth(channel), sampleRate, blockFrames));
+            chains.Add(new ModifierChain(links, width, sampleRate, blockFrames));
         }
 
         return chains;
@@ -326,22 +322,42 @@ public sealed class GraphCompiler(int blockFrames, int sampleRate, ModifierRegis
         for (int bus = 0; bus < config.Buses.Count; bus++)
         {
             ModifierChain? existing = BusChainFor(previous, bus);
+            int width = layout.BusWidth(bus);
             List<ChainLink> links = [];
 
             foreach (ModifierSetting setting in EffectiveBusChain(config.Buses[bus]))
             {
-                Modifier? modifier = existing?.Find(setting.LinkId) ?? registry?.Create(setting.ModifierId);
-
-                if (modifier is not null)
+                if (LinkFor(setting, existing, width) is { } link)
                 {
-                    links.Add(new ChainLink(setting.LinkId, modifier));
+                    links.Add(link);
                 }
             }
 
-            chains.Add(new ModifierChain(links, layout.BusWidth(bus), sampleRate, blockFrames));
+            chains.Add(new ModifierChain(links, width, sampleRate, blockFrames));
         }
 
         return chains;
+    }
+
+    /// <summary>One link of a new chain: the instance a previous chain had, or a fresh one.</summary>
+    /// <param name="setting">The link as configured.</param>
+    /// <param name="existing">The chain being replaced, if any.</param>
+    /// <param name="width">Channels the new chain carries.</param>
+    /// <returns>The link, or null when nobody registered its modifier.</returns>
+    ChainLink? LinkFor(ModifierSetting setting, ModifierChain? existing, int width)
+    {
+        // Kept if we already have it, and never prepared again: the audio thread may be inside it
+        // through the snapshot being replaced. A reorder that minted fresh instances would restart
+        // every filter history and envelope, and a denoise restarting mid-sentence is audible.
+        if (existing is not null
+            && existing.IsPreparedFor(width, sampleRate, blockFrames)
+            && existing.Find(setting.LinkId) is { } kept)
+        {
+            return new ChainLink(setting.LinkId, kept, IsPrepared: true);
+        }
+
+        // A different shape needs a different Prepare, and that means a fresh instance.
+        return registry?.Create(setting.ModifierId) is { } created ? new ChainLink(setting.LinkId, created) : null;
     }
 
     static ModifierChain? BusChainFor(GraphPlan? plan, int busIndex)
