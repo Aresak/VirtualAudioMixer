@@ -150,8 +150,7 @@ public sealed class ProcessLoopbackSources(IProcessSnapshot snapshot, ILogger lo
         {
             if (launched.TryGetValue(executableName, out int previous)
                 && previous != processId
-                && processes.Any(process => process.ProcessId == previous
-                    && string.Equals(process.ExecutableName, executableName, StringComparison.OrdinalIgnoreCase)))
+                && ProcessLoopbackId.FindLaunched(processes, previous, executableName) is not null)
             {
                 return;
             }

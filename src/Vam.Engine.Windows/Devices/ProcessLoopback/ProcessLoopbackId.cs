@@ -87,13 +87,52 @@ public readonly record struct ProcessLoopbackId
 
         if (IsByProcessId)
         {
-            return ResolveProcessId(processes, ProcessId, string.Empty);
+            return ResolveProcessId(processes);
         }
 
-        return launchedProcessId > 0
-            ? ResolveProcessId(processes, launchedProcessId, ExecutableName)
-            : ResolveExecutable(processes);
+        if (launchedProcessId <= 0)
+        {
+            return ResolveExecutable(processes);
+        }
+
+        return FindLaunched(processes, launchedProcessId, ExecutableName) is { } launched
+            ? new ProcessResolution(ProcessResolutionOutcome.Found, launched, 1)
+            : new ProcessResolution(ProcessResolutionOutcome.Missing, default, 0);
     }
+
+    /// <summary>Finds a process VAM started, while it is still the root of its own tree.</summary>
+    /// <remarks>
+    /// A root, because Windows reuses PIDs: once the browser VAM started has exited, its PID can go to
+    /// a child of another browser of the same name, and that is not the meeting.
+    /// </remarks>
+    /// <param name="processes">What is running.</param>
+    /// <param name="processId">The PID it was started under.</param>
+    /// <param name="executableName">Its executable.</param>
+    /// <returns>The process, or null when it is gone.</returns>
+    internal static ProcessEntry? FindLaunched(IReadOnlyList<ProcessEntry> processes, int processId, string executableName)
+    {
+        ProcessEntry? found = null;
+        bool hasSameNamedParent = false;
+
+        foreach (ProcessEntry process in processes)
+        {
+            if (process.ProcessId == processId && IsNamed(process, executableName))
+            {
+                found = process;
+            }
+        }
+
+        if (found is { } candidate)
+        {
+            hasSameNamedParent = processes.Any(process =>
+                process.ProcessId == candidate.ParentProcessId && IsNamed(process, executableName));
+        }
+
+        return hasSameNamedParent ? null : found;
+    }
+
+    static bool IsNamed(ProcessEntry process, string executableName) =>
+        string.Equals(process.ExecutableName, executableName, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>What the operator sees this source called.</summary>
     /// <param name="process">The process it resolved to.</param>
@@ -101,13 +140,11 @@ public readonly record struct ProcessLoopbackId
     public string Describe(ProcessEntry process) =>
         IsByProcessId ? $"{process.ExecutableName}, PID {process.ProcessId}" : ExecutableName;
 
-    static ProcessResolution ResolveProcessId(IReadOnlyList<ProcessEntry> processes, int processId, string executableName)
+    ProcessResolution ResolveProcessId(IReadOnlyList<ProcessEntry> processes)
     {
         foreach (ProcessEntry process in processes)
         {
-            if (process.ProcessId == processId
-                && (executableName.Length == 0
-                    || string.Equals(process.ExecutableName, executableName, StringComparison.OrdinalIgnoreCase)))
+            if (process.ProcessId == ProcessId)
             {
                 return new ProcessResolution(ProcessResolutionOutcome.Found, process, 1);
             }

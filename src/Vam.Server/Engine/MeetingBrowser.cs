@@ -38,6 +38,18 @@ public sealed class MeetingBrowser(MeetingBrowserOptions options, VamEngine engi
         };
     }
 
+    /// <summary>The name a process snapshot reports the browser under.</summary>
+    /// <param name="options">Which browser.</param>
+    /// <returns>Its file name, ending in <c>.exe</c>.</returns>
+    public static string ExecutableName(MeetingBrowserOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        string name = Path.GetFileName(options.Executable.Trim());
+
+        return name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? name : name + ".exe";
+    }
+
     /// <summary>Starts the browser.</summary>
     /// <returns>Null when it started; otherwise a sentence for the log.</returns>
     public string? Start()
@@ -45,6 +57,12 @@ public sealed class MeetingBrowser(MeetingBrowserOptions options, VamEngine engi
         if (!IsConfigured)
         {
             return $"No browser is configured under {MeetingBrowserOptions.Section}.";
+        }
+
+        // Without the sources the start would capture nothing, and the tray would say it had worked.
+        if (engine.ProcessSources is not { } sources)
+        {
+            return "The engine has no process sources to capture the browser with.";
         }
 
         ProcessStartInfo start = StartInfo(options);
@@ -58,9 +76,9 @@ public sealed class MeetingBrowser(MeetingBrowserOptions options, VamEngine engi
                 return "Windows did not start the browser and did not say why.";
             }
 
-            string executableName = Path.GetFileName(start.FileName);
+            string executableName = ExecutableName(options);
 
-            engine.ProcessSources?.Launched(started.Id, executableName);
+            sources.Launched(started.Id, executableName);
             logger.LogInformation("Started the meeting browser {Executable} as PID {ProcessId}.", executableName, started.Id);
 
             return null;

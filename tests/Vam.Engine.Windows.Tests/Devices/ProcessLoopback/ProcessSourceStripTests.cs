@@ -142,6 +142,34 @@ public class ProcessSourceStripTests
         Assert.True(fixture.Opener.Opened[0].IsDisposed);
     }
 
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void ThePidOfAClosedMeetingBrowserReusedInsideAnotherChromeIsNotCaptured()
+    {
+        using Fixture fixture = new();
+        fixture.Processes.Start(200, 1, "chrome.exe");
+        fixture.Processes.Start(500, 4, "chrome.exe");
+        fixture.Sources.Launched(500, "chrome.exe");
+
+        DeviceInputChannel channel = fixture.Track(Chrome);
+
+        // Windows hands the PID on to a renderer of the operator's own Chrome.
+        fixture.Processes.Exit(500);
+        fixture.Processes.Start(500, 200, "chrome.exe");
+        fixture.PullThrough(channel, PastReconcile);
+
+        Assert.Equal(DeviceStreamState.Absent, channel.State);
+        Assert.Single(fixture.Opener.Opened);
+
+        // And the next start from VAM is not mistaken for a hand-off to it.
+        fixture.Processes.Start(700, 4, "chrome.exe");
+        fixture.Sources.Launched(700, "chrome.exe");
+        fixture.PullThrough(channel, PastReconcile);
+
+        Assert.Equal(DeviceStreamState.Running, channel.State);
+        Assert.Equal(700, fixture.Opener.Opened[^1].Process.ProcessId);
+    }
+
     /// <summary>Wires a supervisor to the process backend and collects what it announces.</summary>
     sealed class Fixture : IDisposable
     {

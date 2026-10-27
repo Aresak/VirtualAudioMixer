@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Vam.Server.Engine;
+using Vam.TestKit.Devices;
 using Vam.TestKit.Harness;
 using Xunit;
 
@@ -32,6 +34,42 @@ public class MeetingBrowserTests
             new MeetingBrowserOptions { Executable = Chrome, Arguments = "--new-window" });
 
         Assert.Equal("--new-window", start.Arguments);
+    }
+
+    [Theory]
+    [Trait("Category", TestCategories.Unit)]
+    [InlineData(Chrome, "chrome.exe")]
+    [InlineData(@"C:\Browsers\chrome", "chrome.exe")]
+    [InlineData(@"C:\Browsers\MSEDGE.EXE", "MSEDGE.EXE")]
+    public void TheBrowserIsKnownByTheNameAProcessSnapshotReports(string executable, string expected)
+    {
+        Assert.Equal(expected, MeetingBrowser.ExecutableName(new MeetingBrowserOptions { Executable = executable }));
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void WithoutProcessSourcesNothingIsStartedAndTheTrayIsToldWhy()
+    {
+        string workspace = Path.Combine(Path.GetTempPath(), $"vam-{Guid.NewGuid():N}");
+
+        using NullAudioBackend devices = new();
+        using VamEngine engine = new(
+            new EngineOptions
+            {
+                ConsolePath = Path.Combine(workspace, "console.json"),
+                PresetPath = Path.Combine(workspace, "presets.json"),
+                RecordingDirectory = Path.Combine(workspace, "recordings")
+            },
+            NullLoggerFactory.Instance,
+            devices);
+
+        // A path that cannot start, so reaching Process.Start would give a different sentence.
+        MeetingBrowser browser = new(
+            new MeetingBrowserOptions { Executable = Path.Combine(workspace, "chrome.exe") },
+            engine,
+            NullLogger<MeetingBrowser>.Instance);
+
+        Assert.Contains("no process sources", browser.Start(), StringComparison.Ordinal);
     }
 
     [Fact]
