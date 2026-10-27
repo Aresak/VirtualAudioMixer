@@ -110,7 +110,7 @@ public class DropoutPumpTests
 
         Assert.Equal(1, pump.Reported);
         Assert.Equal(6000 - 1, pump.Folded);
-        Assert.InRange(pump.Summaries, 6, 7);
+        Assert.Equal(6, pump.Summaries);
         Assert.Equal(pump.Reported + pump.Summaries, loggers.Entries.Count);
     }
 
