@@ -1287,7 +1287,20 @@ public sealed class VamEngine : IDisposable
             return;
         }
 
-        IReadOnlyList<MovedDevice> moves = moved.Follow(graph.Config, devices);
+        IReadOnlyList<MovedDevice> moves;
+
+        // The supervisor still tracks devices whose strips were removed or re-aimed, and those are
+        // not free to take.
+        try
+        {
+            moves = moved.Follow(graph.Config, devices, Supervisor?.TrackedDevices);
+        }
+        catch (InvalidOperationException error)
+        {
+            // A strip or bus added or removed by a command mid-pass. The next pass looks again.
+            logger.LogDebug(error, "The console changed while moved devices were being looked for.");
+            return;
+        }
 
         if (moves.Count == 0)
         {
@@ -1296,9 +1309,9 @@ public sealed class VamEngine : IDisposable
 
         foreach (MovedDevice move in moves)
         {
-            if (move.Direction == DeviceDirection.Capture)
+            if (move.Direction == DeviceDirection.Capture && Supervisor?.Retarget(move.From, move.To) == false)
             {
-                Supervisor?.Retarget(move.From, move.To);
+                logger.LogWarning("{DeviceId} could not be re-opened under its new ID.", move.To.Value);
             }
         }
 

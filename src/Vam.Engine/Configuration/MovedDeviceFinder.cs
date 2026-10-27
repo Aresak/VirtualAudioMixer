@@ -26,8 +26,12 @@ public sealed class MovedDeviceFinder(ILogger<MovedDeviceFinder> logger)
     /// </summary>
     /// <param name="config">The console. Changed in place.</param>
     /// <param name="backend">What is plugged in.</param>
+    /// <param name="busy">Devices in use that the console no longer names, such as a removed strip's.</param>
     /// <returns>Every device that was re-aimed.</returns>
-    public IReadOnlyList<MovedDevice> Follow(GraphConfig config, IAudioBackend backend)
+    public IReadOnlyList<MovedDevice> Follow(
+        GraphConfig config,
+        IAudioBackend backend,
+        IReadOnlyCollection<AudioDeviceId>? busy = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(backend);
@@ -48,6 +52,8 @@ public sealed class MovedDeviceFinder(ILogger<MovedDeviceFinder> logger)
 
         List<Wanted> missing = Missing(config, present);
         HashSet<AudioDeviceId> used = Used(config);
+
+        used.UnionWith(busy ?? []);
         List<MovedDevice> moves = [];
 
         foreach (Wanted wanted in missing)

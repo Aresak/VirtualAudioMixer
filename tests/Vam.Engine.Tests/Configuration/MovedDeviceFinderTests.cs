@@ -81,6 +81,20 @@ public class MovedDeviceFinderTests
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
+    public void ADeviceStillOpenForARemovedStripIsNeverTaken()
+    {
+        using NullAudioBackend backend = new();
+        using RecordingLoggerFactory loggers = new();
+        AudioDeviceInfo open = backend.AddDevice(DeviceDirection.Capture, new NullDeviceOptions(Jabra));
+        GraphConfig config = Console(Strip(SavedJabra, Jabra));
+        MovedDeviceFinder finder = new(loggers.CreateTyped<MovedDeviceFinder>());
+
+        Assert.Empty(finder.Follow(config, backend, [open.Id]));
+        Assert.Equal(SavedJabra, config.Channels[0].DeviceId);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
     public void TwoAbsentStripsDoNotRaceForOneDevice()
     {
         using NullAudioBackend backend = new();

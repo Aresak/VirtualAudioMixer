@@ -94,7 +94,8 @@ public sealed class MovedDeviceTests : IDisposable
 
     void SaveConsole()
     {
-        // As the 27 October console was: no device names of its own, only the strip's.
+        // The strip as the 27 October console had it, with only the strip's name. A bus saved before
+        // #64 has no device name and cannot be found this way; this one was saved since.
         GraphConfig config = new();
 
         config.Channels.Add(new ChannelConfig { DeviceId = SavedTrust, Name = Trust });
