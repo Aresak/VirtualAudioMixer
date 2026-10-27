@@ -1,4 +1,5 @@
 @inherits VamComponent
+@using Vam.Ui.Extensions
 
 @*
     D5 and F7. One panel per monitor bus: a source grid, a level, which physical output drives it,
@@ -37,6 +38,7 @@
                         <span class="k">@L["bus.output"]</span>
                         <span class="v">
                             <select value="@monitor.OutputDeviceId"
+                                    title="@Renders.NameOf(monitor.OutputDeviceId)"
                                     aria-label="@L["bus.output"]"
                                     @onchange="argument => SetOutputAsync(monitor, argument)">
                                 <option value="">@L["bus.none"]</option>

@@ -1,4 +1,5 @@
 @inherits VamComponent
+@using Vam.Ui.Extensions
 
 @*
     U17. Adding a strip or a bus while the session is running.
@@ -23,6 +24,7 @@
         <div class="knob">
             <div class="between"><span>@L["strip.device"]</span></div>
             <select @bind="captureId"
+                    title="@Captures.NameOf(captureId)"
                     aria-label="@L["strip.device"]">
                 <option value="">—</option>
                 @foreach (DeviceInfo device in Captures)
@@ -77,6 +79,7 @@
         <div class="knob">
             <div class="between"><span>@L["bus.output"]</span></div>
             <select @bind="renderId"
+                    title="@Renders.NameOf(renderId)"
                     aria-label="@L["bus.output"]">
                 <option value="">@L["bus.none"]</option>
                 @foreach (DeviceInfo device in Renders)
