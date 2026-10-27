@@ -146,6 +146,31 @@ public class SnapshotTests
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
+    public void ARecompileIsNumberedAfterWhatItReplacesSoTheOldOnesAreReleased()
+    {
+        ConsoleFixture console = Build();
+        SnapshotPublisher publisher = console.Controller.Publisher;
+
+        console.Controller.Submit(GraphCommand.SetFader(0, -3));
+        console.Controller.Pump();
+
+        for (int change = 0; change < 5; change++)
+        {
+            long before = publisher.Current.Version;
+
+            console.Controller.Recompile();
+
+            Assert.True(publisher.Current.Version > before);
+        }
+
+        console.Render();
+        publisher.Collect();
+
+        Assert.Equal(0, publisher.PendingRetirements);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
     public void TheSnapshotTheAudioThreadIsRenderingIsNeverReleased()
     {
         ConsoleFixture console = Build();

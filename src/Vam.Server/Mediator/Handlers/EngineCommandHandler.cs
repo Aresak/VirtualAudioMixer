@@ -56,41 +56,23 @@ public sealed class EngineCommandHandler(
     }
 
     /// <inheritdoc />
-    public Task<CommandReply> Handle(SetAutomixRequest request, IMediatorContext context, CancellationToken cancellationToken)
-    {
-        if (engine.Graph is not { } graph)
-        {
-            return Replies.DoneAsync(Replies.Refused("The engine is not running."));
-        }
+    public Task<CommandReply> Handle(SetAutomixRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
+        engine.CommandAsync(
+            graph =>
+            {
+                graph.Config.IsAutomixBypassed = request.Bypassed;
+                graph.Config.AutomixDepthDb = request.DepthDb;
+                graph.Config.AutomixResponseMilliseconds = request.ResponseMs;
 
-        graph.Config.IsAutomixBypassed = request.Bypassed;
-        graph.Config.AutomixDepthDb = request.DepthDb;
-        graph.Config.AutomixResponseMilliseconds = request.ResponseMs;
+                graph.Recompile();
 
-        graph.Recompile();
-
-        return Replies.DoneAsync(Replies.Accepted());
-    }
+                return Replies.Accepted();
+            },
+            cancellationToken);
 
     /// <inheritdoc />
-    public Task<CommandReply> Handle(SetRecordingRequest request, IMediatorContext context, CancellationToken cancellationToken)
-    {
-        if (!request.Recording)
-        {
-            return Replies.DoneAsync(engine.StopRecording()
-                ? Replies.Accepted()
-                : Replies.Refused("Nothing was recording."));
-        }
-
-        DiskVerdict verdict = engine.StartRecording(
-            string.IsNullOrWhiteSpace(request.Directory) ? null : request.Directory);
-
-        // The disk's answer in the disk's own words. "There is room for forty minutes" is something
-        // an operator can act on before a meeting; "recording failed" is not.
-        return Replies.DoneAsync(verdict.CanStart
-            ? Replies.Accepted()
-            : Replies.Refused(verdict.Description));
-    }
+    public Task<CommandReply> Handle(SetRecordingRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
+        engine.CommandAsync(_ => SetRecording(request), cancellationToken);
 
     /// <inheritdoc />
     public Task<CommandReply> Handle(
@@ -113,9 +95,15 @@ public sealed class EngineCommandHandler(
     {
         // The engine's own words. "That is not a path this machine can use" is something an operator
         // can act on; "refused" is not.
-        return Replies.DoneAsync(engine.SetRecordingDirectory(request.Reset ? null : request.Path) is { } problem
-            ? Replies.Refused(problem)
-            : Replies.Accepted());
+        CommandReply Move() =>
+            engine.SetRecordingDirectory(request.Reset ? null : request.Path) is { } problem
+                ? Replies.Refused(problem)
+                : Replies.Accepted();
+
+        // On the control loop when there is one, so it is ordered against a recording starting there.
+        return engine.IsRunning
+            ? engine.CommandAsync(_ => Move(), cancellationToken)
+            : Replies.DoneAsync(Move());
     }
 
     /// <inheritdoc />
@@ -163,13 +151,13 @@ public sealed class EngineCommandHandler(
         IMediatorContext context,
         CancellationToken cancellationToken
     ) =>
-        engine.Graph is { } graph
-            ? Replies.DoneAsync(PresetCommands.Save(graph, engine.Presets, new SaveChainPreset
+        engine.CommandAsync(
+            graph => PresetCommands.Save(graph, engine.Presets, new SaveChainPreset
             {
                 Target = request.Target,
                 Name = request.Name
-            }))
-            : Replies.DoneAsync(Replies.Refused("The engine is not running."));
+            }),
+            cancellationToken);
 
     /// <inheritdoc />
     public Task<CommandReply> Handle(
@@ -177,13 +165,13 @@ public sealed class EngineCommandHandler(
         IMediatorContext context,
         CancellationToken cancellationToken
     ) =>
-        engine.Graph is { } graph
-            ? Replies.DoneAsync(PresetCommands.Apply(graph, engine.Presets, new ApplyChainPreset
+        engine.CommandAsync(
+            graph => PresetCommands.Apply(graph, engine.Presets, new ApplyChainPreset
             {
                 Target = request.Target,
                 Name = request.Name
-            }))
-            : Replies.DoneAsync(Replies.Refused("The engine is not running."));
+            }),
+            cancellationToken);
 
     /// <inheritdoc />
     public Task<CommandReply> Handle(
@@ -192,4 +180,23 @@ public sealed class EngineCommandHandler(
         CancellationToken cancellationToken
     ) =>
         Replies.DoneAsync(PresetCommands.Delete(engine.Presets, new DeleteChainPreset { Name = request.Name }));
+
+    CommandReply SetRecording(SetRecordingRequest request)
+    {
+        if (!request.Recording)
+        {
+            return engine.StopRecording()
+                ? Replies.Accepted()
+                : Replies.Refused("Nothing was recording.");
+        }
+
+        DiskVerdict verdict = engine.StartRecording(
+            string.IsNullOrWhiteSpace(request.Directory) ? null : request.Directory);
+
+        // The disk's answer in the disk's own words. "There is room for forty minutes" is something
+        // an operator can act on before a meeting; "recording failed" is not.
+        return verdict.CanStart
+            ? Replies.Accepted()
+            : Replies.Refused(verdict.Description);
+    }
 }

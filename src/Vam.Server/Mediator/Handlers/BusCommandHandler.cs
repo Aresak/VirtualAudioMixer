@@ -29,15 +29,15 @@ public sealed class BusCommandHandler(VamEngine engine) :
 {
     /// <inheritdoc />
     public Task<CommandReply> Handle(SetBusGainRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
-        SubmitAsync(graph => graph.Submit(GraphCommand.SetBusGain(request.BusIndex, request.Decibels)));
+        SubmitAsync(GraphCommand.SetBusGain(request.BusIndex, request.Decibels), cancellationToken);
 
     /// <inheritdoc />
     public Task<CommandReply> Handle(SetBusMutedRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
-        SubmitAsync(graph => graph.Submit(GraphCommand.SetBusMuted(request.BusIndex, request.Muted)));
+        SubmitAsync(GraphCommand.SetBusMuted(request.BusIndex, request.Muted), cancellationToken);
 
     /// <inheritdoc />
     public Task<CommandReply> Handle(SetBusNameRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
-        RewriteAsync(request.BusIndex, bus => bus with { Name = request.Name });
+        RewriteAsync(request.BusIndex, bus => bus with { Name = request.Name }, cancellationToken);
 
     /// <inheritdoc />
     public Task<CommandReply> Handle(
@@ -45,12 +45,12 @@ public sealed class BusCommandHandler(VamEngine engine) :
         IMediatorContext context,
         CancellationToken cancellationToken
     ) =>
-        RewriteAsync(request.BusIndex, bus => bus with { Colour = request.Colour });
+        RewriteAsync(request.BusIndex, bus => bus with { Colour = request.Colour }, cancellationToken);
 
     /// <inheritdoc />
     public Task<CommandReply> Handle(SetBusRoleRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
         Enum.TryParse(request.Role, ignoreCase: true, out BusRole role)
-            ? RewriteAsync(request.BusIndex, bus => bus with { Role = role })
+            ? RewriteAsync(request.BusIndex, bus => bus with { Role = role }, cancellationToken)
             : Replies.DoneAsync(Replies.Refused($"There is no bus role called '{request.Role}'."));
 
     /// <inheritdoc />
@@ -58,115 +58,111 @@ public sealed class BusCommandHandler(VamEngine engine) :
         SetBusOutputDeviceRequest request,
         IMediatorContext context,
         CancellationToken cancellationToken
-    )
-    {
-        // Refused rather than accepted and quietly ignored. The main mix already goes out of that
-        // device, through the clock; a second stream on it would be Windows mixing the two against
-        // each other, and switching this bus off afterwards would change nothing anybody could hear.
-        if (IsWhereTheMainOutputGoes(request.BusIndex, request.DeviceId))
-        {
-            return Replies.DoneAsync(Replies.Refused(
-                "The main output already plays there. Pick a different device for this one, or listen "
-                + "to the main output instead."));
-        }
+    ) =>
+        engine.CommandAsync(
+            graph =>
+            {
+                // Refused rather than accepted and quietly ignored. The main mix already goes out of that
+                // device, through the clock; a second stream on it would be Windows mixing the two against
+                // each other, and switching this bus off afterwards would change nothing anybody could hear.
+                if (IsWhereTheMainOutputGoes(graph.Config, request.BusIndex, request.DeviceId))
+                {
+                    return Replies.Refused(
+                        "The main output already plays there. Pick a different device for this one, or listen "
+                        + "to the main output instead.");
+                }
 
-        Task<CommandReply> reply = RewriteAsync(
-            request.BusIndex,
-            bus => bus with { OutputDeviceId = new AudioDeviceId(request.DeviceId) });
+                CommandReply reply = Rewrite(
+                    graph,
+                    request.BusIndex,
+                    bus => bus with { OutputDeviceId = new AudioDeviceId(request.DeviceId) });
 
-        // Both halves, always together. Changing the configuration without re-opening the device
-        // thread leaves the bus playing to the endpoint it used to have, which is worse than
-        // silence: it is audio arriving somewhere nobody is expecting it.
-        engine.RebindBusOutputs();
+                // Both halves, always together. Changing the configuration without re-opening the device
+                // thread leaves the bus playing to the endpoint it used to have, which is worse than
+                // silence: it is audio arriving somewhere nobody is expecting it.
+                engine.RebindBusOutputs();
 
-        return reply;
-    }
-
-    /// <inheritdoc />
-    public Task<CommandReply> Handle(AddBusRequest request, IMediatorContext context, CancellationToken cancellationToken)
-    {
-        if (engine.Graph is not { } graph)
-        {
-            return Replies.DoneAsync(Replies.Refused("The engine is not running."));
-        }
-
-        // Checked here as well, because a bus can be given its device on the way in rather than
-        // afterwards, and the answer has to be the same either way.
-        if (IsWhereTheMainOutputGoes(graph.Config.Buses.Count, request.OutputDeviceId))
-        {
-            return Replies.DoneAsync(Replies.Refused(
-                "The main output already plays there. Pick a different device for this one, or listen "
-                + "to the main output instead."));
-        }
-
-        graph.AddBus(new BusConfig
-        {
-            Name = request.Name,
-            Role = Enum.TryParse(request.Role, ignoreCase: true, out BusRole role) ? role : BusRole.Output,
-            ChannelCount = Math.Max(request.ChannelCount, 1),
-            OutputDeviceId = new AudioDeviceId(request.OutputDeviceId)
-        });
-
-        // A new bus naming an output device needs a thread opened behind it, or it mixes into a ring
-        // nobody drains and is silent with no error anywhere to explain it.
-        engine.RebindBusOutputs();
-
-        return Replies.DoneAsync(Replies.Accepted());
-    }
+                return reply;
+            },
+            cancellationToken);
 
     /// <inheritdoc />
-    public Task<CommandReply> Handle(RemoveBusRequest request, IMediatorContext context, CancellationToken cancellationToken)
-    {
-        if (engine.Graph is not { } graph || !graph.RemoveBus(request.BusIndex))
-        {
-            return Replies.DoneAsync(Replies.Refused($"There is no bus {request.BusIndex}."));
-        }
+    public Task<CommandReply> Handle(AddBusRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
+        engine.CommandAsync(
+            graph =>
+            {
+                // Checked here as well, because a bus can be given its device on the way in rather than
+                // afterwards, and the answer has to be the same either way.
+                if (IsWhereTheMainOutputGoes(graph.Config, graph.Config.Buses.Count, request.OutputDeviceId))
+                {
+                    return Replies.Refused(
+                        "The main output already plays there. Pick a different device for this one, or listen "
+                        + "to the main output instead.");
+                }
 
-        // Closed, not merely unbound. A render stream left open on a bus that no longer exists is a
-        // device an operator cannot use for anything else until the engine restarts.
-        engine.RebindBusOutputs();
+                graph.AddBus(new BusConfig
+                {
+                    Name = request.Name,
+                    Role = Enum.TryParse(request.Role, ignoreCase: true, out BusRole role) ? role : BusRole.Output,
+                    ChannelCount = Math.Max(request.ChannelCount, 1),
+                    OutputDeviceId = new AudioDeviceId(request.OutputDeviceId)
+                });
 
-        return Replies.DoneAsync(Replies.Accepted());
-    }
+                // A new bus naming an output device needs a thread opened behind it, or it mixes into a ring
+                // nobody drains and is silent with no error anywhere to explain it.
+                engine.RebindBusOutputs();
+
+                return Replies.Accepted();
+            },
+            cancellationToken);
 
     /// <inheritdoc />
-    public Task<CommandReply> Handle(SetSendRequest request, IMediatorContext context, CancellationToken cancellationToken)
-    {
-        if (engine.Graph is not { } graph)
-        {
-            return Replies.DoneAsync(Replies.Refused("The engine is not running."));
-        }
+    public Task<CommandReply> Handle(RemoveBusRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
+        engine.CommandAsync(
+            graph =>
+            {
+                if (!graph.RemoveBus(request.BusIndex))
+                {
+                    return Replies.Refused($"There is no bus {request.BusIndex}.");
+                }
 
-        GraphSnapshot before = graph.Publisher.Current;
+                // Closed, not merely unbound. A render stream left open on a bus that no longer exists is a
+                // device an operator cannot use for anything else until the engine restarts.
+                engine.RebindBusOutputs();
 
-        if (request.ChannelIndex < before.Sends.ChannelCount
-            && request.BusIndex < before.Sends.BusCount
-            && before.Sends.StateOf(request.ChannelIndex, request.BusIndex) == EngineSendState.ExcludedMixMinus)
-        {
-            // Said out loud rather than silently doing nothing. An operator clicking a send that does
-            // not respond needs to know it is mix-minus and not a broken button.
-            return Replies.DoneAsync(Replies.Refused(
-                "That send is excluded by mix-minus: the bus feeds the device this microphone belongs to, "
-                + "and sending it there would play somebody their own voice, late."));
-        }
+                return Replies.Accepted();
+            },
+            cancellationToken);
 
-        graph.Submit(GraphCommand.SetSend(request.ChannelIndex, request.BusIndex, request.On, request.Decibels));
-        graph.Pump();
+    /// <inheritdoc />
+    public Task<CommandReply> Handle(SetSendRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
+        engine.CommandAsync(
+            graph =>
+            {
+                GraphSnapshot before = graph.Publisher.Current;
 
-        return Replies.DoneAsync(Replies.Accepted());
-    }
+                if (request.ChannelIndex < before.Sends.ChannelCount
+                    && request.BusIndex < before.Sends.BusCount
+                    && before.Sends.StateOf(request.ChannelIndex, request.BusIndex) == EngineSendState.ExcludedMixMinus)
+                {
+                    // Said out loud rather than silently doing nothing. An operator clicking a send that does
+                    // not respond needs to know it is mix-minus and not a broken button.
+                    return Replies.Refused(
+                        "That send is excluded by mix-minus: the bus feeds the device this microphone belongs to, "
+                        + "and sending it there would play somebody their own voice, late.");
+                }
+
+                graph.Submit(GraphCommand.SetSend(request.ChannelIndex, request.BusIndex, request.On, request.Decibels));
+                graph.Pump();
+
+                return Replies.Accepted();
+            },
+            cancellationToken);
 
     /// <summary>Whether this bus is being aimed at the endpoint the primary bus already uses.</summary>
-    bool IsWhereTheMainOutputGoes(int busIndex, string deviceId)
+    static bool IsWhereTheMainOutputGoes(GraphConfig config, int busIndex, string deviceId)
     {
-        if (deviceId.Length == 0 || engine.Graph is not { } graph)
-        {
-            return false;
-        }
-
-        GraphConfig config = graph.Config;
-
-        if (busIndex == config.PrimaryBusIndex || config.Buses.Count == 0)
+        if (deviceId.Length == 0 || busIndex == config.PrimaryBusIndex || config.Buses.Count == 0)
         {
             return false;
         }
@@ -176,29 +172,30 @@ public sealed class BusCommandHandler(VamEngine engine) :
         return config.Buses[primary].OutputDeviceId.Value == deviceId;
     }
 
-    Task<CommandReply> RewriteAsync(int index, Func<BusConfig, BusConfig> change)
+    static CommandReply Rewrite(GraphController graph, int index, Func<BusConfig, BusConfig> change)
     {
-        if (engine.Graph is not { } graph || index < 0 || index >= graph.Config.Buses.Count)
+        if (index < 0 || index >= graph.Config.Buses.Count)
         {
-            return Replies.DoneAsync(Replies.Refused($"There is no bus {index}."));
+            return Replies.Refused($"There is no bus {index}.");
         }
 
         graph.Config.Buses[index] = change(graph.Config.Buses[index]);
         graph.Recompile();
 
-        return Replies.DoneAsync(Replies.Accepted());
+        return Replies.Accepted();
     }
 
-    Task<CommandReply> SubmitAsync(Action<GraphController> queue)
-    {
-        if (engine.Graph is not { } graph)
-        {
-            return Replies.DoneAsync(Replies.Refused("The engine is not running."));
-        }
+    Task<CommandReply> RewriteAsync(int index, Func<BusConfig, BusConfig> change, CancellationToken cancellationToken) =>
+        engine.CommandAsync(graph => Rewrite(graph, index, change), cancellationToken);
 
-        queue(graph);
-        graph.Pump();
+    Task<CommandReply> SubmitAsync(GraphCommand command, CancellationToken cancellationToken) =>
+        engine.CommandAsync(
+            graph =>
+            {
+                graph.Submit(command);
+                graph.Pump();
 
-        return Replies.DoneAsync(Replies.Accepted());
-    }
+                return Replies.Accepted();
+            },
+            cancellationToken);
 }

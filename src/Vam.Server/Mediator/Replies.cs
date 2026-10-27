@@ -25,9 +25,9 @@ public static class Replies
     /// One of the two, as the answer a handler returns.
     /// </summary>
     /// <remarks>
-    /// Every operation here is synchronous — it queues a command or rewrites a configuration on the
-    /// control thread. The interface is asynchronous because a mediator handler may be, and wrapping
-    /// once here is honest about which of those is true.
+    /// For an answer a handler has without going to the control loop: a refusal it can see for itself,
+    /// or an operation that does not touch the graph. Anything that changes the graph goes through
+    /// <see cref="ControlLoopExtensions.CommandAsync"/> and answers once the control loop has run it.
     /// </remarks>
     /// <param name="reply">What happened.</param>
     /// <returns>It, as a completed task.</returns>

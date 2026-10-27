@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Vam.Engine.Automix;
@@ -51,6 +52,7 @@ public sealed class VamEngine : IDisposable
     readonly MovedDeviceFinder moved;
     readonly CancellationTokenSource stopping = new();
     readonly Dictionary<(int Channel, int Link), long> overruns = [];
+    readonly ConcurrentQueue<ControlWork> controlWork = new();
 
     IAudioBackend? backend;
     DiskSpaceWatch? disk;
@@ -170,7 +172,7 @@ public sealed class VamEngine : IDisposable
     public long OverrunsOf(int channelIndex, int linkIndex) =>
         overruns.TryGetValue((channelIndex, linkIndex), out long count) ? count : 0;
 
-    /// <summary>The console. Commands go here.</summary>
+    /// <summary>The console. Touched on the control loop only, through <see cref="OnControlLoopAsync{T}"/>.</summary>
     public GraphController? Graph { get; private set; }
 
     /// <summary>What keeps devices open across a session.</summary>
@@ -322,6 +324,8 @@ public sealed class VamEngine : IDisposable
             control = null;
         }
 
+        AbandonControlWork();
+
         if (Graph is not null)
         {
             // Saved on the way out rather than only when somebody asks. An operator who spent a
@@ -364,6 +368,69 @@ public sealed class VamEngine : IDisposable
         disk?.Dispose();
         disk = null;
         stopping.Dispose();
+    }
+
+    /// <summary>
+    /// Runs something on the control loop and completes when it has run.
+    /// </summary>
+    /// <remarks>
+    /// The configuration, recompiling and the retire queue have one writer, and this is how anything
+    /// on another thread reaches it. Faults with <see cref="EngineStoppedException"/> rather than
+    /// waiting forever when there is no loop to run it, or the loop stops first.
+    /// </remarks>
+    /// <typeparam name="T">What the work returns.</typeparam>
+    /// <param name="work">The work.</param>
+    /// <param name="cancellationToken">Stops the waiting, not the work.</param>
+    /// <returns>What the work returned.</returns>
+    public Task<T> OnControlLoopAsync<T>(Func<T> work, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(work);
+
+        if (!IsRunning || stopping.IsCancellationRequested)
+        {
+            return Task.FromException<T>(new EngineStoppedException());
+        }
+
+        TaskCompletionSource<T> done = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        controlWork.Enqueue(new ControlWork(
+            () =>
+            {
+                try
+                {
+                    done.TrySetResult(work());
+                }
+                catch (Exception error)
+                {
+                    done.TrySetException(error);
+                }
+            },
+            () => done.TrySetException(new EngineStoppedException())));
+
+        // Stop may have drained the queue between the check and the enqueue.
+        if (stopping.IsCancellationRequested)
+        {
+            AbandonControlWork();
+        }
+
+        return done.Task.WaitAsync(cancellationToken);
+    }
+
+    void RunControlWork()
+    {
+        // Left for Stop to refuse once stopping, rather than run against devices it is closing.
+        while (!stopping.IsCancellationRequested && controlWork.TryDequeue(out ControlWork work))
+        {
+            work.Run();
+        }
+    }
+
+    void AbandonControlWork()
+    {
+        while (controlWork.TryDequeue(out ControlWork work))
+        {
+            work.Abandon();
+        }
     }
 
     /// <summary>Saves the console now. H1.</summary>
@@ -1104,7 +1171,7 @@ public sealed class VamEngine : IDisposable
     /// Re-opens the bus outputs after the buses changed. D7.
     /// </summary>
     /// <remarks>
-    /// Called by the control surface after anything that adds, removes or re-aims a bus. A bus whose
+    /// Called on the control loop after anything that adds, removes or re-aims a bus. A bus whose
     /// output was changed and not re-bound would keep playing to the device it used to have, which
     /// is worse than silence: it is audio arriving somewhere nobody expects it.
     /// </remarks>
@@ -1229,6 +1296,9 @@ public sealed class VamEngine : IDisposable
             Supervisor?.Poll(interval);
             Clock?.Poll();
 
+            // Before the pump, so a command's own Pump and this one see the same configuration.
+            RunControlWork();
+
             // I1, before the graph pumps, so a strip whose device died this tick is already silent
             // in the snapshot the next block renders from.
             Faults?.Poll();
@@ -1336,6 +1406,9 @@ public sealed class VamEngine : IDisposable
 
         sinceMeters = TimeSpan.Zero;
     }
+
+    /// <summary>Work queued for the control loop, and how to fail it if the loop never runs it.</summary>
+    readonly record struct ControlWork(Action Run, Action Abandon);
 
     /// <summary>One track a session would open: its name, its format and what it records.</summary>
     readonly record struct PlannedTrack(string Name, RecordingFormat Format, RecordingSource Source);

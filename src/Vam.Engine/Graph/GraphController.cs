@@ -145,10 +145,11 @@ public sealed class GraphController
     /// <remarks>
     /// Expensive by comparison — a new arena, new nodes, and every filter history starting again.
     /// Adding a strip or a bus is worth that; moving a fader is not, which is why they are different
-    /// methods rather than one that decides.
+    /// methods rather than one that decides. Control thread.
     /// </remarks>
     public void Recompile() =>
-        Publisher.Publish(compiler.Compile(config, busOutputs, Publisher.Current.Plan, recording));
+        Publisher.Publish(
+            compiler.Compile(config, busOutputs, Publisher.Current.Plan, recording).Succeeding(Publisher.Current));
 
     /// <summary>
     /// Attaches a recording session, so every strip is tapped on its way past. E3 and E4.
