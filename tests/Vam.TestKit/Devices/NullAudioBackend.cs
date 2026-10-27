@@ -24,6 +24,9 @@ public sealed class NullAudioBackend : IAudioBackend
     readonly Dictionary<DeviceDirection, AudioDeviceId> defaults = [];
     readonly Lock opening = new();
 
+    // A test may add or remove a device while an engine's control thread enumerates.
+    readonly Lock table = new();
+
     // Copied on write: the engine opens streams on its control thread while a test reads these.
     NullCaptureStream[] captureStreams = [];
     NullRenderStream[] renderStreams = [];
@@ -85,8 +88,11 @@ public sealed class NullAudioBackend : IAudioBackend
             deviceOptions.DeviceSampleRate,
             deviceOptions.DeviceChannelCount);
 
-        devices[id] = info;
-        options[id] = deviceOptions;
+        lock (table)
+        {
+            devices[id] = info;
+            options[id] = deviceOptions;
+        }
 
         return info;
     }
@@ -112,8 +118,11 @@ public sealed class NullAudioBackend : IAudioBackend
             }
         }
 
-        options.Remove(deviceId);
-        return devices.Remove(deviceId);
+        lock (table)
+        {
+            options.Remove(deviceId);
+            return devices.Remove(deviceId);
+        }
     }
 
     /// <inheritdoc />
@@ -121,11 +130,14 @@ public sealed class NullAudioBackend : IAudioBackend
     {
         List<AudioDeviceInfo> present = [];
 
-        foreach (AudioDeviceInfo info in devices.Values)
+        lock (table)
         {
-            if (info.Direction == direction)
+            foreach (AudioDeviceInfo info in devices.Values)
             {
-                present.Add(info);
+                if (info.Direction == direction)
+                {
+                    present.Add(info);
+                }
             }
         }
 
@@ -138,6 +150,27 @@ public sealed class NullAudioBackend : IAudioBackend
     /// with no notion of a default would let a test pass while the real backend picks differently.
     /// </remarks>
     public AudioDeviceInfo? DefaultDevice(DeviceDirection direction)
+    {
+        lock (table)
+        {
+            return DefaultDeviceLocked(direction);
+        }
+    }
+
+    /// <summary>Says which device this backend calls the default.</summary>
+    /// <param name="deviceId">Which one.</param>
+    public void MakeDefault(AudioDeviceId deviceId)
+    {
+        lock (table)
+        {
+            if (devices.TryGetValue(deviceId, out AudioDeviceInfo? info))
+            {
+                defaults[info.Direction] = deviceId;
+            }
+        }
+    }
+
+    AudioDeviceInfo? DefaultDeviceLocked(DeviceDirection direction)
     {
         if (defaults.TryGetValue(direction, out AudioDeviceId chosen) && devices.TryGetValue(chosen, out AudioDeviceInfo? named))
         {
@@ -153,16 +186,6 @@ public sealed class NullAudioBackend : IAudioBackend
         }
 
         return null;
-    }
-
-    /// <summary>Says which device this backend calls the default.</summary>
-    /// <param name="deviceId">Which one.</param>
-    public void MakeDefault(AudioDeviceId deviceId)
-    {
-        if (devices.TryGetValue(deviceId, out AudioDeviceInfo? info))
-        {
-            defaults[info.Direction] = deviceId;
-        }
     }
 
     /// <inheritdoc />
@@ -278,11 +301,14 @@ public sealed class NullAudioBackend : IAudioBackend
 
     NullDeviceOptions Resolve(AudioDeviceId deviceId, DeviceDirection direction)
     {
-        if (!devices.TryGetValue(deviceId, out AudioDeviceInfo? info) || info.Direction != direction)
+        lock (table)
         {
-            throw new DeviceNotFoundException(deviceId);
-        }
+            if (!devices.TryGetValue(deviceId, out AudioDeviceInfo? info) || info.Direction != direction)
+            {
+                throw new DeviceNotFoundException(deviceId);
+            }
 
-        return options[deviceId];
+            return options[deviceId];
+        }
     }
 }

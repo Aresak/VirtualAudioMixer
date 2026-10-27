@@ -50,6 +50,10 @@ public sealed class MovedDeviceFinder(ILogger<MovedDeviceFinder> logger)
 
         RememberNames(config, present);
 
+        // A device back under its old ID is no longer ambiguous. If it goes missing again, that
+        // absence gets its own warning.
+        reportedAmbiguous.RemoveWhere(present.ContainsKey);
+
         List<Wanted> missing = Missing(config, present);
         HashSet<AudioDeviceId> used = Used(config);
 

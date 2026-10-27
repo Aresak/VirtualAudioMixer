@@ -176,4 +176,43 @@ public class NullAudioBackendTests
         Assert.Equal(48000, capture.Format.SampleRate);
         Assert.Equal(48002.4, capture.EffectiveSampleRate, 1);
     }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void DevicesCanComeAndGoWhileAnotherThreadEnumerates()
+    {
+        using NullAudioBackend backend = new();
+        Exception? failure = null;
+
+        // The engine's control thread enumerates while a test plugs devices in and out. Without a
+        // lock that is a Dictionary modified mid-enumeration, thrown on the engine's thread.
+        Thread plugger = new(() =>
+        {
+            try
+            {
+                for (int cycle = 0; cycle < 20_000; cycle++)
+                {
+                    AudioDeviceInfo device = backend.AddDevice(DeviceDirection.Capture, new NullDeviceOptions("Flapping"));
+                    backend.RemoveDevice(device.Id);
+                }
+            }
+            catch (Exception error)
+            {
+                failure = error;
+            }
+        });
+
+        backend.AddDevice(DeviceDirection.Capture, new NullDeviceOptions("Steady"));
+        plugger.Start();
+
+        while (plugger.IsAlive)
+        {
+            backend.Enumerate(DeviceDirection.Capture);
+            backend.DefaultDevice(DeviceDirection.Capture);
+        }
+
+        plugger.Join();
+
+        Assert.Null(failure);
+    }
 }
