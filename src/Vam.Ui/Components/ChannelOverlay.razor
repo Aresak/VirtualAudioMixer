@@ -1,4 +1,5 @@
 @inherits VamComponent
+@using Vam.Ui.Extensions
 
 @*
     U3. Over the mixer, not away from it. An operator adjusting one microphone has not stopped
@@ -48,6 +49,7 @@
                     <span class="k">@L["strip.device"]</span>
                     <span class="v">
                         <select value="@channel.DeviceId"
+                                title="@Captures.NameOf(channel.DeviceId)"
                                 aria-label="@L["strip.device"]"
                                 @onchange="argument => SetDeviceAsync(channel, argument)">
                             @foreach (DeviceInfo device in Captures)

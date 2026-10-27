@@ -1,4 +1,5 @@
 @inherits VamComponent
+@using Vam.Ui.Extensions
 
 @if (Bus is { } bus)
 {
@@ -38,6 +39,7 @@
                     <span class="k">@L["bus.output"]</span>
                     <span class="v">
                         <select value="@bus.OutputDeviceId"
+                                title="@Renders.NameOf(bus.OutputDeviceId)"
                                 aria-label="@L["bus.output"]"
                                 @onchange="argument => SetOutputAsync(bus, argument)">
                             <option value="">@L["bus.none"]</option>

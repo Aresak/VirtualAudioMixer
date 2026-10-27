@@ -128,6 +128,7 @@
 
 <div class="row">
     <select @bind="adding"
+            title="@AddingName"
             aria-label="@L["mixer.add"]">
         <option value="">—</option>
         @foreach (ModifierDescriptorState descriptor in Session.Modifiers)

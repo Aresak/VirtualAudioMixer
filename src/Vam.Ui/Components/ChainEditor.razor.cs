@@ -27,6 +27,9 @@ public partial class ChainEditor
     string adding = string.Empty;
     int dragging = -1;
 
+    string AddingName =>
+        Session.Modifiers.FirstOrDefault(descriptor => descriptor.Id == adding)?.Name ?? string.Empty;
+
     /// <summary>Whose chain this is.</summary>
     [Parameter]
     [EditorRequired]
