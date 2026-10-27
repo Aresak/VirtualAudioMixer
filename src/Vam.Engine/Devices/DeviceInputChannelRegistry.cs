@@ -11,16 +11,17 @@ namespace Vam.Engine.Devices;
 /// give a configuration lookup a dependency on ring buffers.
 /// </para>
 /// <para>
-/// Control thread only. Membership changes when a device is opened or lost, which is the
-/// supervisor's business and never the audio thread's.
+/// Membership changes on the control thread only. The clock pulls from <see cref="Current"/> on the
+/// audio thread, so every change publishes a new array with one write rather than editing the one
+/// being read.
 /// </para>
 /// </remarks>
 public sealed class DeviceInputChannelRegistry
 {
-    readonly List<DeviceInputChannel> channels = [];
+    DeviceInputChannel[] channels = [];
 
     /// <summary>How many channels are open.</summary>
-    public int Count => channels.Count;
+    public int Count => Volatile.Read(ref channels).Length;
 
     /// <summary>
     /// The open channels, in the order they were added.
@@ -29,7 +30,10 @@ public sealed class DeviceInputChannelRegistry
     /// This order is also the order <see cref="GetAllTelemetry"/> writes in, which is how a caller
     /// maps a telemetry row back to a device without the struct having to carry an identifier.
     /// </remarks>
-    public IReadOnlyList<DeviceInputChannel> Channels => channels;
+    public IReadOnlyList<DeviceInputChannel> Channels => Volatile.Read(ref channels);
+
+    /// <summary>The open channels as one consistent set, for the audio thread.</summary>
+    public ReadOnlySpan<DeviceInputChannel> Current => Volatile.Read(ref channels);
 
     /// <summary>Adds an open channel.</summary>
     /// <param name="channel">The channel. Adding one twice is a mistake and is refused.</param>
@@ -37,18 +41,53 @@ public sealed class DeviceInputChannelRegistry
     {
         ArgumentNullException.ThrowIfNull(channel);
 
-        if (channels.Contains(channel))
+        if (Array.IndexOf(channels, channel) >= 0)
         {
             throw new InvalidOperationException($"Channel for device {channel.DeviceId} is already registered.");
         }
 
-        channels.Add(channel);
+        Volatile.Write(ref channels, [.. channels, channel]);
     }
 
     /// <summary>Removes a channel that has been closed.</summary>
     /// <param name="channel">The channel.</param>
     /// <returns>Whether it was registered.</returns>
-    public bool Remove(DeviceInputChannel channel) => channels.Remove(channel);
+    public bool Remove(DeviceInputChannel channel)
+    {
+        int index = Array.IndexOf(channels, channel);
+
+        if (index < 0)
+        {
+            return false;
+        }
+
+        Volatile.Write(ref channels, [.. channels.AsSpan(0, index), .. channels.AsSpan(index + 1)]);
+
+        return true;
+    }
+
+    /// <summary>Puts a channel in another's place, so every other channel keeps its index.</summary>
+    /// <param name="existing">The registered channel.</param>
+    /// <param name="replacement">What takes its slot.</param>
+    /// <returns>Whether <paramref name="existing"/> was registered.</returns>
+    public bool Replace(DeviceInputChannel existing, DeviceInputChannel replacement)
+    {
+        ArgumentNullException.ThrowIfNull(replacement);
+
+        int index = Array.IndexOf(channels, existing);
+
+        if (index < 0 || Array.IndexOf(channels, replacement) >= 0)
+        {
+            return false;
+        }
+
+        DeviceInputChannel[] next = [.. channels];
+
+        next[index] = replacement;
+        Volatile.Write(ref channels, next);
+
+        return true;
+    }
 
     /// <summary>
     /// Reads every channel's telemetry into a buffer the caller already owns.
@@ -65,14 +104,16 @@ public sealed class DeviceInputChannelRegistry
     /// <returns>Entries written.</returns>
     public int GetAllTelemetry(Span<DeviceTelemetry> destination)
     {
-        ArgumentOutOfRangeException.ThrowIfLessThan(destination.Length, channels.Count);
+        DeviceInputChannel[] current = Volatile.Read(ref channels);
 
-        for (int index = 0; index < channels.Count; index++)
+        ArgumentOutOfRangeException.ThrowIfLessThan(destination.Length, current.Length);
+
+        for (int index = 0; index < current.Length; index++)
         {
-            destination[index] = channels[index].GetTelemetry();
+            destination[index] = current[index].GetTelemetry();
         }
 
-        return channels.Count;
+        return current.Length;
     }
 
     /// <summary>
@@ -81,9 +122,9 @@ public sealed class DeviceInputChannelRegistry
     /// <param name="elapsed">Time since the previous call.</param>
     public void UpdateCorrections(TimeSpan elapsed)
     {
-        for (int index = 0; index < channels.Count; index++)
+        foreach (DeviceInputChannel channel in channels)
         {
-            channels[index].UpdateCorrection(elapsed);
+            channel.UpdateCorrection(elapsed);
         }
     }
 }

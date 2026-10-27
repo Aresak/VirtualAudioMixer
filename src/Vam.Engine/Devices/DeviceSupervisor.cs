@@ -141,6 +141,42 @@ public sealed class DeviceSupervisor(
     }
 
     /// <summary>
+    /// Stops tracking one device and tracks another in its registry slot, then tries to open it.
+    /// </summary>
+    /// <remarks>
+    /// A new channel rather than <see cref="Retarget"/>'s kept one, because the new device may be a
+    /// different width and a channel's width is fixed when it is built.
+    /// </remarks>
+    /// <param name="from">The tracked device to let go of.</param>
+    /// <param name="to">The device to take its slot.</param>
+    /// <param name="options">How to build the new channel.</param>
+    /// <param name="captureOptions">What to ask the new device for.</param>
+    /// <returns>Whether <paramref name="from"/> was tracked and <paramref name="to"/> was not.</returns>
+    public bool Replace(
+        AudioDeviceId from,
+        AudioDeviceId to,
+        DeviceInputChannelOptions options,
+        CaptureOptions captureOptions)
+    {
+        if (tracked.ContainsKey(to) || !tracked.Remove(from, out TrackedCaptureDevice? previous))
+        {
+            return false;
+        }
+
+        Close(previous, DeviceStreamState.Stopped);
+
+        DeviceInputChannel channel = new(to, options, loggerFactory.CreateLogger<DeviceInputChannel>());
+        TrackedCaptureDevice device = new(to, channel, captureOptions);
+
+        tracked[to] = device;
+        channels.Replace(previous.Channel, channel);
+
+        TryOpen(device);
+
+        return true;
+    }
+
+    /// <summary>
     /// Queues a device notification. Safe from any thread, and does nothing else.
     /// </summary>
     /// <param name="change">What the operating system reported.</param>

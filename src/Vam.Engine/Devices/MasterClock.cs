@@ -422,9 +422,11 @@ public sealed class MasterClock : IDisposable
         // Pulled in registry order, and every device every block. A device that is absent produces
         // silence from an empty ring rather than being skipped, so the set handed to the graph has
         // the same shape whatever is plugged in.
-        for (int index = 0; index < channels.Count && deviceCount < slices.Length; index++)
+        ReadOnlySpan<DeviceInputChannel> current = channels.Current;
+
+        for (int index = 0; index < current.Length && deviceCount < slices.Length; index++)
         {
-            DeviceInputChannel channel = channels.Channels[index];
+            DeviceInputChannel channel = current[index];
             int width = frameCount * channel.ChannelCount;
 
             if (offset + width > arena.Length)
