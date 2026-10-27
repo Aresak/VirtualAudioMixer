@@ -6,6 +6,7 @@ using Vam.Protocol;
 using Vam.Protocol.V1;
 using Vam.Ui.Abstractions;
 using Vam.Ui.Components;
+using Vam.Ui.Extensions;
 using Vam.Ui.Localization;
 using Vam.Ui.Services;
 using Vam.Ui.State;
@@ -26,11 +27,27 @@ public partial class DiagnosticsView
         (DiagnosticsTab.Log, "diag.tabLog")
     ];
 
+    static readonly (LogLevelFilter Id, string Key)[] Levels =
+    [
+        (LogLevelFilter.All, "diag.levelAll"),
+        (LogLevelFilter.Info, "diag.levelInfo"),
+        (LogLevelFilter.Warning, "diag.levelWarning"),
+        (LogLevelFilter.Error, "diag.levelError")
+    ];
+
+    const string LogModule = "./_content/Vam.Ui/js/vam-log.js";
+
     DiagnosticsState? report;
     PeriodicTimer? timer;
     CancellationTokenSource? polling;
     DiagnosticsTab tab = DiagnosticsTab.Clocks;
     string filter = string.Empty;
+    LogLevelFilter level = LogLevelFilter.All;
+    IJSObjectReference? logModule;
+    ElementReference logBox;
+
+    // The log as it was when the reader scrolled away from the newest line. Null while following.
+    IReadOnlyList<LogLine>? held;
 
     /// <inheritdoc />
     protected override void OnInitialized()
@@ -41,6 +58,33 @@ public partial class DiagnosticsView
         timer = new PeriodicTimer(PollInterval);
 
         _ = PollAsync(polling.Token);
+    }
+
+    /// <inheritdoc />
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            logModule = await Js.InvokeAsync<IJSObjectReference>("import", LogModule);
+        }
+    }
+
+    /// <summary>Stops polling and lets go of the module.</summary>
+    public async ValueTask DisposeAsync()
+    {
+        Dispose();
+
+        if (logModule is not null)
+        {
+            try
+            {
+                await logModule.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // The browser is already gone.
+            }
+        }
     }
 
     /// <inheritdoc />
@@ -57,9 +101,15 @@ public partial class DiagnosticsView
         {
             do
             {
-                report = await Session.GetDiagnosticsAsync(cancellationToken);
+                DiagnosticsState? next = await Session.GetDiagnosticsAsync(cancellationToken);
 
-                await InvokeAsync(StateHasChanged);
+                await InvokeAsync(async () =>
+                {
+                    held = await IsReadingOlderAsync() ? held ?? report?.Log : null;
+                    report = next;
+
+                    StateHasChanged();
+                });
             }
             while (timer is not null && await timer.WaitForNextTickAsync(cancellationToken));
         }
@@ -77,10 +127,40 @@ public partial class DiagnosticsView
             ? console.Channels[index].Name
             : $"#{index}";
 
-    IReadOnlyList<LogLine> Filtered(DiagnosticsState state) =>
-        filter.Length == 0
-            ? state.Log
-            : [.. state.Log.Where(line => line.Message.Contains(filter, StringComparison.OrdinalIgnoreCase))];
+    IReadOnlyList<LogLine> Shown(DiagnosticsState state) => (held ?? state.Log).Filter(level, filter);
+
+    void Select(DiagnosticsTab id)
+    {
+        tab = id;
+        held = null;
+    }
+
+    async Task<bool> IsReadingOlderAsync()
+    {
+        if (tab != DiagnosticsTab.Log || logModule is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            return !await logModule.InvokeAsync<bool>("isAtNewest", logBox);
+        }
+        catch (JSDisconnectedException)
+        {
+            return false;
+        }
+    }
+
+    async Task ToNewestAsync()
+    {
+        held = null;
+
+        if (logModule is not null)
+        {
+            await logModule.InvokeVoidAsync("toNewest", logBox);
+        }
+    }
 
     static string When(long ticks) =>
         new DateTime(ticks, DateTimeKind.Utc).ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture);
