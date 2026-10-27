@@ -70,7 +70,8 @@ What is wrong, where in the code, and how it was seen. Evidence: a log line, a f
 What to build. Where a choice is genuinely open, say "decide in the task".
 
 ## Not in scope
-The fence. Name the neighbouring issues by number.
+The fence. Every item in a task's `Not in scope` names the issue that will do it, by number,
+or says it will not be done and why. "A follow-up" with no number is not enough.
 
 ## Acceptance
 How a reviewer knows it is done. Testable, and tested with `NullAudioBackend` where it can be.
