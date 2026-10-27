@@ -43,10 +43,12 @@
                                                                   Body="@L["help.depth"]" /></span>
                             <span class="mono">@automix.DepthDb.ToString("0.0", CultureInfo.InvariantCulture) dB</span>
                         </div>
-                        <input type="range" min="-40" max="0" step="0.5"
-                               value="@automix.DepthDb"
-                               aria-label="@L["automix.depth"]"
-                               @oninput="SetDepthAsync" />
+                        <Slider Value="automix.DepthDb"
+                                Label="@L["automix.depth"]"
+                                Minimum="-40"
+                                Maximum="0"
+                                Step="0.5"
+                                Changed="SetDepthAsync" />
                     </div>
 
                     @*
@@ -60,10 +62,12 @@
                                                                      Body="@L["help.response"]" /></span>
                             <span class="mono">@automix.ResponseMs.ToString("0", CultureInfo.InvariantCulture) ms</span>
                         </div>
-                        <input type="range" min="20" max="500" step="5"
-                               value="@automix.ResponseMs"
-                               aria-label="@L["automix.response"]"
-                               @oninput="SetResponseAsync" />
+                        <Slider Value="automix.ResponseMs"
+                                Label="@L["automix.response"]"
+                                Minimum="20"
+                                Maximum="500"
+                                Step="5"
+                                Changed="SetResponseAsync" />
                     </div>
                 </div>
 

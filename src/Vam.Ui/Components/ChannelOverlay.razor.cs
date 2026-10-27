@@ -107,42 +107,27 @@ public partial class ChannelOverlay
             SetChannelColour = new SetChannelColour { ChannelIndex = channel.Index, Colour = colour }
         });
 
-    async Task SetTrimAsync(ChannelState channel, ChangeEventArgs arguments)
-    {
-        if (double.TryParse(arguments.Value?.ToString(), CultureInfo.InvariantCulture, out double decibels))
+    async Task SetTrimAsync(ChannelState channel, double decibels) =>
+        await Session.ApplyAsync(new Command
         {
-            await Session.ApplyAsync(new Command
-            {
-                SetTrim = new SetTrim { ChannelIndex = channel.Index, Decibels = decibels }
-            });
-        }
-    }
+            SetTrim = new SetTrim { ChannelIndex = channel.Index, Decibels = decibels }
+        });
 
-    async Task SetFaderAsync(ChannelState channel, ChangeEventArgs arguments)
-    {
-        if (double.TryParse(arguments.Value?.ToString(), CultureInfo.InvariantCulture, out double raw))
+    async Task SetFaderAsync(ChannelState channel, double position) =>
+        await Session.ApplyAsync(new Command
         {
-            await Session.ApplyAsync(new Command
+            SetFader = new SetFader
             {
-                SetFader = new SetFader
-                {
-                    ChannelIndex = channel.Index,
-                    Decibels = FaderScale.ToDecibels(raw / 1000.0)
-                }
-            });
-        }
-    }
+                ChannelIndex = channel.Index,
+                Decibels = FaderScale.ToDecibels(position / 1000.0)
+            }
+        });
 
-    async Task SetWeightAsync(ChannelState channel, ChangeEventArgs arguments)
-    {
-        if (double.TryParse(arguments.Value?.ToString(), CultureInfo.InvariantCulture, out double weight))
+    async Task SetWeightAsync(ChannelState channel, double weight) =>
+        await Session.ApplyAsync(new Command
         {
-            await Session.ApplyAsync(new Command
-            {
-                SetAutomixWeight = new SetAutomixWeight { ChannelIndex = channel.Index, Weight = weight }
-            });
-        }
-    }
+            SetAutomixWeight = new SetAutomixWeight { ChannelIndex = channel.Index, Weight = weight }
+        });
 
     // Written the way a console prints it: a number of steps off centre, and the word for the middle
     // rather than a zero somebody has to interpret.
@@ -150,16 +135,11 @@ public partial class ChannelOverlay
         ? L["strip.centre"]
         : (channel.Pan < 0 ? "L" : "R") + (Math.Abs(channel.Pan) * 100).ToString("0", CultureInfo.InvariantCulture);
 
-    async Task SetPanAsync(ChannelState channel, ChangeEventArgs arguments)
-    {
-        if (double.TryParse(arguments.Value?.ToString(), CultureInfo.InvariantCulture, out double pan))
+    async Task SetPanAsync(ChannelState channel, double pan) =>
+        await Session.ApplyAsync(new Command
         {
-            await Session.ApplyAsync(new Command
-            {
-                SetPan = new SetPan { ChannelIndex = channel.Index, Pan = pan }
-            });
-        }
-    }
+            SetPan = new SetPan { ChannelIndex = channel.Index, Pan = pan }
+        });
 
     async Task SetFlagAsync(ChannelState channel, string flag, bool enabled) =>
         await Session.ApplyAsync(new Command

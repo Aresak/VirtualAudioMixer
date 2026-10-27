@@ -52,13 +52,13 @@ public partial class ChainEditor
         parameter.Value.ToString("0.##", CultureInfo.InvariantCulture)
         + (parameter.Unit.Length > 0 ? " " + parameter.Unit : string.Empty);
 
-    static string Step(ParameterState parameter)
+    static double Step(ParameterState parameter)
     {
         double span = parameter.Maximum - parameter.Minimum;
 
         // A thousand steps across whatever the range happens to be. A fixed step of 0.1 is far too
         // coarse for a ratio and far too fine for a frequency that runs to twenty thousand.
-        return (span <= 0 ? 0.01 : span / 1000.0).ToString("0.#####", CultureInfo.InvariantCulture);
+        return span <= 0 ? 0.01 : Math.Round(span / 1000.0, 5);
     }
 
     string HelpFor(ModifierState link) => L["help.mod." + link.ModifierId];
@@ -104,13 +104,7 @@ public partial class ChainEditor
             }
         });
 
-    async Task SetParameterAsync(int index, ParameterState parameter, ChangeEventArgs arguments)
-    {
-        if (!double.TryParse(arguments.Value?.ToString(), CultureInfo.InvariantCulture, out double value))
-        {
-            return;
-        }
-
+    async Task SetParameterAsync(int index, ParameterState parameter, double value) =>
         await Session.ApplyAsync(new Command
         {
             SetModifierParameter = new SetModifierParameter
@@ -121,7 +115,6 @@ public partial class ChainEditor
                 Value = value
             }
         });
-    }
 
     async Task RemoveAsync(int index) =>
         await Session.ApplyAsync(new Command
