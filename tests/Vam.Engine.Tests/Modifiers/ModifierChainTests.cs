@@ -79,6 +79,122 @@ public class ModifierChainTests
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
+    public void ARecompileKeepsAnInstanceWithoutPreparingItAgain()
+    {
+        ModifierRegistry registry = ModifierRegistry.CreateDefault();
+
+        registry.Register(CountingModifier.Id, static () => new CountingModifier());
+
+        ConsoleFixture console = Build(registry, new ModifierSetting { ModifierId = CountingModifier.Id, LinkId = "counted" });
+        CountingModifier before = Assert.IsType<CountingModifier>(InstancesOf(console)[0]);
+
+        for (int recompile = 0; recompile < 3; recompile++)
+        {
+            console.Controller.Recompile();
+        }
+
+        // Preparing it again would rebuild its state on the control thread while the audio thread
+        // may still be inside it through the snapshot being replaced.
+        Assert.Same(before, InstancesOf(console)[0]);
+        Assert.Equal(1, before.Prepared);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void AStripThatChangesWidthGetsAFreshInstance()
+    {
+        ModifierRegistry registry = ModifierRegistry.CreateDefault();
+
+        registry.Register(CountingModifier.Id, static () => new CountingModifier());
+
+        ConsoleFixture console = Build(registry, new ModifierSetting { ModifierId = CountingModifier.Id, LinkId = "counted" });
+        CountingModifier before = Assert.IsType<CountingModifier>(InstancesOf(console)[0]);
+
+        console.Controller.Config.Channels[0] = console.Controller.Config.Channels[0] with
+        {
+            ChannelCount = 2,
+            Flags = ChannelFlags.None
+        };
+        console.Controller.Recompile();
+
+        CountingModifier after = Assert.IsType<CountingModifier>(InstancesOf(console)[0]);
+
+        // The old one was prepared for one channel and may still be running. It is left alone.
+        Assert.NotSame(before, after);
+        Assert.Equal(1, before.PreparedChannels);
+        Assert.Equal(2, after.PreparedChannels);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void RenderingWhileTheConsoleIsRecompiledNeverCrashes()
+    {
+        const int Recompiles = 2000;
+
+        GraphConfig config = new();
+
+        config.InputDeviceOrder.Add(Microphone);
+        config.Channels.Add(new ChannelConfig
+        {
+            DeviceId = Microphone,
+            Name = "Mayor 180 degrees",
+            Chain =
+            [
+                new ModifierSetting { ModifierId = "vam.compressor", LinkId = "compressor" },
+                new ModifierSetting { ModifierId = "vam.limiter", LinkId = "limiter" }
+            ]
+        });
+
+        // A stream bus, for its mandatory limiter: the instance #78 found being re-prepared live.
+        config.Buses.Add(new BusConfig { Name = "Stream", Role = BusRole.Stream, ChannelCount = 2 });
+
+        ConsoleFixture console = new(config, ModifierRegistry.CreateDefault());
+
+        console.AddDevice(Microphone, 1);
+        console.Controller.Submit(GraphCommand.SetSend(0, 0, isOn: true, decibels: 0));
+        console.Controller.Pump();
+        console.Feed(0, 0.9f);
+
+        Exception? failure = null;
+        int rendered = 0;
+        using CancellationTokenSource finished = new();
+
+        Thread audio = new(() =>
+        {
+            try
+            {
+                while (!finished.IsCancellationRequested)
+                {
+                    console.Render();
+                    Interlocked.Increment(ref rendered);
+                }
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "test-audio"
+        };
+
+        audio.Start();
+
+        for (int recompile = 0; recompile < Recompiles && failure is null; recompile++)
+        {
+            console.Controller.Recompile();
+        }
+
+        finished.Cancel();
+
+        Assert.True(audio.Join(TimeSpan.FromSeconds(5)), "The audio thread did not stop.");
+        Assert.Null(failure);
+        Assert.True(Volatile.Read(ref rendered) > 0, "Nothing was rendered.");
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
     public void RunningTheChainAllocatesNothing()
     {
         ConsoleFixture console = Build(Gain("first", -3f), Gain("second", -3f));
@@ -193,7 +309,9 @@ public class ModifierChainTests
             Values = new Dictionary<string, float>(StringComparer.Ordinal) { ["level"] = decibels }
         };
 
-    static ConsoleFixture Build(params ModifierSetting[] chain)
+    static ConsoleFixture Build(params ModifierSetting[] chain) => Build(ModifierRegistry.CreateDefault(), chain);
+
+    static ConsoleFixture Build(ModifierRegistry registry, params ModifierSetting[] chain)
     {
         GraphConfig config = new();
 
@@ -207,7 +325,7 @@ public class ModifierChainTests
 
         config.Buses.Add(new BusConfig { Name = "Stream", Role = BusRole.Output, ChannelCount = 2 });
 
-        ConsoleFixture console = new(config, ModifierRegistry.CreateDefault());
+        ConsoleFixture console = new(config, registry);
 
         console.AddDevice(Microphone, 1);
 
@@ -224,6 +342,31 @@ public class ModifierChainTests
 
         public override void Prepare(int sampleRate, int maxFrames, int channelCount)
         {
+        }
+
+        public override void Process(ref ModifierContext context)
+        {
+        }
+    }
+
+    /// <summary>A modifier that counts how often it is prepared, and for how many channels.</summary>
+    sealed class CountingModifier : Modifier
+    {
+        public const string Id = "test.counting";
+
+        public override ModifierDescriptor Descriptor { get; } =
+            new(Id, "Counting", ChannelsIn: 0, ChannelsOut: 0, LatencySamples: 0, CanProcessInPlace: true);
+
+        public override ReadOnlySpan<ParameterDescriptor> Parameters => default;
+
+        public int Prepared { get; private set; }
+
+        public int PreparedChannels { get; private set; }
+
+        public override void Prepare(int sampleRate, int maxFrames, int channelCount)
+        {
+            Prepared++;
+            PreparedChannels = channelCount;
         }
 
         public override void Process(ref ModifierContext context)
