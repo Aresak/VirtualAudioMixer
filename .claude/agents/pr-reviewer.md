@@ -39,7 +39,7 @@ unreviewable.
 
 Then check the fence the other way. Every item in a task's `Not in scope` names the issue that will do it, by
 number, or says it will not be done and why. "A follow-up" with no number is not enough. For each item without
-one, report it as a finding. So is anything the pull request itself says it found and left.
+one, report it as a finding.
 
 And check that what the task's title promises an operator can be reached from the console. A feature the
 engine can do but no screen offers is not done, whatever the tests say.

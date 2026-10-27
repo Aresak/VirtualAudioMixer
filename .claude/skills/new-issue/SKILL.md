@@ -83,8 +83,6 @@ How a reviewer knows it is done. Testable, and tested with `NullAudioBackend` wh
 - **Title:** the behaviour that should be true, stated plainly. "An absent device is not a stream of
   dropouts", not "Fix dropout bug".
 - **Labels:** from the existing set only (`gh label list`). `bug` or `task`, plus one or more `area:*`.
-- **An item in `Not in scope` with no issue yet:** open that one too, so the number exists when this
-  one is written.
 - **Issues opened together** reference each other. Open both, then edit each body to put in the
   other's number.
 
