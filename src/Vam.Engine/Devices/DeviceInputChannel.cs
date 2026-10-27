@@ -47,6 +47,12 @@ public sealed class DeviceInputChannel
     /// </summary>
     const int InputHeadroomFrames = 8;
 
+    /// <summary>
+    /// How long a newly opened stream may take to fill the ring to the setpoint before it is
+    /// reported. The setpoint is tens of milliseconds of audio; two seconds is long past any start-up.
+    /// </summary>
+    static readonly TimeSpan PrimingTimeout = TimeSpan.FromSeconds(2);
+
     readonly AudioRingBuffer ring;
     readonly DriftEstimator estimator;
     readonly DriftResampler resampler;
@@ -69,6 +75,14 @@ public sealed class DeviceInputChannel
     double measuredRateHz;
     double driftPpm;
     double ratio = 1.0;
+
+    // Priming is a request the control thread raises and the pulling thread answers, each writing
+    // only its own counter, so neither ever clears state the other is using.
+    int primingRequest;
+    int flushedRequest;
+    int primedRequest;
+    TimeSpan primingFor;
+    bool isPrimingReported;
 
     /// <summary>Builds a channel and everything it owns.</summary>
     /// <param name="deviceId">Which device this carries. Used for identity and for log lines.</param>
@@ -162,6 +176,12 @@ public sealed class DeviceInputChannel
     /// <summary>Whether the servo is currently asking for more correction than it may apply.</summary>
     public bool IsClamping => servo.IsClamping;
 
+    /// <summary>
+    /// Whether the channel is waiting for its ring to reach the setpoint after
+    /// <see cref="BeginPriming"/>. Until it has, the pull side is silence and the servo does not run.
+    /// </summary>
+    public bool IsPriming => Volatile.Read(ref primedRequest) != Volatile.Read(ref primingRequest);
+
     /// <summary>Whether the supervisor has let go of this channel's device and left its slot empty.</summary>
     public bool IsVacant => Volatile.Read(ref isVacant);
 
@@ -222,6 +242,13 @@ public sealed class DeviceInputChannel
     /// </returns>
     public int Pull(Span<float> destination)
     {
+        // Nothing is late while the ring fills, so this is silence and not a dropout.
+        if (!TryFinishPriming())
+        {
+            destination.Clear();
+            return 0;
+        }
+
         int wanted = destination.Length / channelCount;
         int produced = 0;
 
@@ -284,9 +311,15 @@ public sealed class DeviceInputChannel
     public double UpdateCorrection(TimeSpan elapsed)
     {
         // An empty ring with no device behind it is not drift, and the servo would only wind up
-        // against its limit. The supervisor resets the channel before the device is reopened.
+        // against its limit. The supervisor primes the channel again when the device is reopened.
         if (HasNoDevice)
         {
+            return Ratio;
+        }
+
+        if (IsPriming)
+        {
+            WatchPriming(elapsed);
             return Ratio;
         }
 
@@ -339,6 +372,31 @@ public sealed class DeviceInputChannel
             Volatile.Read(ref deviceSampleRateHz));
 
     /// <summary>
+    /// Starts a new stream from rest: stale audio is dropped, and the strip stays silent with the
+    /// servo idle until the ring has filled to the setpoint.
+    /// </summary>
+    /// <remarks>
+    /// Control thread, before the new stream starts and after the old one has stopped. Safe while
+    /// the other side keeps pulling: the ring, the resampler and the pending frames are cleared by
+    /// the pulling thread itself, on its next pull.
+    /// </remarks>
+    public void BeginPriming()
+    {
+        estimator.Reset();
+        servo.Reset();
+        resampler.Ratio = 1.0;
+
+        loggedClampCount = 0;
+        primingFor = TimeSpan.Zero;
+        isPrimingReported = false;
+
+        Volatile.Write(ref measuredRateHz, nominalRateHz);
+        Volatile.Write(ref driftPpm, 0.0);
+        Volatile.Write(ref ratio, 1.0);
+        Volatile.Write(ref primingRequest, primingRequest + 1);
+    }
+
+    /// <summary>
     /// Discards everything buffered and returns the correction to rest.
     /// </summary>
     /// <remarks>
@@ -378,6 +436,59 @@ public sealed class DeviceInputChannel
         double ringGainFramesPerSecond = estimator.EstimatedRateHz - nominalRateHz;
 
         return consumedRateHz + ringGainFramesPerSecond;
+    }
+
+    bool TryFinishPriming()
+    {
+        int request = Volatile.Read(ref primingRequest);
+
+        if (primedRequest == request)
+        {
+            return true;
+        }
+
+        if (flushedRequest != request)
+        {
+            ring.Discard(ring.FillFrames);
+            resampler.Reset();
+            Volatile.Write(ref pendingFrames, 0);
+            Volatile.Write(ref underrunCount, 0);
+            flushedRequest = request;
+        }
+
+        int surplus = ring.FillFrames - servo.TargetFillFrames;
+
+        if (surplus < 0)
+        {
+            return false;
+        }
+
+        // The stream delivers in periods, so the last one overshoots. Trimmed, so the servo starts
+        // exactly at its setpoint.
+        ring.Discard(surplus);
+        Volatile.Write(ref primedRequest, request);
+
+        return true;
+    }
+
+    void WatchPriming(TimeSpan elapsed)
+    {
+        primingFor += elapsed;
+
+        if (isPrimingReported || primingFor < PrimingTimeout)
+        {
+            return;
+        }
+
+        isPrimingReported = true;
+
+        logger.LogWarning(
+            "{DeviceId} has been open for {Seconds:F1} s without filling its buffer to {TargetFillFrames} "
+            + "frames ({FillFrames} so far). It stays silent until it does.",
+            DeviceId,
+            primingFor.TotalSeconds,
+            servo.TargetFillFrames,
+            ring.FillFrames);
     }
 
     void TopUpPending()

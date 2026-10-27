@@ -140,6 +140,10 @@ public sealed class BusOutputHost(IAudioBackend backend, ILoggerFactory loggers)
             stream.RequireFormat(options.NominalSampleRate, channel.ChannelCount);
             channel.DescribeStream(stream.Format);
 
+            // Without it the device drains an empty ring from its first callback and the servo
+            // spends its first update clamped against an error that is only start-up.
+            channel.BeginPriming();
+
             // The delegate is created once, here, and stored. Creating one per callback would
             // allocate inside the audio path.
             stream.Start(channel.Fill);

@@ -106,6 +106,26 @@ public class AudioRingBufferTests
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
+    public void DiscardDropsOnlyWhatIsWaitingAndKeepsTheRest()
+    {
+        AudioRingBuffer ring = new(8, 1);
+        float[] readBuffer = new float[2];
+
+        Assert.True(ring.TryWrite([1f, 2f, 3f, 4f, 5f]));
+
+        Assert.Equal(3, ring.Discard(3));
+        Assert.Equal(2, ring.Read(readBuffer));
+        Assert.Equal([4f, 5f], readBuffer);
+
+        // Asking for more than is waiting drops what is there and leaves the cursors consistent.
+        Assert.True(ring.TryWrite([6f]));
+        Assert.Equal(1, ring.Discard(10));
+        Assert.Equal(0, ring.FillFrames);
+        Assert.Equal(0, ring.UnderrunCount);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
     public void AFullRingRefusesTheWriteWholeAndCountsIt()
     {
         AudioRingBuffer ring = new(4, 1);

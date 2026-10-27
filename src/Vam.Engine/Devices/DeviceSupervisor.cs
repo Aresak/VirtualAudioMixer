@@ -32,14 +32,10 @@ namespace Vam.Engine.Devices;
 /// reads.
 /// </para>
 /// <para>
-/// <b>One thing here is not finished, and it will matter later.</b> Re-opening clears the channel's
-/// ring in place. That is correct while nothing is pulling from it, which is true today because the
-/// mix graph does not exist yet. Once EPIC-03's graph pulls every block regardless of whether a
-/// device is present, clearing a ring underneath a live reader is a torn read waiting to happen, and
-/// the design's answer is the one VAM-020 describes: open the new stream, prime its ring to the
-/// servo's setpoint, and then swap the ring reference in with a single write. Priming before
-/// swapping is also what makes a re-attach silent instead of a click. That swap is owed when the
-/// graph arrives.
+/// <b>Re-opening never clears a ring under a live reader.</b> The channel is primed instead: the
+/// pulling thread drops what the old stream left, the strip stays silent until the new stream has
+/// filled the ring to the servo's setpoint, and only then does the servo start. That is also what
+/// makes a re-attach silent instead of a click and a drift warning.
 /// </para>
 /// </remarks>
 public sealed class DeviceSupervisor(
@@ -327,10 +323,10 @@ public sealed class DeviceSupervisor(
 
         try
         {
-            // Cleared before the stream starts, not after. The ring holds audio from before the
-            // device left, and the drift estimate describes a rate it may no longer run at;
-            // carrying either across the gap would splice two unrelated moments together.
-            device.Channel.Reset();
+            // Before the stream starts, not after. The ring holds audio from before the device left,
+            // and the drift estimate describes a rate it may no longer run at; carrying either
+            // across the gap would splice two unrelated moments together.
+            device.Channel.BeginPriming();
 
             ICaptureStream stream = backend.OpenCapture(device.DeviceId, device.CaptureOptions);
 

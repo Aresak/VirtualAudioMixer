@@ -1,5 +1,6 @@
 using Vam.Engine.Devices;
 using Vam.Engine.Devices.Abstractions;
+using Vam.Engine.Diagnostics;
 using Vam.TestKit.Devices;
 using Vam.TestKit.Harness;
 using Vam.TestKit.Logging;
@@ -21,9 +22,13 @@ public class DeviceSupervisorTests
     const int BlockFrames = 120;
     const int TargetFillFrames = 1024;
     const int PlugCycles = 20;
+    const int BlocksPerCorrection = 100;
+    const int MixBlocks = 1200;
 
     static readonly TimeSpan Tick = TimeSpan.FromMilliseconds(100);
     static readonly TimeSpan PastReconcile = TimeSpan.FromSeconds(6);
+    static readonly TimeSpan BlockDuration = TimeSpan.FromSeconds(BlockFrames / 48000.0);
+    static readonly TimeSpan CorrectionInterval = TimeSpan.FromMilliseconds(250);
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
@@ -111,10 +116,18 @@ public class DeviceSupervisorTests
         fixture.Arrive(device.Id);
 
         // Same strip, same channel object, nothing carried over. The old ring holds audio from
-        // before the device left, and playing it out would be a glitch with a timestamp.
+        // before the device left, and playing it out would be a glitch with a timestamp. The mix
+        // drops it on its next pull, not the supervisor, which must not clear a ring being read.
+        float[] output = new float[BlockFrames];
+
+        Array.Fill(output, 1.0f);
+        channel.Pull(output);
+
         Assert.Equal(DeviceStreamState.Running, channel.State);
+        Assert.True(channel.IsPriming);
         Assert.Equal(0, channel.FillFrames);
         Assert.Equal(1.0, channel.Ratio);
+        Assert.All(output, sample => Assert.Equal(0f, sample));
     }
 
     [Fact]
@@ -185,10 +198,50 @@ public class DeviceSupervisorTests
 
         Assert.Equal(DeviceStreamState.Running, channel.State);
 
-        // Back and running, a shortfall is a real dropout again.
+        // Priming is not a dropout either. Once the ring has reached its setpoint, a shortfall is.
         channel.Pull(block);
 
-        Assert.Equal(BlockFrames, channel.GetTelemetry().UnderrunCount);
+        Assert.Equal(0, channel.GetTelemetry().UnderrunCount);
+
+        while (channel.IsPriming)
+        {
+            channel.Write(block, BlockFrames);
+            channel.Pull([]);
+        }
+
+        for (int pass = 0; pass <= TargetFillFrames / BlockFrames; pass++)
+        {
+            channel.Pull(block);
+        }
+
+        Assert.True(channel.GetTelemetry().UnderrunCount > 0);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void OpeningAndReopeningADeviceRaisesNoDriftWarning()
+    {
+        using NullAudioBackend backend = new();
+        AudioDeviceInfo device = AddDevice(backend, "Mayor 180 degrees");
+        DropoutLog dropouts = new();
+
+        using Fixture fixture = new(backend);
+        DeviceInputChannel channel = fixture.Track(device.Id, dropouts);
+
+        RunMix(channel, backend.CaptureStreams[^1]);
+
+        backend.RemoveDevice(device.Id);
+        fixture.Remove(device.Id);
+        backend.AddDevice(device.Id, DeviceDirection.Capture, new NullDeviceOptions("Mayor 180 degrees"));
+        fixture.Arrive(device.Id);
+
+        RunMix(channel, backend.CaptureStreams[^1]);
+
+        // An empty ring at open used to ask the servo for more than its limit, on every replug.
+        Assert.False(channel.IsPriming);
+        Assert.Equal(0, channel.ClampCount);
+        Assert.Equal(0, fixture.Loggers.CountMentioning("ppm limit"));
+        Assert.Equal(0, dropouts.TotalRecorded);
     }
 
     [Fact]
@@ -240,6 +293,23 @@ public class DeviceSupervisorTests
         Assert.Equal(DeviceStreamState.Running, channel.State);
     }
 
+    /// <summary>Three seconds of a device delivering, the mix pulling and the servo running.</summary>
+    static void RunMix(DeviceInputChannel channel, NullCaptureStream stream)
+    {
+        float[] block = new float[BlockFrames];
+
+        for (int pass = 1; pass <= MixBlocks; pass++)
+        {
+            stream.Pump(BlockDuration);
+            channel.Pull(block);
+
+            if (pass % BlocksPerCorrection == 0)
+            {
+                channel.UpdateCorrection(CorrectionInterval);
+            }
+        }
+    }
+
     static AudioDeviceInfo AddDevice(NullAudioBackend backend, string name) =>
         backend.AddDevice(DeviceDirection.Capture, new NullDeviceOptions(name));
 
@@ -264,7 +334,7 @@ public class DeviceSupervisorTests
 
         public IReadOnlyList<DeviceChange> Changes => changes;
 
-        public DeviceInputChannel Track(AudioDeviceId deviceId) =>
+        public DeviceInputChannel Track(AudioDeviceId deviceId, DropoutLog? dropouts = null) =>
             Supervisor.Track(
                 deviceId,
                 new DeviceInputChannelOptions
@@ -273,7 +343,8 @@ public class DeviceSupervisorTests
                     ChannelCount = 1,
                     BlockFrames = BlockFrames,
                     RingCapacityFrames = 4096,
-                    TargetFillFrames = TargetFillFrames
+                    TargetFillFrames = TargetFillFrames,
+                    Dropouts = dropouts
                 },
                 new CaptureOptions(ShareMode.Shared, TimeSpan.FromMilliseconds(20), ChannelCount: 1));
 

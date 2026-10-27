@@ -171,6 +171,108 @@ public class DeviceInputChannelTests
         Assert.Equal(0.0, telemetry.DriftPpm);
     }
 
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void PrimingDropsStaleAudioAndStartsTheServoAtTheSetpoint()
+    {
+        RecordingLogger<DeviceInputChannel> logger = new();
+        DropoutLog dropouts = new();
+        DeviceInputChannel channel = CreateChannel(logger, dropouts);
+        float[] block = new float[BlockFrames];
+
+        channel.State = DeviceStreamState.Running;
+        FillRingAbove(channel, TargetFillFrames / 2);
+
+        channel.BeginPriming();
+        Array.Fill(block, 1.0f);
+
+        // Silence while the ring fills, with the stale audio gone and no dropout counted.
+        Assert.Equal(0, channel.Pull(block));
+        Assert.All(block, sample => Assert.Equal(0f, sample));
+        Assert.Equal(0, channel.FillFrames);
+
+        Assert.Equal(1.0, channel.UpdateCorrection(Interval));
+        Assert.Equal(0, channel.CorrectionCount);
+
+        while (channel.IsPriming)
+        {
+            channel.Write(block, BlockFrames);
+            channel.Pull([]);
+        }
+
+        // The last period overshoots and is trimmed, so the servo's first look is at no error.
+        Assert.Equal(TargetFillFrames, channel.FillFrames);
+        Assert.Equal(1.0, channel.UpdateCorrection(Interval));
+        Assert.Equal(1, channel.CorrectionCount);
+
+        Assert.Equal(BlockFrames, channel.Pull(block));
+        Assert.Equal(0, channel.GetTelemetry().UnderrunCount);
+        Assert.Equal(0, dropouts.TotalRecorded);
+        Assert.Empty(logger.Problems);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void AChannelThatNeverFillsIsReportedOnceWithinTheTimeout()
+    {
+        RecordingLogger<DeviceInputChannel> logger = new();
+        DropoutLog dropouts = new();
+        DeviceInputChannel channel = CreateChannel(logger, dropouts);
+        float[] block = new float[BlockFrames];
+
+        channel.State = DeviceStreamState.Running;
+        channel.BeginPriming();
+
+        // Just under two seconds of a stream that opened and delivers nothing.
+        for (int update = 0; update < 7; update++)
+        {
+            channel.Pull(block);
+            channel.UpdateCorrection(Interval);
+        }
+
+        Assert.Empty(logger.Problems);
+
+        for (int update = 0; update < 40; update++)
+        {
+            channel.Pull(block);
+            channel.UpdateCorrection(Interval);
+        }
+
+        LogRecord problem = Assert.Single(logger.Problems);
+
+        Assert.Contains("without filling", problem.Message, StringComparison.Ordinal);
+        Assert.True(channel.IsPriming);
+        Assert.Equal(0, channel.ClampCount);
+        Assert.Equal(0, dropouts.TotalRecorded);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void PrimingAgainWhileTheMixPullsAllocatesNothing()
+    {
+        DeviceInputChannel channel = CreateChannel();
+
+        channel.State = DeviceStreamState.Running;
+
+        (DeviceInputChannel Channel, float[] Input, float[] Output) state =
+            (channel, new float[BlockFrames], new float[BlockFrames]);
+
+        // Each pass reopens, so the measured pulls cover the flush, the silence, the trim and the
+        // first real blocks.
+        AllocationAssert.None(
+            state,
+            static work =>
+            {
+                work.Channel.BeginPriming();
+
+                for (int pass = 0; pass < (TargetFillFrames / BlockFrames) + 3; pass++)
+                {
+                    work.Channel.Write(work.Input, BlockFrames);
+                    work.Channel.Pull(work.Output);
+                }
+            });
+    }
+
     [Theory]
     [Trait("Category", TestCategories.Unit)]
     [InlineData(DeviceStreamState.Absent)]

@@ -199,6 +199,22 @@ public sealed class AudioRingBuffer
     }
 
     /// <summary>
+    /// Drops frames without reading them. Consumer side, so it is safe while the producer writes.
+    /// </summary>
+    /// <param name="frameCount">Frames to drop. Fewer are dropped when fewer are waiting.</param>
+    /// <returns>Frames actually dropped.</returns>
+    public int Discard(int frameCount)
+    {
+        long readTo = tail.Value;
+        long writtenTo = Volatile.Read(ref head.Value);
+
+        int dropped = Math.Clamp(frameCount, 0, (int)(writtenTo - readTo));
+
+        Volatile.Write(ref tail.Value, readTo + dropped);
+        return dropped;
+    }
+
+    /// <summary>
     /// Discards everything buffered and returns the ring to empty.
     /// </summary>
     /// <remarks>
