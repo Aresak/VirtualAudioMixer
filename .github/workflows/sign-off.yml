@@ -34,10 +34,18 @@ jobs:
 
           unsigned=0
           count=0
+          skipped=0
 
           while read -r sha; do
             count=$((count + 1))
             subject=$(git log -1 --format='%s' "$sha")
+
+            # A merge that adds nothing of its own, such as the Update branch button's, has no work to sign.
+            if [ "$(git rev-list --no-walk --count --merges "$sha")" -eq 1 ] \
+              && [ -z "$(git diff-tree --cc --format= "$sha")" ]; then
+              skipped=$((skipped + 1))
+              continue
+            fi
 
             if ! git log -1 --format='%B' "$sha" | grep -qiE '^Signed-off-by: .+ <.+@.+>'; then
               echo "::error::Commit ${sha} is not signed off: ${subject}"
@@ -46,7 +54,7 @@ jobs:
           done < <(git rev-list "${BASE_SHA}..${HEAD_SHA}")
 
           if [ "$unsigned" -eq 0 ]; then
-            echo "All ${count} commit(s) signed off."
+            echo "All ${count} commit(s) signed off (${skipped} clean merge(s) skipped)."
             exit 0
           fi
 
