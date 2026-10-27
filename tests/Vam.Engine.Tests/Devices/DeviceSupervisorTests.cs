@@ -210,6 +210,28 @@ public class DeviceSupervisorTests
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
+    public void ADeviceThatIsPresentButWillNotOpenIsNotMovedToAnIdenticalSpare()
+    {
+        using NullAudioBackend backend = new();
+
+        // Present under its own ID and refusing to open, the way a device held exclusively by
+        // another program does. The spare beside it is the same model.
+        AudioDeviceInfo stubborn = backend.AddDevice(
+            DeviceDirection.Capture,
+            new NullDeviceOptions("Trust USB microphone", NominalSampleRate: 44100, CanConvertRate: false));
+        AddDevice(backend, "Trust USB microphone");
+
+        using Fixture fixture = new(backend);
+        DeviceInputChannel channel = fixture.Track(stubborn.Id, "Trust USB microphone");
+
+        fixture.Supervisor.Poll(PastReconcile);
+
+        Assert.NotEqual(DeviceStreamState.Running, channel.State);
+        Assert.Equal(stubborn.Id, channel.DeviceId);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
     public void ADeviceAnotherStripHoldsIsNotTaken()
     {
         using NullAudioBackend backend = new();

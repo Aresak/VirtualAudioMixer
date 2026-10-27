@@ -209,20 +209,24 @@ public sealed class DeviceSupervisor(
         }
 
         Reconcile(present);
-        FollowMoves(infos);
+        FollowMoves(infos, present);
     }
 
-    void FollowMoves(IReadOnlyList<AudioDeviceInfo> present)
+    void FollowMoves(IReadOnlyList<AudioDeviceInfo> infos, HashSet<AudioDeviceId> present)
     {
         foreach (TrackedCaptureDevice device in tracked.Values.ToList())
         {
-            // A name equal to the ID is the placeholder for a device never seen by name.
-            if (device.IsOpen || device.FriendlyName == device.DeviceId.Value)
+            // Only a device that is gone has moved. One that is present but will not open - held
+            // exclusively by another program, say - is still the operator's device. A name equal to
+            // the ID is the placeholder for a device never seen by name.
+            if (device.IsOpen
+                || present.Contains(device.DeviceId)
+                || device.FriendlyName == device.DeviceId.Value)
             {
                 continue;
             }
 
-            AudioDeviceInfo? moved = DeviceMatch.Find(device.FriendlyName, present, tracked.ContainsKey, out int candidates);
+            AudioDeviceInfo? moved = DeviceMatch.Find(device.FriendlyName, infos, tracked.ContainsKey, out int candidates);
 
             if (moved is null)
             {
@@ -311,6 +315,7 @@ public sealed class DeviceSupervisor(
             device.Stream = stream;
             device.Channel.State = DeviceStreamState.Running;
             device.FriendlyName = NameOf(device.DeviceId, device.FriendlyName);
+            device.AmbiguityReported = false;
             device.Succeeded();
 
             Announce(DeviceChangeKind.Arrived, device);
