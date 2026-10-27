@@ -101,6 +101,23 @@ public class ProcessLoopbackBackendTests
         Assert.Empty(fixture.Opener.Opened);
     }
 
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void ASourceNoStripWantsIsForgottenAndTheEndpointsAreTold()
+    {
+        using Fixture fixture = new();
+        fixture.Processes.Start(200, 1, "msedge.exe");
+
+        fixture.Backend.OpenCapture(Meeting, Stereo).Dispose();
+
+        Assert.Contains(fixture.Backend.Enumerate(DeviceDirection.Capture), device => device.Id == Meeting);
+
+        fixture.Backend.Forget(Meeting);
+
+        Assert.DoesNotContain(fixture.Backend.Enumerate(DeviceDirection.Capture), device => device.Id == Meeting);
+        Assert.Contains(Meeting, fixture.Endpoints.ForgottenDevices);
+    }
+
     /// <summary>The backend over a null one, a scripted process list and stand-in captures.</summary>
     sealed class Fixture : IDisposable
     {
