@@ -56,7 +56,7 @@ public sealed class NullAudioBackend : IAudioBackend
     {
         // Identity is generated rather than derived from the name, precisely so two devices can
         // share a friendly name - which is the case that breaks name-based identity in real rooms.
-        AudioDeviceId id = new($"null:{direction}:{nextDeviceNumber++}");
+        AudioDeviceId id = new($"null:{direction}:{Interlocked.Increment(ref nextDeviceNumber) - 1}");
 
         return AddDevice(id, direction, deviceOptions);
     }

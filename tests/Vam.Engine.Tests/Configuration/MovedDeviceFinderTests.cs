@@ -183,16 +183,14 @@ public class MovedDeviceFinderTests
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
-    public void ADeviceThatIsPresentButWillNotOpenIsNotMovedToAnIdenticalSpare()
+    public void ADevicePresentUnderItsOwnIdIsNotMovedToAnIdenticalSpare()
     {
         using NullAudioBackend backend = new();
         using RecordingLoggerFactory loggers = new();
 
-        // Present under its own ID and refusing to open, the way a device held exclusively by
-        // another program does. The spare beside it is the same model.
-        AudioDeviceInfo stubborn = backend.AddDevice(
-            DeviceDirection.Capture,
-            new NullDeviceOptions(Trust, NominalSampleRate: 44100, CanConvertRate: false));
+        // Present is enough, whether or not it opens: one held exclusively by another program is
+        // still the operator's device, not a missing one. The spare beside it is the same model.
+        AudioDeviceInfo stubborn = backend.AddDevice(DeviceDirection.Capture, new NullDeviceOptions(Trust));
         backend.AddDevice(DeviceDirection.Capture, new NullDeviceOptions(Trust));
         GraphConfig config = Console(Strip(stubborn.Id, Trust));
         MovedDeviceFinder finder = new(loggers.CreateTyped<MovedDeviceFinder>());
