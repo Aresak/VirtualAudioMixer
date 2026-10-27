@@ -27,12 +27,14 @@ gh issue list --state all --limit 300 --json number,state,title,labels -q '.[] |
 Read all of them in the same area, not only the ones that look alike.
 
 **b. Search by the defect, not by your wording.** The class or method involved, the symptom an
-operator sees, the threads, the log line. Several searches, each short:
+operator sees, the threads, the log line. Several searches, each short, each a different angle:
 
 ```bash
-gh issue list --state all --search "RetargetChannel" --json number,state,title -q '.[] | "\(.number)\t\(.state)\t\(.title)"'
-gh issue list --state all --search "gRPC thread" --json number,state,title -q '.[] | "\(.number)\t\(.state)\t\(.title)"'
+gh issue list --state all --search "<term>" --json number,state,title -q '.[] | "\(.number)\t\(.state)\t\(.title)"'
 ```
+
+These help, but they do not replace (a). Searched with #74's own words — `GraphConfig`,
+"configuration two threads" — GitHub does not return #47. Only reading the titles found it.
 
 **c. Search pull requests too.** A fix may be in flight with no issue of its own, or listed under
 another one's "Outside the fence":

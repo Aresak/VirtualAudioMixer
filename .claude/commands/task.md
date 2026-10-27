@@ -16,15 +16,21 @@ anything.
 ## Steps
 
 **1. Check nobody has done it, then branch.** Several sessions work this repository at once. Fetch,
-then look for a pull request or a branch that already references the task:
+then ask GitHub three things: whether the issue is still open, which pull requests say they close it,
+and which pull requests or branches are named for it.
 
 ```bash
 git fetch origin
-gh pr list --state all --search "$1 in:body" --json number,state,title
+gh issue view $1 --json state,closedByPullRequestsReferences
+gh pr list --state all --limit 1000 --json number,state,headRefName -q '.[] | select(.headRefName | startswith("task/'$1'-"))'
 git branch -r --list "origin/task/$1-*"
 ```
 
-If one is open or merged, **stop and say so.** Do not build a second one. PR #71 duplicated the
+Not a text search for the number: `64 in:body` also finds a pull request that mentions "16–64 px".
+The first query catches a pull request that says `Closes #$1`; the other two catch one that does not.
+
+If the issue is closed, or a pull request is open or merged, **stop and say so.** Do not build a
+second one. PR #71 duplicated the
 already-merged #70 this way, from a `main` fetched an hour too early.
 
 Then `git switch -c task/$1-<short-slug> origin/main`. Never work on `main`.
