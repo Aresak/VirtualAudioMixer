@@ -812,7 +812,7 @@ public sealed class VamEngine : IDisposable
 
         foreach (DeviceInputChannel channel in Channels.Channels)
         {
-            config.InputDeviceOrder.Add(Supervisor!.DeviceInSlot(channel));
+            config.InputDeviceOrder.Add(DeviceSupervisor.DeviceInSlot(channel));
         }
     }
 

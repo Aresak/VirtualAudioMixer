@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Vam.Engine.Devices.Abstractions;
 using Vam.Engine.Devices.Extensions;
@@ -95,7 +96,9 @@ public sealed class DeviceSupervisor(
 
         if (vacated.Count > 0)
         {
-            channels.Replace(vacated[0], channel);
+            bool isReplaced = channels.Replace(vacated[0], channel);
+
+            Debug.Assert(isReplaced, "A vacant slot's channel was not in the registry.");
             vacated.RemoveAt(0);
         }
         else
@@ -124,6 +127,7 @@ public sealed class DeviceSupervisor(
         }
 
         Close(device, DeviceStreamState.Stopped);
+        device.Channel.Vacate();
         vacated.Add(device.Channel);
 
         return true;
@@ -132,8 +136,12 @@ public sealed class DeviceSupervisor(
     /// <summary>The device a registry slot holds, or <see cref="VacantSlot"/> when it holds none.</summary>
     /// <param name="channel">A registered channel.</param>
     /// <returns>Its device.</returns>
-    public AudioDeviceId DeviceInSlot(DeviceInputChannel channel) =>
-        vacated.Contains(channel) ? VacantSlot : channel.DeviceId;
+    public static AudioDeviceId DeviceInSlot(DeviceInputChannel channel)
+    {
+        ArgumentNullException.ThrowIfNull(channel);
+
+        return channel.IsVacant ? VacantSlot : channel.DeviceId;
+    }
 
     /// <summary>
     /// Moves a tracked device to the endpoint ID Windows now knows it by, and tries to open it.
@@ -188,12 +196,16 @@ public sealed class DeviceSupervisor(
         }
 
         Close(previous, DeviceStreamState.Stopped);
+        previous.Channel.Vacate();
 
         DeviceInputChannel channel = new(to, options, loggerFactory.CreateLogger<DeviceInputChannel>());
         TrackedCaptureDevice device = new(to, channel, captureOptions);
 
         tracked[to] = device;
-        channels.Replace(previous.Channel, channel);
+
+        bool isReplaced = channels.Replace(previous.Channel, channel);
+
+        Debug.Assert(isReplaced, "A tracked device's channel was not in the registry.");
 
         TryOpen(device);
 

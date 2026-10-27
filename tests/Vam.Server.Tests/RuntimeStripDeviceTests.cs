@@ -73,6 +73,33 @@ public sealed class RuntimeStripDeviceTests : IDisposable
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
+    public async Task AVacantSlotIsSilentWithoutReportingDropouts()
+    {
+        devices.AddDevice(DeviceDirection.Capture, new NullDeviceOptions("Lectern", Signal: NullSignal.Tone));
+        devices.AddDevice(DeviceDirection.Capture, new NullDeviceOptions("Mayor", Signal: NullSignal.Tone));
+        devices.AddDevice(DeviceDirection.Render, new NullDeviceOptions("Monitor", ChannelCount: 2));
+
+        using VamEngine engine = CreateEngine();
+        using SignalPump pump = new(devices);
+        engine.Start();
+
+        // Both strips, so every slot is vacant and nothing else can account for a dropout.
+        Assert.True(await engine.OnControlLoopAsync(() => engine.RemoveChannel(0) && engine.RemoveChannel(0), Token));
+
+        long dropouts = engine.Dropouts.TotalRecorded;
+        long blocks = engine.Clock!.BlocksRendered;
+        long[] underruns = [.. engine.Channels.Channels.Select(channel => channel.GetTelemetry().UnderrunCount)];
+
+        await Task.Delay(TimeSpan.FromSeconds(1), Token);
+
+        Assert.True(engine.Clock.BlocksRendered > blocks, "The clock stopped pulling, so this proves nothing.");
+        Assert.All(engine.Channels.Channels, channel => Assert.True(channel.IsVacant));
+        Assert.Equal(underruns, engine.Channels.Channels.Select(channel => channel.GetTelemetry().UnderrunCount));
+        Assert.Equal(dropouts, engine.Dropouts.TotalRecorded);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
     public async Task TheRegistryAndTheInputOrderStayInStep()
     {
         AudioDeviceInfo first = devices.AddDevice(DeviceDirection.Capture, new NullDeviceOptions("A"));
@@ -154,7 +181,7 @@ public sealed class RuntimeStripDeviceTests : IDisposable
         (AudioDeviceId[] Registry, AudioDeviceId[] Order, AudioDeviceId[] Tracked, AudioDeviceId[] Strips) state =
             await engine.OnControlLoopAsync(
                 () => (
-                    engine.Channels.Channels.Select(engine.Supervisor!.DeviceInSlot).ToArray(),
+                    engine.Channels.Channels.Select(DeviceSupervisor.DeviceInSlot).ToArray(),
                     engine.Graph!.Config.InputDeviceOrder.ToArray(),
                     engine.Supervisor!.TrackedDevices.ToArray(),
                     engine.Graph.Config.Channels.Select(channel => channel.DeviceId).ToArray()),
