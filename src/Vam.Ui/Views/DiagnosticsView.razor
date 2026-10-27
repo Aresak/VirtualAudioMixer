@@ -1,5 +1,7 @@
 @inherits VamComponent
-@implements IDisposable
+@using Vam.Ui.Extensions
+@implements IAsyncDisposable
+@inject IJSRuntime Js
 
 @*
     EPIC-11. K1 to K7, in tabs.
@@ -21,7 +23,7 @@
             {
                 <button type="button"
                         class="@(tab == id ? "on" : null)"
-                        @onclick="() => tab = id">@L[key]</button>
+                        @onclick="() => Select(id)">@L[key]</button>
             }
         </div>
 
@@ -210,17 +212,42 @@
                         break;
 
                     case DiagnosticsTab.Log:
-                        @* K7. *@
+                        @*
+                            K7. Newest first, as the mockup draws it. While the reader is scrolled
+                            away from the newest line the box holds still and counts what arrived.
+                        *@
+                        IReadOnlyList<LogLine> shown = Shown(state);
+
                         <div class="row">
-                            <input type="text" @bind="filter" @bind:event="oninput"
-                                   placeholder="@L["diag.filter"]" aria-label="@L["diag.log"]" />
-                            <span class="chip">@Filtered(state).Count</span>
+                            @foreach ((LogLevelFilter id, string key) in Levels)
+                            {
+                                <button type="button"
+                                        class="chip @(level == id ? "on" : null)"
+                                        @onclick="() => level = id">@L[key]</button>
+                            }
+
+                            <input type="text"
+                                   @bind="filter"
+                                   @bind:event="oninput"
+                                   placeholder="@L["diag.filter"]"
+                                   aria-label="@L["diag.log"]" />
+                            <span class="logcount">@L.Format("diag.lineCount", shown.Count)</span>
+
+                            @if (held is not null)
+                            {
+                                <button type="button"
+                                        class="btn sm"
+                                        @onclick="ToNewestAsync">@L.Format("diag.newLines", Waiting(state))</button>
+                            }
                         </div>
 
                         <div class="logbox"
-                             style="margin-top:10px">
-                            @foreach (LogLine line in Filtered(state))
+                             style="margin-top:10px"
+                             @ref="logBox">
+                            @for (int index = shown.Count - 1; index >= 0; index--)
                             {
+                                LogLine line = shown[index];
+
                                 <div>
                                     <span class="t">@When(line.TimestampTicks) </span>
                                     <span style="color:@LevelColour(line.Level)">@line.Level </span>

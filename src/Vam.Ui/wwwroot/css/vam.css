@@ -845,6 +845,7 @@ input[type=checkbox] { accent-color: var(--brass); width: 15px; height: 15px; }
 .logbox{background:var(--sunken);border:1px solid var(--line);border-radius:2px;padding:9px 11px;
   font-family:var(--f-mono);font-size:11.5px;line-height:1.65;max-height:300px;overflow:auto}
 .logbox .t{color:var(--ink-mute)}
+.logcount{color:var(--ink-mute);font-size:11px}
 
 /* Rules the mockup expresses through JavaScript or a body class, and which this console needs as
    plain CSS because its state lives in C#. */
