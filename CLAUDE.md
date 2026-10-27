@@ -39,10 +39,10 @@ when the project changes shape, so a row can be trusted rather than read as inte
 |---|---|---|---|
 | `src/Vam.Core` | `VamException`, the base for VAM's own exceptions | Cross-cutting primitives everything shares | Apache-2.0 |
 | `src/Vam.Engine` | The device abstraction, ring buffer, device registry, drift estimator, resampler, fill servo and per-device input channel. Platform-free, and a test enforces it | The mix graph and DSP, in EPIC-03 onwards | AGPL-3.0-or-later **plus the modifier exception** |
-| `src/Vam.Engine.Windows` | WASAPI capture and render, driving the clients directly, plus device notifications | Later ASIO and RNNoise interop | AGPL-3.0-or-later |
+| `src/Vam.Engine.Windows` | WASAPI capture and render, driving the clients directly, plus device notifications and a Shell_NotifyIcon tray icon | Later ASIO and RNNoise interop | AGPL-3.0-or-later |
 | `src/Vam.Modifiers.Abstractions` | The modifier ABI: `Modifier`, its context, its descriptors. **References nothing** | The same, permanently — every addition is a rebuild for every existing modifier | AGPL-3.0-or-later **plus the modifier exception** |
 | `src/Vam.Protocol` | The `.proto` contracts, the generated gRPC client and server, and the meter frame codec | The same, versioned | Apache-2.0 |
-| `src/Vam.Server` | The headless engine host and its gRPC service. Owns the devices, the graph, the clock and the recording | The same, plus whatever EPIC-12 adds | AGPL-3.0-or-later |
+| `src/Vam.Server` | The headless engine host, its gRPC service and its tray icon. Owns the devices, the graph, the clock and the recording | The same, plus whatever EPIC-12 adds | AGPL-3.0-or-later |
 | `src/Vam.Ui` | The whole console — every view, component, the session client, the startup connector and the two string files. A host contributes nothing but a startup file | The same, plus whatever later epics add to the console | MPL-2.0 |
 | `src/Vam.Client` | The MAUI Blazor Hybrid host: a startup file, its platform services and the engine launcher. A `.razor` file here is a defect | The same | MPL-2.0 |
 | `src/Vam.WebClient` | The Blazor Server host, and the same three files for a browser. It cannot start an engine and says so | The same | MPL-2.0 |

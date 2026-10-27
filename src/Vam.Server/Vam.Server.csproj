@@ -29,6 +29,15 @@
     <PackageReference Include="Shiny.Mediator" />
   </ItemGroup>
 
+  <!-- The tray's artwork and words. Named explicitly so ".en" and ".cs" are not read as cultures. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Tray/Resources/engine-*.ico"
+                      LogicalName="Vam.Server.Tray.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Tray/Resources/tray.*.json"
+                      LogicalName="Vam.Server.Tray.%(Filename)%(Extension)"
+                      WithCulture="false" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Vam.Core\Vam.Core.csproj" />
     <ProjectReference Include="..\Vam.Engine\Vam.Engine.csproj" />

@@ -1,0 +1,16 @@
+{
+  "tray.caption": "VAM engine",
+  "tray.running": "VAM engine — running",
+  "tray.recording": "VAM engine — recording {0}",
+  "tray.fault": "Muted, device failed: {0}",
+  "tray.address": "Listening on {0}",
+  "tray.dropouts": "Dropouts: {0}",
+  "tray.openConsole": "Open console",
+  "tray.startRecording": "Start recording",
+  "tray.stopRecording": "Stop recording",
+  "tray.stopRecordingWhy": "Stop recording? The files are closed and a new recording starts a new folder.",
+  "tray.stopEngine": "Stop engine",
+  "tray.stopEngineWhy": "Stop the engine? The recording running now ends and its files are closed, and sound stops.",
+  "tray.notDone": "Not done",
+  "tray.noConsole": "The console could not be opened. The engine's log says why."
+}
