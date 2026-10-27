@@ -140,6 +140,12 @@ public interface IVamSession
     /// </remarks>
     ValueTask<PastSessionList?> GetPastSessionsAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>The programs with audio on the engine's machine, which a strip can take as its source. #95.</summary>
+    /// <param name="cancellationToken">Gives up waiting.</param>
+    /// <returns>The programs, or an empty list when the engine is too old to say or did not answer.</returns>
+    /// <remarks>Asked when a selector opens: programs come and go during a meeting, unlike endpoints.</remarks>
+    ValueTask<IReadOnlyList<AudioProcess>> GetAudioProcessesAsync(CancellationToken cancellationToken = default);
+
     /// <summary>Deletes a past session from the engine's disk. #99.</summary>
     /// <param name="directory">The folder, as the engine listed it.</param>
     /// <param name="cancellationToken">Gives up waiting.</param>

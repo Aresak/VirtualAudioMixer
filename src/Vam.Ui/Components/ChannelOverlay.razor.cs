@@ -17,7 +17,11 @@ namespace Vam.Ui.Components;
 /// <summary>The code behind <c>ChannelOverlay.razor</c>.</summary>
 public partial class ChannelOverlay
 {
+    IReadOnlyList<AudioProcess> processes = [];
+
     int Count => Session.Console?.Channels.Count ?? 0;
+
+    IReadOnlyList<AudioProcess> Programs => processes.Besides(Captures);
 
     IReadOnlyList<BusState> Buses => Session.Console?.Buses ?? [];
 
@@ -29,7 +33,14 @@ public partial class ChannelOverlay
             ? console.Channels[Shell.SelectedChannel]
             : null;
 
+    /// <inheritdoc />
+    protected override async Task OnInitializedAsync() =>
+        processes = await Session.GetAudioProcessesAsync();
+
     static string Colour(ChannelState channel) => channel.ToStripColour();
+
+    string SourceName(string deviceId) =>
+        Captures.NameOf(deviceId) is { Length: > 0 } name ? name : processes.NameOf(deviceId);
 
     string Rates(ChannelState channel) =>
         Session.SampleRate.ToString(CultureInfo.InvariantCulture)

@@ -268,6 +268,9 @@ public class EngineConnectorTests
         public ValueTask<PastSessionList?> GetPastSessionsAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+        public ValueTask<IReadOnlyList<AudioProcess>> GetAudioProcessesAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public ValueTask<CommandReply?> DeletePastSessionAsync(string directory, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
