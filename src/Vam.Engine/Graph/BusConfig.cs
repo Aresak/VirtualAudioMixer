@@ -34,6 +34,12 @@ public sealed record BusConfig
     public AudioDeviceId OutputDeviceId { get; init; } = AudioDeviceId.None;
 
     /// <summary>
+    /// The output device's friendly name when it was last present, so it can be found again under
+    /// a new endpoint ID.
+    /// </summary>
+    public string OutputDeviceName { get; init; } = string.Empty;
+
+    /// <summary>
     /// The colour its strip is topped with. U5.
     /// </summary>
     public string Colour { get; init; } = string.Empty;

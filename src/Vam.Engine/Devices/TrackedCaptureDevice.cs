@@ -29,7 +29,7 @@ sealed class TrackedCaptureDevice(
     TimeSpan remaining = TimeSpan.Zero;
 
     /// <summary>Which device.</summary>
-    public AudioDeviceId DeviceId => deviceId;
+    public AudioDeviceId DeviceId { get; set; } = deviceId;
 
     /// <summary>The channel it feeds. Outlives the stream, so a strip keeps its identity across a gap.</summary>
     public DeviceInputChannel Channel => channel;

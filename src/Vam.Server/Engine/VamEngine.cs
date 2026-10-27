@@ -41,10 +41,14 @@ public sealed class VamEngine : IDisposable
     /// </summary>
     const int CaptureBufferMilliseconds = 20;
 
+    /// <summary>How often absent devices are looked for under a new endpoint ID. Enumerating is not free.</summary>
+    static readonly TimeSpan MovedDeviceInterval = TimeSpan.FromSeconds(5);
+
     readonly EngineOptions options;
     readonly ILoggerFactory loggers;
     readonly ILogger<VamEngine> logger;
     readonly ConsoleStore store;
+    readonly MovedDeviceFinder moved;
     readonly CancellationTokenSource stopping = new();
     readonly Dictionary<(int Channel, int Link), long> overruns = [];
 
@@ -56,6 +60,7 @@ public sealed class VamEngine : IDisposable
     TimeSpan sinceMeters;
     object? meterPlan;
     TimeSpan sinceLoad;
+    TimeSpan sinceMoved;
     string lastRecordingRoot = string.Empty;
 
     readonly IAudioBackend? supplied;
@@ -81,6 +86,7 @@ public sealed class VamEngine : IDisposable
 
         logger = loggers.CreateLogger<VamEngine>();
         store = new ConsoleStore(loggers.CreateLogger<ConsoleStore>());
+        moved = new MovedDeviceFinder(loggers.CreateLogger<MovedDeviceFinder>());
 
         Channels = new DeviceInputChannelRegistry();
         Modifiers = ModifierRegistry.CreateDefault();
@@ -214,6 +220,9 @@ public sealed class VamEngine : IDisposable
         Supervisor = new DeviceSupervisor(backend, Channels, loggers);
 
         GraphConfig config = LoadOrDiscover(backend);
+
+        // Before anything opens, so a device Windows renamed opens under its new ID like any other.
+        moved.Follow(config, backend);
 
         // Before the graph is compiled, because the compiler reads these to decide which sends it
         // refuses. Done on every start rather than saved once: the hardware in the room changes.
@@ -1241,6 +1250,7 @@ public sealed class VamEngine : IDisposable
         sinceLoad += interval;
         sinceCorrection += interval;
         sinceMeters += interval;
+        sinceMoved += interval;
 
         if (sinceLoad >= TimeSpan.FromSeconds(1))
         {
@@ -1260,7 +1270,53 @@ public sealed class VamEngine : IDisposable
             sinceCorrection = TimeSpan.Zero;
         }
 
+        if (sinceMoved >= MovedDeviceInterval)
+        {
+            FollowMovedDevices();
+            sinceMoved = TimeSpan.Zero;
+        }
+
         PublishMeters();
+    }
+
+    /// <summary>Re-aims strips and buses whose device came back under a new endpoint ID.</summary>
+    void FollowMovedDevices()
+    {
+        if (Graph is not { } graph || backend is not { } devices)
+        {
+            return;
+        }
+
+        IReadOnlyList<MovedDevice> moves;
+
+        // The supervisor still tracks devices whose strips were removed or re-aimed, and those are
+        // not free to take.
+        try
+        {
+            moves = moved.Follow(graph.Config, devices, Supervisor?.TrackedDevices);
+        }
+        catch (InvalidOperationException error)
+        {
+            // A strip or bus added or removed by a command mid-pass. The next pass looks again.
+            logger.LogDebug(error, "The console changed while moved devices were being looked for.");
+            return;
+        }
+
+        if (moves.Count == 0)
+        {
+            return;
+        }
+
+        foreach (MovedDevice move in moves)
+        {
+            if (move.Direction == DeviceDirection.Capture && Supervisor?.Retarget(move.From, move.To) == false)
+            {
+                logger.LogWarning("{DeviceId} could not be re-opened under its new ID.", move.To.Value);
+            }
+        }
+
+        // Re-opens any bus output, re-aims the clock at the primary bus and recompiles.
+        BindBusOutputs(graph.Config);
     }
 
     void PublishMeters()

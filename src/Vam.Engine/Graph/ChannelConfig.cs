@@ -16,6 +16,15 @@ public sealed record ChannelConfig
     /// <summary>The device this strip listens to.</summary>
     public required AudioDeviceId DeviceId { get; init; }
 
+    /// <summary>
+    /// The device's friendly name when it was last present, or empty when it has not been seen.
+    /// </summary>
+    /// <remarks>
+    /// Kept apart from <see cref="Name"/>, which the operator renames. It is how the device is found
+    /// again when Windows gives it a new endpoint ID.
+    /// </remarks>
+    public string DeviceName { get; init; } = string.Empty;
+
     /// <summary>What to call it on the console.</summary>
     public required string Name { get; init; }
 
