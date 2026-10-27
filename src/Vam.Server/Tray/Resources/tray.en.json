@@ -6,11 +6,13 @@
   "tray.address": "Listening on {0}",
   "tray.dropouts": "Dropouts: {0}",
   "tray.openConsole": "Open console",
+  "tray.startMeetingBrowser": "Start meeting browser",
   "tray.startRecording": "Start recording",
   "tray.stopRecording": "Stop recording",
   "tray.stopRecordingWhy": "Stop recording? The files are closed and a new recording starts a new folder.",
   "tray.stopEngine": "Stop engine",
   "tray.stopEngineWhy": "Stop the engine? The recording running now ends and its files are closed, and sound stops.",
   "tray.notDone": "Not done",
-  "tray.noConsole": "The console could not be opened. The engine's log says why."
+  "tray.noConsole": "The console could not be opened. The engine's log says why.",
+  "tray.noMeetingBrowser": "The meeting browser could not be started. The engine's log says why."
 }

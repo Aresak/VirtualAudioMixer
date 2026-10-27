@@ -6,11 +6,13 @@
   "tray.address": "Naslouchá na {0}",
   "tray.dropouts": "Výpadky: {0}",
   "tray.openConsole": "Otevřít konzoli",
+  "tray.startMeetingBrowser": "Spustit prohlížeč schůzky",
   "tray.startRecording": "Spustit nahrávání",
   "tray.stopRecording": "Zastavit nahrávání",
   "tray.stopRecordingWhy": "Zastavit nahrávání? Soubory se zavřou a další nahrávka začne novou složkou.",
   "tray.stopEngine": "Vypnout engine",
   "tray.stopEngineWhy": "Vypnout engine? Probíhající nahrávání skončí a jeho soubory se uzavřou, zvuk se zastaví.",
   "tray.notDone": "Neprovedeno",
-  "tray.noConsole": "Konzoli se nepodařilo otevřít. Důvod je v logu enginu."
+  "tray.noConsole": "Konzoli se nepodařilo otevřít. Důvod je v logu enginu.",
+  "tray.noMeetingBrowser": "Prohlížeč schůzky se nepodařilo spustit. Důvod je v logu enginu."
 }

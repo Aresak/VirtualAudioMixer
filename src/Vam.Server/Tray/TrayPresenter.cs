@@ -26,17 +26,26 @@ public sealed class TrayPresenter(TrayText text)
             ? TrayGlyph.Fault
             : status.IsRecording ? TrayGlyph.Recording : TrayGlyph.Running;
 
-        TrayMenuItem[] menu =
+        List<TrayMenuItem> menu =
         [
-            new((int)TrayCommand.OpenConsole, text["tray.openConsole"]),
+            new((int)TrayCommand.OpenConsole, text["tray.openConsole"])
+        ];
+
+        if (status.CanStartMeetingBrowser)
+        {
+            menu.Add(new((int)TrayCommand.StartMeetingBrowser, text["tray.startMeetingBrowser"]));
+        }
+
+        menu.AddRange(
+        [
             status.IsRecording
                 ? new((int)TrayCommand.StopRecording, text["tray.stopRecording"], text["tray.stopRecordingWhy"])
                 : new((int)TrayCommand.StartRecording, text["tray.startRecording"]),
             TrayMenuItem.Separator,
             new((int)TrayCommand.StopEngine, text["tray.stopEngine"], status.IsRecording ? text["tray.stopEngineWhy"] : null)
-        ];
+        ]);
 
-        return new TrayView(glyph, Tooltip(status), text["tray.caption"], menu, (int)TrayCommand.OpenConsole);
+        return new TrayView(glyph, Tooltip(status), text["tray.caption"], [.. menu], (int)TrayCommand.OpenConsole);
     }
 
     /// <summary>The mediator request a menu item stands for.</summary>
