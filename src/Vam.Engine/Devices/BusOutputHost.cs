@@ -91,8 +91,9 @@ public sealed class BusOutputHost(IAudioBackend backend, ILoggerFactory loggers)
     /// <param name="elapsed">Time since the last call.</param>
     public void UpdateCorrections(TimeSpan elapsed)
     {
-        foreach (Binding binding in bindings.Values)
+        foreach ((int busIndex, Binding binding) in bindings)
         {
+            Follow(busIndex, binding);
             binding.Channel.UpdateCorrection(elapsed);
         }
     }
@@ -161,6 +162,28 @@ public sealed class BusOutputHost(IAudioBackend backend, ILoggerFactory loggers)
                 "Bus {Bus} could not open {DeviceId}. It will keep mixing, and nothing will come out of it.",
                 request.BusIndex,
                 request.DeviceId.Value);
+        }
+    }
+
+    void Follow(int busIndex, Binding binding)
+    {
+        DeviceStreamState state = binding.Stream.State;
+
+        if (state == binding.Channel.State)
+        {
+            return;
+        }
+
+        // A removed or failed device stops draining the ring. Until the channel knows, every block
+        // the mix writes into it is counted as an overrun.
+        binding.Channel.State = state;
+
+        if (state is DeviceStreamState.Absent or DeviceStreamState.Faulted)
+        {
+            logger.LogWarning(
+                "Bus {Bus} lost {DeviceId}. It will keep mixing, and nothing will come out of it.",
+                busIndex,
+                binding.Channel.DeviceId.Value);
         }
     }
 

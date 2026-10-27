@@ -161,6 +161,8 @@ public sealed class DeviceInputChannel
     /// <summary>Whether the servo is currently asking for more correction than it may apply.</summary>
     public bool IsClamping => servo.IsClamping;
 
+    bool HasNoDevice => State is DeviceStreamState.Absent or DeviceStreamState.Faulted;
+
     /// <summary>
     /// Records what the stream underneath this channel was actually granted.
     /// </summary>
@@ -188,7 +190,8 @@ public sealed class DeviceInputChannel
     /// <param name="frameCount">Frames in the buffer.</param>
     public void Write(ReadOnlySpan<float> samples, int frameCount)
     {
-        if (!ring.TryWrite(samples[..(frameCount * channelCount)]))
+        // A bus writes here every block whether or not its device is still draining the ring.
+        if (!ring.TryWrite(samples[..(frameCount * channelCount)]) && !HasNoDevice)
         {
             dropouts?.Record(endpointIndex, DropoutKind.CaptureOverrun, frameCount, ring.FillFrames);
         }
@@ -239,6 +242,14 @@ public sealed class DeviceInputChannel
         if (produced < wanted)
         {
             destination[(produced * channelCount)..].Clear();
+
+            // Nothing was lost from a device that is not there. Its absence is reported once, by
+            // whoever noticed it, and counting every block of it would bury real dropouts.
+            if (HasNoDevice)
+            {
+                return produced;
+            }
+
             underrunCount += wanted - produced;
 
             // A note, not a log call. Writing a structured record into a pre-allocated ring is
@@ -261,6 +272,13 @@ public sealed class DeviceInputChannel
     /// <returns>The ratio now in force.</returns>
     public double UpdateCorrection(TimeSpan elapsed)
     {
+        // An empty ring with no device behind it is not drift, and the servo would only wind up
+        // against its limit. The supervisor resets the channel before the device is reopened.
+        if (HasNoDevice)
+        {
+            return Ratio;
+        }
+
         int fill = FillFrames;
 
         estimator.Observe(fill, elapsed);
