@@ -86,29 +86,43 @@ public sealed class RuntimeStripDeviceTests : IDisposable
         AudioDeviceId fourth = devices.AddDevice(DeviceDirection.Capture, new NullDeviceOptions("D")).Id;
         AudioDeviceId fifth = devices.AddDevice(DeviceDirection.Capture, new NullDeviceOptions("E")).Id;
         AudioDeviceId sixth = devices.AddDevice(DeviceDirection.Capture, new NullDeviceOptions("F")).Id;
+        AudioDeviceId seventh = devices.AddDevice(DeviceDirection.Capture, new NullDeviceOptions("G")).Id;
+        AudioDeviceId eighth = devices.AddDevice(DeviceDirection.Capture, new NullDeviceOptions("H")).Id;
 
         // Strips 0-2 are A, B, C. Every kind of step: a new device, a shared one, a retarget away from
-        // a shared device, one into a free slot, one onto a device already open, and removals.
-        Func<bool>[] steps =
+        // a shared device, one into a free slot, one onto a device already open, removals, and then a
+        // new device by add and by retarget once removals have left slots vacant.
+        (Func<bool> Step, AudioDeviceId FillsVacantSlot)[] steps =
         [
-            () => engine.AddChannel(new ChannelConfig { DeviceId = fourth, Name = "D" }) == 3,
-            () => engine.AddChannel(new ChannelConfig { DeviceId = first.Id, Name = "A again" }) == 4,
-            () => engine.RetargetChannel(0, fifth),
-            () => engine.RetargetChannel(1, sixth),
-            () => engine.RetargetChannel(2, first.Id),
-            () => engine.RemoveChannel(3),
-            () => engine.RemoveChannel(0),
-            () => engine.RetargetChannel(0, fourth),
-            () => engine.RemoveChannel(0)
+            (() => engine.AddChannel(new ChannelConfig { DeviceId = fourth, Name = "D" }) == 3, default),
+            (() => engine.AddChannel(new ChannelConfig { DeviceId = first.Id, Name = "A again" }) == 4, default),
+            (() => engine.RetargetChannel(0, fifth), default),
+            (() => engine.RetargetChannel(1, sixth), default),
+            (() => engine.RetargetChannel(2, first.Id), default),
+            (() => engine.RemoveChannel(3), default),
+            (() => engine.RemoveChannel(0), default),
+            (() => engine.RetargetChannel(0, fourth), default),
+            (() => engine.RemoveChannel(0), default),
+            (() => engine.AddChannel(new ChannelConfig { DeviceId = seventh, Name = "G" }) == 2, seventh),
+            (() => engine.RetargetChannel(0, eighth), eighth)
         ];
 
         AudioDeviceId[] before = await AssertInStepAsync(engine);
 
-        foreach (Func<bool> step in steps)
+        foreach ((Func<bool> step, AudioDeviceId fillsVacantSlot) in steps)
         {
             Assert.True(await engine.OnControlLoopAsync(step, Token));
 
             AudioDeviceId[] after = await AssertInStepAsync(engine);
+
+            if (!fillsVacantSlot.IsNone)
+            {
+                int slot = Array.IndexOf(after, fillsVacantSlot);
+
+                Assert.Equal(before.Length, after.Length);
+                Assert.Equal(DeviceSupervisor.VacantSlot, before[slot]);
+                Assert.Equal(fillsVacantSlot, (await engine.OnControlLoopAsync(() => engine.Channels.Channels[slot], Token)).DeviceId);
+            }
 
             // The clock pulls by slot under whichever plan is published, so a device that stays must
             // not move: a shift would hand a strip its neighbour's microphone until the recompile.
