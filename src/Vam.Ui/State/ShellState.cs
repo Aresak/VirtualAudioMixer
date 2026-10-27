@@ -31,6 +31,7 @@ public sealed class ShellState
     int meterFramesPerSecond = DefaultMeterFramesPerSecond;
     bool isMonitorBarOpen = true;
     bool isReorderArmed;
+    bool isAddingBus;
 
     readonly HashSet<int> clipped = [];
 
@@ -118,6 +119,9 @@ public sealed class ShellState
         set => Set(ref isReorderArmed, value);
     }
 
+    /// <summary>Whether the add overlay was opened from the buses, and so starts at its bus section. U17.</summary>
+    public bool IsAddingBus => isAddingBus;
+
     /// <summary>
     /// Whether a strip's clip indicator is latched. F1.
     /// </summary>
@@ -174,8 +178,21 @@ public sealed class ShellState
         Changed?.Invoke();
     }
 
+    /// <summary>Opens the add overlay at adding a strip.</summary>
+    public void OpenAddChannel() => OpenAdd(false);
+
+    /// <summary>Opens the add overlay at adding a bus.</summary>
+    public void OpenAddBus() => OpenAdd(true);
+
     /// <summary>Closes whatever overlay is open.</summary>
     public void CloseOverlay() => Overlay = OverlayId.None;
+
+    void OpenAdd(bool addsBus)
+    {
+        isAddingBus = addsBus;
+        overlay = OverlayId.Add;
+        Changed?.Invoke();
+    }
 
     void Set<T>(ref T field, T value)
     {
