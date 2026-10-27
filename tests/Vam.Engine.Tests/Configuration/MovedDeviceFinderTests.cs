@@ -159,6 +159,46 @@ public class MovedDeviceFinderTests
         Assert.Empty(loggers.Problems);
     }
 
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void ASecondAmbiguousAbsenceIsReportedAgain()
+    {
+        using NullAudioBackend backend = new();
+        using RecordingLoggerFactory loggers = new();
+        backend.AddDevice(DeviceDirection.Capture, new NullDeviceOptions(Jabra));
+        backend.AddDevice(DeviceDirection.Capture, new NullDeviceOptions(Jabra));
+        GraphConfig config = Console(Strip(SavedJabra, Jabra));
+        MovedDeviceFinder finder = new(loggers.CreateTyped<MovedDeviceFinder>());
+
+        finder.Follow(config, backend);
+
+        // Back under its old ID for a while, then gone again with the same two look-alikes present.
+        backend.AddDevice(SavedJabra, DeviceDirection.Capture, new NullDeviceOptions(Jabra));
+        finder.Follow(config, backend);
+        backend.RemoveDevice(SavedJabra);
+        finder.Follow(config, backend);
+
+        Assert.Equal(2, loggers.Problems.Count);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void ADevicePresentUnderItsOwnIdIsNotMovedToAnIdenticalSpare()
+    {
+        using NullAudioBackend backend = new();
+        using RecordingLoggerFactory loggers = new();
+
+        // Present is enough, whether or not it opens: one held exclusively by another program is
+        // still the operator's device, not a missing one. The spare beside it is the same model.
+        AudioDeviceInfo stubborn = backend.AddDevice(DeviceDirection.Capture, new NullDeviceOptions(Trust));
+        backend.AddDevice(DeviceDirection.Capture, new NullDeviceOptions(Trust));
+        GraphConfig config = Console(Strip(stubborn.Id, Trust));
+        MovedDeviceFinder finder = new(loggers.CreateTyped<MovedDeviceFinder>());
+
+        Assert.Empty(finder.Follow(config, backend));
+        Assert.Equal(stubborn.Id, config.Channels[0].DeviceId);
+    }
+
     static ChannelConfig Strip(AudioDeviceId deviceId, string name) => new() { DeviceId = deviceId, Name = name };
 
     static GraphConfig Console(params ChannelConfig[] strips)
