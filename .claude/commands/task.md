@@ -15,7 +15,21 @@ anything.
 
 ## Steps
 
-**1. Branch.** `git switch -c task/$1-<short-slug>` from an up-to-date `main`. Never work on `main`.
+**1. Check nobody has done it, then branch.** Several sessions work this repository at once. Fetch,
+then look for a pull request or a branch that already references the task:
+
+```bash
+git fetch origin
+gh pr list --state all --search "$1 in:body" --json number,state,title
+git branch -r --list "origin/task/$1-*"
+```
+
+If one is open or merged, **stop and say so.** Do not build a second one. PR #71 duplicated the
+already-merged #70 this way, from a `main` fetched an hour too early.
+
+Then `git switch -c task/$1-<short-slug> origin/main`. Never work on `main`.
+
+Anything found along the way that becomes an issue is opened with the `new-issue` skill.
 
 **2. Implement what the task says.** Its **What to build** section is the instruction; its **Constraints** are
 what must still hold afterwards.

@@ -18,6 +18,8 @@ only repeats what must never be missed.
 - Short, plain commit messages
 - Run the whole test suite before opening a pull request, not the part that seems relevant
 - Stop and say so when a task is `needs-hardware`, wrong, or blocked. Guessing is worse than stopping
+- Open an issue only through the `new-issue` skill, which checks for duplicates first. Before starting a
+  task, fetch and check that no pull request already does it
 
 ## Where things are
 
