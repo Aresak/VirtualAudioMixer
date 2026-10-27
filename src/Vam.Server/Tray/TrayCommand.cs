@@ -9,9 +9,12 @@ public enum TrayCommand
     /// <summary>Starts a console, or brings an open one to the front.</summary>
     OpenConsole = 1,
 
-    /// <summary>Starts the recording, or stops the one running.</summary>
-    ToggleRecording = 2,
+    /// <summary>Starts a recording.</summary>
+    StartRecording = 2,
+
+    /// <summary>Stops the recording.</summary>
+    StopRecording = 3,
 
     /// <summary>Ends the engine.</summary>
-    StopEngine = 3
+    StopEngine = 4
 }

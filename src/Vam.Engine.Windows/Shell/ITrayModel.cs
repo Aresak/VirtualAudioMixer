@@ -8,7 +8,7 @@ public interface ITrayModel
     /// <returns>What to show.</returns>
     TrayView Read();
 
-    /// <summary>Acts on a menu item, after any confirmation was answered yes.</summary>
+    /// <summary>Acts on a menu item the latest <see cref="Read"/> still offers, after any confirmation.</summary>
     /// <param name="id">The item's <see cref="TrayMenuItem.Id"/>.</param>
     void Choose(int id);
 }

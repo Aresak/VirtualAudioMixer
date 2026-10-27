@@ -106,8 +106,10 @@ public class TrayPresenterTests
     [Trait("Category", TestCategories.Unit)]
     public void TheRecordingItemSendsTheConsolesRequest()
     {
-        SetRecordingRequest start = Assert.IsType<SetRecordingRequest>(TrayPresenter.RequestFor(TrayCommand.ToggleRecording, Idle));
-        SetRecordingRequest stop = Assert.IsType<SetRecordingRequest>(TrayPresenter.RequestFor(TrayCommand.ToggleRecording, Recording));
+        // Fixed by the item rather than worked out from the state when it is chosen, which could
+        // have changed while the menu was open.
+        SetRecordingRequest start = Assert.IsType<SetRecordingRequest>(TrayPresenter.RequestFor(TrayCommand.StartRecording));
+        SetRecordingRequest stop = Assert.IsType<SetRecordingRequest>(TrayPresenter.RequestFor(TrayCommand.StopRecording));
 
         // An empty directory is the configured root, exactly what the console sends.
         Assert.Equal(new SetRecordingRequest(true, string.Empty), start);
@@ -118,18 +120,19 @@ public class TrayPresenterTests
     [Trait("Category", TestCategories.Unit)]
     public void StopEngineSendsTheShutdownRequest()
     {
-        Assert.IsType<ShutdownRequest>(TrayPresenter.RequestFor(TrayCommand.StopEngine, Recording));
+        Assert.IsType<ShutdownRequest>(TrayPresenter.RequestFor(TrayCommand.StopEngine));
     }
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
     public void OpeningTheConsoleIsNotAnEngineCommand()
     {
-        Assert.Null(TrayPresenter.RequestFor(TrayCommand.OpenConsole, Idle));
-        Assert.Null(TrayPresenter.RequestFor(TrayCommand.None, Idle));
+        Assert.Null(TrayPresenter.RequestFor(TrayCommand.OpenConsole));
+        Assert.Null(TrayPresenter.RequestFor(TrayCommand.None));
     }
 
     static TrayMenuItem StopEngine(TrayView view) => view.Menu.Single(item => item.Id == (int)TrayCommand.StopEngine);
 
-    static TrayMenuItem Toggle(TrayView view) => view.Menu.Single(item => item.Id == (int)TrayCommand.ToggleRecording);
+    static TrayMenuItem Toggle(TrayView view) =>
+        view.Menu.Single(item => item.Id is (int)TrayCommand.StartRecording or (int)TrayCommand.StopRecording);
 }

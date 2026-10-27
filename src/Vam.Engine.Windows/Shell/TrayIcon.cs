@@ -45,6 +45,7 @@ public sealed unsafe class TrayIcon : IDisposable
     TrayView? shown;
     Tuple<string, string>? told;
     bool isClosing;
+    bool isBusy;
     bool isDisposed;
 
     /// <summary>Prepares the icon. Nothing appears until <see cref="Start"/>.</summary>
@@ -293,15 +294,28 @@ public sealed unsafe class TrayIcon : IDisposable
 
     void OnIcon(uint mouse)
     {
-        if (mouse is WmRButtonUp or WmContextMenu)
+        // A menu or a question runs its own message loop, which would otherwise open a second one.
+        if (isBusy)
         {
-            ShowMenu();
+            return;
         }
-        else if (mouse == WmLButtonDblClk)
-        {
-            TrayView view = Refresh(isNew: false);
 
-            Act(view, view.DefaultId);
+        isBusy = true;
+
+        try
+        {
+            if (mouse is WmRButtonUp or WmContextMenu)
+            {
+                ShowMenu();
+            }
+            else if (mouse == WmLButtonDblClk)
+            {
+                Act(Refresh(isNew: false).DefaultId);
+            }
+        }
+        finally
+        {
+            isBusy = false;
         }
     }
 
@@ -352,7 +366,7 @@ public sealed unsafe class TrayIcon : IDisposable
             int chosen = TrackPopupMenuEx(menu, TpmReturnCmd | TpmRightButton, cursor.X, cursor.Y, window, 0);
             PostMessage(window, WmNull, 0, 0);
 
-            Act(view, chosen);
+            Act(chosen);
         }
         finally
         {
@@ -360,15 +374,20 @@ public sealed unsafe class TrayIcon : IDisposable
         }
     }
 
-    void Act(TrayView view, int id)
+    void Act(int id)
     {
-        if (id == 0 || view.Menu.FirstOrDefault(item => item.Id == id) is not { } item)
+        // Read again rather than trusting the menu: the state may have changed while it was open,
+        // and an item the engine no longer offers, or a question it now needs, must not be skipped.
+        TrayView view = model.Read();
+
+        if (Offered(view, id) is not { } item)
         {
             return;
         }
 
         if (item.Confirmation is { } question
-            && MessageBox(window, question, view.Caption, MbYesNo | MbIconWarning | MbDefButton2 | MbSetForeground) != IdYes)
+            && (MessageBox(window, question, view.Caption, MbYesNo | MbIconWarning | MbDefButton2 | MbSetForeground) != IdYes
+                || Offered(model.Read(), id) is null))
         {
             return;
         }
@@ -378,6 +397,9 @@ public sealed unsafe class TrayIcon : IDisposable
             model.Choose(id);
         }
     }
+
+    static TrayMenuItem? Offered(TrayView view, int id) =>
+        id == 0 ? null : view.Menu.FirstOrDefault(item => item.Id == id);
 
     void ShowTold()
     {

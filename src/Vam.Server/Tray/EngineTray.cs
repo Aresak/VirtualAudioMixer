@@ -22,7 +22,6 @@ public sealed class EngineTray(VamEngine engine, IMediator mediator, IServer ser
     readonly ConsoleLauncher launcher = new();
 
     TrayIcon? icon;
-    TrayStatus? status;
 
     /// <inheritdoc />
     public Task StartAsync(CancellationToken cancellationToken)
@@ -58,7 +57,7 @@ public sealed class EngineTray(VamEngine engine, IMediator mediator, IServer ser
     /// <inheritdoc />
     public TrayView Read()
     {
-        status = new TrayStatus
+        TrayStatus status = new()
         {
             Address = Address(),
             Dropouts = engine.Dropouts.TotalRecorded,
@@ -87,7 +86,7 @@ public sealed class EngineTray(VamEngine engine, IMediator mediator, IServer ser
             return;
         }
 
-        if (status is { } shown && TrayPresenter.RequestFor(command, shown) is { } request)
+        if (TrayPresenter.RequestFor(command) is { } request)
         {
             // Not awaited: the tray thread pumps messages and must not wait on the engine.
             _ = SendAsync(request);

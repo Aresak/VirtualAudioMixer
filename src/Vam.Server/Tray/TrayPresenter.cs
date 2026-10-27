@@ -30,8 +30,8 @@ public sealed class TrayPresenter(TrayText text)
         [
             new((int)TrayCommand.OpenConsole, text["tray.openConsole"]),
             status.IsRecording
-                ? new((int)TrayCommand.ToggleRecording, text["tray.stopRecording"], text["tray.stopRecordingWhy"])
-                : new((int)TrayCommand.ToggleRecording, text["tray.startRecording"]),
+                ? new((int)TrayCommand.StopRecording, text["tray.stopRecording"], text["tray.stopRecordingWhy"])
+                : new((int)TrayCommand.StartRecording, text["tray.startRecording"]),
             TrayMenuItem.Separator,
             new((int)TrayCommand.StopEngine, text["tray.stopEngine"], status.IsRecording ? text["tray.stopEngineWhy"] : null)
         ];
@@ -41,19 +41,14 @@ public sealed class TrayPresenter(TrayText text)
 
     /// <summary>The mediator request a menu item stands for.</summary>
     /// <param name="command">The item.</param>
-    /// <param name="status">The state the menu was shown in.</param>
     /// <returns>The request, or null for an item that is not one.</returns>
-    public static IRequest<CommandReply>? RequestFor(TrayCommand command, TrayStatus status)
+    public static IRequest<CommandReply>? RequestFor(TrayCommand command) => command switch
     {
-        ArgumentNullException.ThrowIfNull(status);
-
-        return command switch
-        {
-            TrayCommand.ToggleRecording => new SetRecordingRequest(!status.IsRecording, string.Empty),
-            TrayCommand.StopEngine => new ShutdownRequest(ShutdownReason),
-            _ => null
-        };
-    }
+        TrayCommand.StartRecording => new SetRecordingRequest(true, string.Empty),
+        TrayCommand.StopRecording => new SetRecordingRequest(false, string.Empty),
+        TrayCommand.StopEngine => new ShutdownRequest(ShutdownReason),
+        _ => null
+    };
 
     /// <summary>The hover text.</summary>
     /// <param name="status">The engine's state.</param>
