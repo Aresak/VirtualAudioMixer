@@ -13,27 +13,39 @@ namespace Vam.Engine.Diagnostics;
 /// somebody wrote it — "Strip 2 re-attached and unmuted after 340 ms" rather than a row of numbers.
 /// </para>
 /// <para>
-/// <b>Repeats are folded.</b> A device that has started underrunning does it every block, and three
-/// thousand identical lines a minute drives the one line that mattered off the top of the log.
+/// <b>Repeats are counted, not written.</b> The first dropout of a kind on an endpoint gets its own
+/// line; the ones after it are counted and written as one line per <see cref="Interval"/>. A device
+/// that keeps dropping out would otherwise fill the console's log tail by itself. The log ring is
+/// untouched, so the dropouts tab still lists every one.
 /// </para>
 /// </remarks>
-public sealed class DropoutPump(DropoutLog log, ILogger<DropoutPump> logger)
+/// <param name="log">The ring the audio threads write into.</param>
+/// <param name="logger">Where the lines go.</param>
+/// <param name="clock">What decides an interval has passed with nothing new arriving. The system clock if null.</param>
+public sealed class DropoutPump(DropoutLog log, ILogger<DropoutPump> logger, TimeProvider? clock = null)
 {
     /// <summary>Records taken per pump. Enough to keep up, bounded so one bad second cannot stall the loop.</summary>
     const int BatchSize = 256;
 
+    /// <summary>How long repeats are counted before they are written, unless told otherwise.</summary>
+    public static readonly TimeSpan DefaultInterval = TimeSpan.FromSeconds(10);
+
     readonly DropoutRecord[] batch = new DropoutRecord[BatchSize];
     readonly List<string> names = [];
+    readonly Dictionary<(int Endpoint, DropoutKind Kind), DropoutRun> runs = [];
+    readonly TimeProvider time = clock ?? TimeProvider.System;
 
-    DropoutKind lastKind;
-    int lastEndpoint = -1;
-    int repeats;
+    /// <summary>How long repeats of one kind on one endpoint are counted before one line says how many.</summary>
+    public TimeSpan Interval { get; init; } = DefaultInterval;
 
-    /// <summary>Records turned into log lines so far.</summary>
+    /// <summary>Records given a log line of their own so far.</summary>
     public long Reported { get; private set; }
 
-    /// <summary>Records folded into a repeat count rather than logged separately.</summary>
+    /// <summary>Records counted into a repeat line rather than logged separately.</summary>
     public long Folded { get; private set; }
+
+    /// <summary>Repeat lines written so far.</summary>
+    public long Summaries { get; private set; }
 
     /// <summary>
     /// Tells the pump what each endpoint is called, so the log can say so.
@@ -48,7 +60,7 @@ public sealed class DropoutPump(DropoutLog log, ILogger<DropoutPump> logger)
     }
 
     /// <summary>
-    /// Drains the log and writes what it found. Control thread.
+    /// Drains the log and writes what it found, and any count whose interval has passed. Control thread.
     /// </summary>
     /// <returns>Records taken this time.</returns>
     public int Pump()
@@ -60,17 +72,20 @@ public sealed class DropoutPump(DropoutLog log, ILogger<DropoutPump> logger)
             Report(batch[index]);
         }
 
+        Expire(time.GetUtcNow().UtcTicks);
+
         return count;
     }
 
-    /// <summary>Writes out anything being held as a repeat. Call when a session ends.</summary>
+    /// <summary>Writes out every count still being held. Call when a session ends.</summary>
     public void Flush()
     {
-        if (repeats > 0)
+        foreach (KeyValuePair<(int Endpoint, DropoutKind Kind), DropoutRun> entry in runs)
         {
-            logger.LogWarning("...and {Repeats} more like the last one.", repeats);
-            repeats = 0;
+            Summarise(entry.Key, entry.Value);
         }
+
+        runs.Clear();
     }
 
     static string Describe(DropoutKind kind) => kind switch
@@ -83,33 +98,87 @@ public sealed class DropoutPump(DropoutLog log, ILogger<DropoutPump> logger)
         _ => "reported something unrecognised"
     };
 
+    static DateTimeOffset LocalTime(long utcTicks) => new DateTimeOffset(utcTicks, TimeSpan.Zero).ToLocalTime();
+
     string NameOf(int endpointIndex) =>
         endpointIndex >= 0 && endpointIndex < names.Count ? names[endpointIndex] : $"endpoint {endpointIndex}";
 
     void Report(DropoutRecord record)
     {
-        // A device that has started underrunning does it every block. Three thousand identical lines
-        // a minute would push the one line that mattered off the top of the log.
-        if (record.Kind == lastKind && record.EndpointIndex == lastEndpoint)
-        {
-            repeats++;
-            Folded++;
+        (int Endpoint, DropoutKind Kind) key = (record.EndpointIndex, record.Kind);
 
-            return;
+        if (runs.TryGetValue(key, out DropoutRun? run))
+        {
+            bool isElapsed = record.TimestampTicks >= run.StartTicks + Interval.Ticks;
+
+            if (isElapsed && run.Count == 0)
+            {
+                runs.Remove(key);
+            }
+            else
+            {
+                if (isElapsed)
+                {
+                    Summarise(key, run);
+                    run.Restart(record.TimestampTicks);
+                }
+
+                run.Add(record);
+                Folded++;
+
+                return;
+            }
         }
 
-        Flush();
-
-        lastKind = record.Kind;
-        lastEndpoint = record.EndpointIndex;
+        runs[key] = new DropoutRun(record.TimestampTicks);
         Reported++;
 
         logger.LogWarning(
             "{Endpoint} {What} at {Time:HH:mm:ss.fff}, costing {Frames} frames ({Detail}).",
             NameOf(record.EndpointIndex),
             Describe(record.Kind),
-            new DateTimeOffset(record.TimestampTicks, TimeSpan.Zero).ToLocalTime(),
+            LocalTime(record.TimestampTicks),
             record.Frames,
             record.Detail);
+    }
+
+    void Expire(long nowTicks)
+    {
+        // A run that went quiet for a whole interval is forgotten, so the next dropout gets a line of its own.
+        foreach (KeyValuePair<(int Endpoint, DropoutKind Kind), DropoutRun> entry in runs)
+        {
+            if (nowTicks < entry.Value.StartTicks + Interval.Ticks)
+            {
+                continue;
+            }
+
+            if (entry.Value.Count == 0)
+            {
+                runs.Remove(entry.Key);
+            }
+            else
+            {
+                Summarise(entry.Key, entry.Value);
+                entry.Value.Restart(nowTicks);
+            }
+        }
+    }
+
+    void Summarise((int Endpoint, DropoutKind Kind) key, DropoutRun run)
+    {
+        if (run.Count == 0)
+        {
+            return;
+        }
+
+        Summaries++;
+
+        logger.LogWarning(
+            "{Endpoint} {What} {Repeats} more times by {Time:HH:mm:ss.fff}, costing {Frames} frames.",
+            NameOf(key.Endpoint),
+            Describe(key.Kind),
+            run.Count,
+            LocalTime(run.LastTicks),
+            run.Frames);
     }
 }
