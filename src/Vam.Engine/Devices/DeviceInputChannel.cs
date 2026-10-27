@@ -190,7 +190,8 @@ public sealed class DeviceInputChannel
     /// <param name="frameCount">Frames in the buffer.</param>
     public void Write(ReadOnlySpan<float> samples, int frameCount)
     {
-        if (!ring.TryWrite(samples[..(frameCount * channelCount)]))
+        // A bus writes here every block whether or not its device is still draining the ring.
+        if (!ring.TryWrite(samples[..(frameCount * channelCount)]) && !HasNoDevice)
         {
             dropouts?.Record(endpointIndex, DropoutKind.CaptureOverrun, frameCount, ring.FillFrames);
         }
