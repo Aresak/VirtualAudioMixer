@@ -61,6 +61,9 @@ public sealed class DeviceSupervisor(
     /// <summary>Raised for every arrival, departure and failed open. Control thread.</summary>
     public event EventHandler<DeviceChange>? Changed;
 
+    /// <summary>Raised when an absent device is found again under a new ID. Control thread. #64.</summary>
+    public event EventHandler<DeviceMove>? Moved;
+
     /// <summary>The devices being kept open.</summary>
     public IReadOnlyCollection<AudioDeviceId> TrackedDevices => tracked.Keys;
 
@@ -70,11 +73,16 @@ public sealed class DeviceSupervisor(
     /// <param name="deviceId">Which device.</param>
     /// <param name="options">How to build its channel.</param>
     /// <param name="captureOptions">What to ask the device for.</param>
+    /// <param name="friendlyName">
+    /// What the device was called when last seen, or empty. Without it an absent device cannot be
+    /// found again under a new ID.
+    /// </param>
     /// <returns>The channel, which exists whether or not the device is currently present.</returns>
     public DeviceInputChannel Track(
         AudioDeviceId deviceId,
         DeviceInputChannelOptions options,
-        CaptureOptions captureOptions)
+        CaptureOptions captureOptions,
+        string friendlyName = "")
     {
         if (tracked.TryGetValue(deviceId, out TrackedCaptureDevice? existing))
         {
@@ -86,6 +94,11 @@ public sealed class DeviceSupervisor(
         // underneath it is transient.
         DeviceInputChannel channel = new(deviceId, options, loggerFactory.CreateLogger<DeviceInputChannel>());
         TrackedCaptureDevice device = new(deviceId, channel, captureOptions);
+
+        if (friendlyName.Length > 0)
+        {
+            device.FriendlyName = friendlyName;
+        }
 
         tracked[deviceId] = device;
         channels.Add(channel);
@@ -187,14 +200,72 @@ public sealed class DeviceSupervisor(
 
         sinceReconcile = TimeSpan.Zero;
 
+        IReadOnlyList<AudioDeviceInfo> infos = backend.Enumerate(DeviceDirection.Capture);
         HashSet<AudioDeviceId> present = [];
 
-        foreach (AudioDeviceInfo info in backend.Enumerate(DeviceDirection.Capture))
+        foreach (AudioDeviceInfo info in infos)
         {
             present.Add(info.Id);
         }
 
         Reconcile(present);
+        FollowMoves(infos);
+    }
+
+    void FollowMoves(IReadOnlyList<AudioDeviceInfo> present)
+    {
+        foreach (TrackedCaptureDevice device in tracked.Values.ToList())
+        {
+            // A name equal to the ID is the placeholder for a device never seen by name.
+            if (device.IsOpen || device.FriendlyName == device.DeviceId.Value)
+            {
+                continue;
+            }
+
+            AudioDeviceInfo? moved = DeviceMatch.Find(device.FriendlyName, present, tracked.ContainsKey, out int candidates);
+
+            if (moved is null)
+            {
+                if (candidates > 1 && !device.AmbiguityReported)
+                {
+                    device.AmbiguityReported = true;
+
+                    logger.LogWarning(
+                        "{DeviceName} is not present under its ID, and {Count} devices carry that name. "
+                        + "It stays absent rather than guessing which one.",
+                        device.FriendlyName,
+                        candidates);
+                }
+
+                continue;
+            }
+
+            Move(device, moved);
+        }
+    }
+
+    void Move(TrackedCaptureDevice device, AudioDeviceInfo moved)
+    {
+        AudioDeviceId from = device.DeviceId;
+
+        // Same tracked entry and same channel, so the strip keeps its place in the registry and in
+        // the graph. Only the identity underneath changes.
+        tracked.Remove(from);
+        device.DeviceId = moved.Id;
+        device.Channel.DeviceId = moved.Id;
+        device.AmbiguityReported = false;
+        device.CancelRetry();
+        tracked[moved.Id] = device;
+
+        logger.LogInformation(
+            "{DeviceName} came back under a new endpoint ID: {From} is now {To}.",
+            moved.FriendlyName,
+            from.Value,
+            moved.Id.Value);
+
+        Moved?.Invoke(this, new DeviceMove(from, moved.Id, moved.FriendlyName));
+
+        TryOpen(device);
     }
 
     void Reconcile(HashSet<AudioDeviceId> present)

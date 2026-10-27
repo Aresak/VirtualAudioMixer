@@ -159,6 +159,75 @@ public class DeviceSupervisorTests
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
+    public void AnAbsentDeviceIsFoundAgainUnderANewId()
+    {
+        using NullAudioBackend backend = new();
+        AudioDeviceId old = new("null:Capture:before-the-port-changed");
+
+        using Fixture fixture = new(backend);
+        DeviceInputChannel channel = fixture.Track(old, "Trust USB microphone");
+        List<DeviceMove> moves = [];
+
+        fixture.Supervisor.Moved += (_, move) => moves.Add(move);
+
+        // Plugged into another port while the meeting runs: same name, new identity.
+        AudioDeviceInfo moved = AddDevice(backend, "Trust USB microphone");
+
+        fixture.Supervisor.Poll(PastReconcile);
+
+        Assert.Equal(DeviceStreamState.Running, channel.State);
+        Assert.Equal(moved.Id, channel.DeviceId);
+        Assert.Equal(new DeviceMove(old, moved.Id, "Trust USB microphone"), Assert.Single(moves));
+
+        // Same channel object in the same place, so the strip's graph input does not move.
+        Assert.Same(channel, Assert.Single(fixture.Channels.Channels));
+        Assert.Contains(moved.Id, fixture.Supervisor.TrackedDevices);
+        Assert.DoesNotContain(old, fixture.Supervisor.TrackedDevices);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void TwoDevicesWithTheNameLeaveTheStripAbsentAndSaySoOnce()
+    {
+        using NullAudioBackend backend = new();
+        AudioDeviceId old = new("null:Capture:before-the-port-changed");
+
+        using Fixture fixture = new(backend);
+        DeviceInputChannel channel = fixture.Track(old, "Trust USB microphone");
+
+        AddDevice(backend, "Trust USB microphone");
+        AddDevice(backend, "Trust USB microphone");
+
+        for (int reconcile = 0; reconcile < 3; reconcile++)
+        {
+            fixture.Supervisor.Poll(PastReconcile);
+        }
+
+        Assert.Equal(DeviceStreamState.Absent, channel.State);
+        Assert.Equal(old, channel.DeviceId);
+        Assert.Equal(1, fixture.Loggers.CountMentioning("rather than guessing"));
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void ADeviceAnotherStripHoldsIsNotTaken()
+    {
+        using NullAudioBackend backend = new();
+        AudioDeviceInfo held = AddDevice(backend, "Trust USB microphone");
+        AudioDeviceId old = new("null:Capture:before-the-port-changed");
+
+        using Fixture fixture = new(backend);
+        fixture.Track(held.Id, "Trust USB microphone");
+        DeviceInputChannel channel = fixture.Track(old, "Trust USB microphone");
+
+        fixture.Supervisor.Poll(PastReconcile);
+
+        Assert.Equal(DeviceStreamState.Absent, channel.State);
+        Assert.Equal(old, channel.DeviceId);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
     public void AMissedNotificationIsCaughtByTheReconcile()
     {
         using NullAudioBackend backend = new();
@@ -230,7 +299,7 @@ public class DeviceSupervisorTests
 
         public IReadOnlyList<DeviceChange> Changes => changes;
 
-        public DeviceInputChannel Track(AudioDeviceId deviceId) =>
+        public DeviceInputChannel Track(AudioDeviceId deviceId, string friendlyName = "") =>
             Supervisor.Track(
                 deviceId,
                 new DeviceInputChannelOptions
@@ -241,7 +310,8 @@ public class DeviceSupervisorTests
                     RingCapacityFrames = 4096,
                     TargetFillFrames = TargetFillFrames
                 },
-                new CaptureOptions(ShareMode.Shared, TimeSpan.FromMilliseconds(20), ChannelCount: 1));
+                new CaptureOptions(ShareMode.Shared, TimeSpan.FromMilliseconds(20), ChannelCount: 1),
+                friendlyName);
 
         public void Remove(AudioDeviceId deviceId) => PostAndPoll(DeviceChangeKind.Removed, deviceId);
 

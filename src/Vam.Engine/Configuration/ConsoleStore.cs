@@ -179,6 +179,8 @@ public sealed class ConsoleStore(ILogger<ConsoleStore> logger)
 
         public required string Name { get; init; }
 
+        public string DeviceName { get; init; } = string.Empty;
+
         public int ChannelCount { get; init; } = 1;
 
         public double TrimDb { get; init; }
@@ -197,6 +199,7 @@ public sealed class ConsoleStore(ILogger<ConsoleStore> logger)
         {
             DeviceId = channel.DeviceId.Value,
             Name = channel.Name,
+            DeviceName = channel.DeviceName,
             ChannelCount = channel.ChannelCount,
             TrimDb = channel.TrimDb,
             FaderDb = channel.FaderDb,
@@ -214,6 +217,7 @@ public sealed class ConsoleStore(ILogger<ConsoleStore> logger)
         {
             DeviceId = new Devices.Abstractions.AudioDeviceId(DeviceId),
             Name = Name,
+            DeviceName = DeviceName,
             ChannelCount = ChannelCount,
             TrimDb = TrimDb,
             FaderDb = FaderDb,
@@ -238,6 +242,8 @@ public sealed class ConsoleStore(ILogger<ConsoleStore> logger)
 
         public string OutputDeviceId { get; init; } = string.Empty;
 
+        public string OutputDeviceName { get; init; } = string.Empty;
+
         public static StoredBus From(BusConfig bus) => new()
         {
             Name = bus.Name,
@@ -245,7 +251,8 @@ public sealed class ConsoleStore(ILogger<ConsoleStore> logger)
             ChannelCount = bus.ChannelCount,
             GainDb = bus.GainDb,
             IsMuted = bus.IsMuted,
-            OutputDeviceId = bus.OutputDeviceId.Value
+            OutputDeviceId = bus.OutputDeviceId.Value,
+            OutputDeviceName = bus.OutputDeviceName
         };
 
         public BusConfig ToConfig() => new()
@@ -255,7 +262,8 @@ public sealed class ConsoleStore(ILogger<ConsoleStore> logger)
             ChannelCount = ChannelCount,
             GainDb = GainDb,
             IsMuted = IsMuted,
-            OutputDeviceId = new Devices.Abstractions.AudioDeviceId(OutputDeviceId)
+            OutputDeviceId = new Devices.Abstractions.AudioDeviceId(OutputDeviceId),
+            OutputDeviceName = OutputDeviceName
         };
     }
 

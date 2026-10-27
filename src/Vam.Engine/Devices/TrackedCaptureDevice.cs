@@ -28,8 +28,11 @@ sealed class TrackedCaptureDevice(
     TimeSpan backoff = FirstBackoff;
     TimeSpan remaining = TimeSpan.Zero;
 
-    /// <summary>Which device.</summary>
-    public AudioDeviceId DeviceId => deviceId;
+    /// <summary>Which device. Changes only when the device is found again under a new ID.</summary>
+    public AudioDeviceId DeviceId { get; set; } = deviceId;
+
+    /// <summary>Whether "several devices carry this name" has been said for this absence.</summary>
+    public bool AmbiguityReported { get; set; }
 
     /// <summary>The channel it feeds. Outlives the stream, so a strip keeps its identity across a gap.</summary>
     public DeviceInputChannel Channel => channel;

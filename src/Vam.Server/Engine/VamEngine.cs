@@ -212,8 +212,14 @@ public sealed class VamEngine : IDisposable
         ChooseNoiseSuppressor();
 
         Supervisor = new DeviceSupervisor(backend, Channels, loggers);
+        Supervisor.Moved += OnDeviceMoved;
+        Supervisor.Changed += OnDeviceChanged;
 
         GraphConfig config = LoadOrDiscover(backend);
+
+        // Before anything opens: a device Windows re-enumerated under a new ID is the same device,
+        // and the strips, the clock and the bus outputs should open it as such.
+        DeviceRebinder.Apply(config, backend, logger);
 
         // Before the graph is compiled, because the compiler reads these to decide which sends it
         // refuses. Done on every start rather than saved once: the hardware in the room changes.
@@ -738,7 +744,55 @@ public sealed class VamEngine : IDisposable
                 options.CaptureShareMode,
                 TimeSpan.FromMilliseconds(CaptureBufferMilliseconds),
                 width,
-                options.SampleRate));
+                options.SampleRate),
+            channel.DeviceName.Length > 0 ? channel.DeviceName : channel.Name);
+    }
+
+    /// <summary>Follows a strip's device to its new ID, so the console saves the one that works. #64.</summary>
+    void OnDeviceMoved(object? sender, DeviceMove move)
+    {
+        if (Graph is not { } graph)
+        {
+            return;
+        }
+
+        GraphConfig config = graph.Config;
+
+        for (int index = 0; index < config.Channels.Count; index++)
+        {
+            if (config.Channels[index].DeviceId == move.From)
+            {
+                config.Channels[index] = config.Channels[index] with { DeviceId = move.To, DeviceName = move.FriendlyName };
+            }
+        }
+
+        int at = config.InputDeviceOrder.IndexOf(move.From);
+
+        if (at >= 0)
+        {
+            config.InputDeviceOrder[at] = move.To;
+        }
+
+        graph.Recompile();
+    }
+
+    /// <summary>Remembers the name of a device a strip has just opened, for finding it again later.</summary>
+    void OnDeviceChanged(object? sender, DeviceChange change)
+    {
+        if (change.Kind != DeviceChangeKind.Arrived || Graph is not { } graph)
+        {
+            return;
+        }
+
+        List<ChannelConfig> channels = graph.Config.Channels;
+
+        for (int index = 0; index < channels.Count; index++)
+        {
+            if (channels[index].DeviceId == change.DeviceId && channels[index].DeviceName != change.FriendlyName)
+            {
+                channels[index] = channels[index] with { DeviceName = change.FriendlyName };
+            }
+        }
     }
 
     /// <summary>How many channels a strip's device actually produces.</summary>
@@ -1122,6 +1176,8 @@ public sealed class VamEngine : IDisposable
             clock.Preferred = PrimaryOutputDeviceOf(config);
         }
 
+        RememberOutputNames(config);
+
         List<BusOutputRequest> wanted = [];
         AudioDeviceId primary = PrimaryOutputDeviceOf(config);
 
@@ -1167,6 +1223,28 @@ public sealed class VamEngine : IDisposable
         }
 
         Graph.Recompile();
+    }
+
+    /// <summary>Records the name of each bus's device, so a bus re-aimed at runtime can be found again. #64.</summary>
+    void RememberOutputNames(GraphConfig config)
+    {
+        if (backend is null)
+        {
+            return;
+        }
+
+        IReadOnlyList<AudioDeviceInfo> renders = backend.Enumerate(DeviceDirection.Render);
+
+        for (int bus = 0; bus < config.Buses.Count; bus++)
+        {
+            foreach (AudioDeviceInfo device in renders)
+            {
+                if (device.Id == config.Buses[bus].OutputDeviceId && device.FriendlyName != config.Buses[bus].OutputDeviceName)
+                {
+                    config.Buses[bus] = config.Buses[bus] with { OutputDeviceName = device.FriendlyName };
+                }
+            }
+        }
     }
 
     /// <summary>Where the primary bus is aimed, which is where the clock has to be.</summary>

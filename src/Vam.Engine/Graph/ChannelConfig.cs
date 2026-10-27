@@ -16,6 +16,12 @@ public sealed record ChannelConfig
     /// <summary>The device this strip listens to.</summary>
     public required AudioDeviceId DeviceId { get; init; }
 
+    /// <summary>
+    /// What that device was called when it was last seen. Not <see cref="Name"/>, which an operator
+    /// may change. Used to find the device again under a new endpoint ID. #64.
+    /// </summary>
+    public string DeviceName { get; init; } = string.Empty;
+
     /// <summary>What to call it on the console.</summary>
     public required string Name { get; init; }
 
