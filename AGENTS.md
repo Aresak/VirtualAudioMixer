@@ -29,7 +29,8 @@ the vault's backlog are an earlier scheme; do not use them for new work.
 
 ```
 1. Pick a task that is Ready. Never one that is only in Backlog.
-2. git switch -c task/42-short-slug
+2. git fetch, check no open or merged pull request already does it, then
+   git switch -c task/42-short-slug origin/main
 3. Implement exactly what the task says. Nothing else.
 4. Run the tests. All of them, not the ones you think are relevant.
 5. Commit with a short, plain message. Sign off: git commit -s
@@ -60,6 +61,9 @@ reads the repository never looks — so it was followed by whoever remembered an
 
 A task's **Not in scope** section is binding. If you find a real problem outside it — and you will — open an
 issue or write it down. Do not fix it in this branch.
+
+Open issues with the `new-issue` skill (`.claude/skills/new-issue`). It searches for the same defect
+first, because several sessions work here at once and a problem filed twice gets fixed twice.
 
 This is the rule that keeps a two-hour task from becoming a four-hour one that touches nine files and cannot
 be reviewed.
