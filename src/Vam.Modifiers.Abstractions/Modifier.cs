@@ -38,8 +38,9 @@ public abstract class Modifier
     /// Allocates everything the modifier will need. Control thread, at chain build time.
     /// </summary>
     /// <remarks>
-    /// Called again whenever the chain is recompiled, so it must be safe to call more than once and
-    /// must not assume it is starting from nothing.
+    /// Called once per instance, before it is first processed. A recompile keeps a prepared instance
+    /// as it is, because the audio thread may still be running it, and builds a fresh one when the
+    /// shape it was prepared for has changed.
     /// </remarks>
     /// <param name="sampleRate">The rate audio will arrive at.</param>
     /// <param name="maxFrames">Largest block it will ever be handed.</param>

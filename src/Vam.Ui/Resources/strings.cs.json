@@ -99,6 +99,7 @@
   "settings.startedButSilent": "Engine se tu spustil, ale neozval se. Důvod bude v jeho vlastním logu.",
   "settings.restartEngine": "Restartovat engine",
   "settings.stopEngine": "Vypnout engine",
+  "settings.stoppingEngine": "Engine se vypíná…",
   "settings.stopEngineConfirm": "Vypnout engine? Zvuk se zastaví a případný záznam se uzavře.",
   "settings.engineLifeWhy": "Engine běží dál i po zavření tohohle okna, aby zavření konzole neukončilo schůzku. Tady se ukončí schválně.",
   "settings.stopRefused": "Engine se nepodařilo vypnout.",

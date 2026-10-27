@@ -66,6 +66,7 @@ public sealed class DeviceInputChannel
     readonly int maxInputFrames;
 
     int pendingFrames;
+    bool isVacant;
     int state = (int)DeviceStreamState.Stopped;
     int shareMode = (int)ShareMode.Shared;
     int deviceSampleRateHz;
@@ -181,7 +182,17 @@ public sealed class DeviceInputChannel
     /// </summary>
     public bool IsPriming => Volatile.Read(ref primedRequest) != Volatile.Read(ref primingRequest);
 
-    bool HasNoDevice => State is DeviceStreamState.Absent or DeviceStreamState.Faulted;
+    /// <summary>Whether the supervisor has let go of this channel's device and left its slot empty.</summary>
+    public bool IsVacant => Volatile.Read(ref isVacant);
+
+    bool HasNoDevice => IsVacant || State is DeviceStreamState.Absent or DeviceStreamState.Faulted;
+
+    /// <summary>
+    /// Marks the channel as a slot nothing feeds any more. The clock still pulls it, and it answers
+    /// with silence rather than an underrun every block.
+    /// </summary>
+    /// <remarks>Control thread, once the stream is closed.</remarks>
+    internal void Vacate() => Volatile.Write(ref isVacant, true);
 
     /// <summary>
     /// Records what the stream underneath this channel was actually granted.

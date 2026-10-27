@@ -886,26 +886,9 @@ public class ProtocolGateTests : IAsyncLifetime
             await live.OnControlLoopAsync(() => (graph.Config.Buses.ToList(), graph.Config.Sends.ToList()), Token);
 
         int worstPending = 0;
-        using CancellationTokenSource finished = CancellationTokenSource.CreateLinkedTokenSource(Token);
 
-        // Stands in for the audio thread: takes each snapshot the way a block would, without rendering
-        // it. Nothing else acquires here, because nothing pumps the null devices. Not real rendering:
-        // a recompile re-prepares the stream limiter while the audio thread may be inside it, which is
-        // a separate defect.
-        Thread audio = new(() =>
-        {
-            while (!finished.IsCancellationRequested)
-            {
-                graph.Publisher.Acquire();
-                Thread.Sleep(1);
-            }
-        })
-        {
-            IsBackground = true,
-            Name = "test-audio"
-        };
-
-        audio.Start();
+        // Real rendering, on the engine's own audio path, while every one of these recompiles.
+        using SignalPump pump = new(devices);
 
         using CancellationTokenSource commandsDone = CancellationTokenSource.CreateLinkedTokenSource(Token);
 
@@ -970,9 +953,6 @@ public class ProtocolGateTests : IAsyncLifetime
 
             pendingNow = await live.OnControlLoopAsync(() => graph.Publisher.PendingRetirements, Token);
         }
-
-        await finished.CancelAsync();
-        audio.Join();
 
         Assert.InRange(pendingNow, 0, 1);
     }

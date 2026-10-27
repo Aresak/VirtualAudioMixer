@@ -50,6 +50,27 @@ public sealed class DeviceInputChannelRegistry
     /// <returns>Whether it was registered.</returns>
     public bool Remove(DeviceInputChannel channel) => channels.Remove(channel);
 
+    /// <summary>Puts a channel in another's slot, so no other channel moves.</summary>
+    /// <remarks>One reference write, which the clock reading this slot sees whole or not at all.</remarks>
+    /// <param name="existing">The registered channel.</param>
+    /// <param name="replacement">What takes its slot.</param>
+    /// <returns>Whether <paramref name="existing"/> was registered.</returns>
+    public bool Replace(DeviceInputChannel existing, DeviceInputChannel replacement)
+    {
+        ArgumentNullException.ThrowIfNull(replacement);
+
+        int index = channels.IndexOf(existing);
+
+        if (index < 0 || channels.Contains(replacement))
+        {
+            return false;
+        }
+
+        channels[index] = replacement;
+
+        return true;
+    }
+
     /// <summary>
     /// Reads every channel's telemetry into a buffer the caller already owns.
     /// </summary>

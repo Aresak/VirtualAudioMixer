@@ -31,6 +31,8 @@ public sealed class ModifierChain
     readonly ModifierCost[] costs;
     readonly float[] scratch;
     readonly int channelCount;
+    readonly int sampleRate;
+    readonly int maxFrames;
 
     readonly string[] linkIds;
 
@@ -48,6 +50,8 @@ public sealed class ModifierChain
         modifiers = [.. links.Select(link => link.Modifier)];
         linkIds = [.. links.Select(link => link.LinkId)];
         this.channelCount = channelCount;
+        this.sampleRate = sampleRate;
+        this.maxFrames = maxFrames;
 
         parameterOffsets = new int[modifiers.Length + 1];
         telemetry = new ModifierTelemetry[modifiers.Length];
@@ -62,7 +66,10 @@ public sealed class ModifierChain
             total += modifiers[link].Parameters.Length;
 
             // Every allocation a modifier will ever make happens here, on the control thread.
-            modifiers[link].Prepare(sampleRate, maxFrames, channelCount);
+            if (!links[link].IsPrepared)
+            {
+                modifiers[link].Prepare(sampleRate, maxFrames, channelCount);
+            }
         }
 
         parameterOffsets[^1] = total;
@@ -140,6 +147,16 @@ public sealed class ModifierChain
 
         return null;
     }
+
+    /// <summary>
+    /// Whether this chain's instances were prepared for a shape, so a rebuild can keep them as they are.
+    /// </summary>
+    /// <param name="channelCount">Channels the new chain will carry.</param>
+    /// <param name="sampleRate">The rate audio will arrive at.</param>
+    /// <param name="maxFrames">Largest block the new chain will be handed.</param>
+    /// <returns>True when keeping an instance needs no <see cref="Modifier.Prepare"/>.</returns>
+    public bool IsPreparedFor(int channelCount, int sampleRate, int maxFrames) =>
+        this.channelCount == channelCount && this.sampleRate == sampleRate && this.maxFrames == maxFrames;
 
     /// <summary>
     /// Checks a proposed chain before anything is built from it.
