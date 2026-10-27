@@ -39,9 +39,8 @@ public partial class CloseOverlay
     /// </remarks>
     void OnAsked() => _ = InvokeAsync(() =>
     {
-        // Nothing to ask about when the engine is somebody else's: closing this window does not end
-        // that meeting, and offering to would be offering to end it by accident.
-        if (Prompt.IsAsking && !Connector.CanStopEngine)
+        // Nothing to ask about when the engine is somebody else's, not connected, or already stopping.
+        if (Prompt.IsAsking && !Connector.AsksOnClose)
         {
             Prompt.Release();
 
@@ -53,7 +52,11 @@ public partial class CloseOverlay
 
     async Task StopAndCloseAsync()
     {
-        await Connector.StopEngineAsync("The console was closed.");
+        // The connection can drop while the question is up; a stop then has nobody to reach.
+        if (Connector.AsksOnClose)
+        {
+            await Connector.StopEngineAsync("The console was closed.");
+        }
 
         Prompt.Release();
     }

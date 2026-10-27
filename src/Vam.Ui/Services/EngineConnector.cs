@@ -124,6 +124,13 @@ public sealed class EngineConnector(
     /// <summary>Whether a stop was sent and the connection has not changed since.</summary>
     public bool IsStopping => stoppingOver is not null;
 
+    /// <summary>Whether closing the window asks about the engine before it goes.</summary>
+    /// <remarks>
+    /// Only while there is an engine here this console could still stop. With none connected, or one
+    /// already stopping, there is nothing to decide and the window simply closes.
+    /// </remarks>
+    public bool AsksOnClose => OffersStop && !IsStopping;
+
     /// <summary>Stops the engine this console is looking at.</summary>
     /// <param name="reason">What the engine should write in its log.</param>
     /// <param name="cancellationToken">Abandons the wait, not the request.</param>
