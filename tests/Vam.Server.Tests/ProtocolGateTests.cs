@@ -889,7 +889,9 @@ public class ProtocolGateTests : IAsyncLifetime
         using CancellationTokenSource finished = CancellationTokenSource.CreateLinkedTokenSource(Token);
 
         // Stands in for the audio thread: takes each snapshot the way a block would, without rendering
-        // it. Nothing else acquires here, because nothing pumps the null devices.
+        // it. Nothing else acquires here, because nothing pumps the null devices. Not real rendering:
+        // a recompile re-prepares the stream limiter while the audio thread may be inside it, which is
+        // a separate defect.
         Thread audio = new(() =>
         {
             while (!finished.IsCancellationRequested)
@@ -998,16 +1000,20 @@ public class ProtocolGateTests : IAsyncLifetime
     {
         VamEngine live = engine!;
         using ManualResetEventSlim gate = new();
+        using ManualResetEventSlim running = new();
 
         // One piece of work holds the loop, so the next is still queued when Stop arrives.
         Task<int> holding = live.OnControlLoopAsync(
             () =>
             {
+                running.Set();
                 gate.Wait(TimeSpan.FromSeconds(10));
                 return 0;
             },
             Token);
         Task<int> queued = live.OnControlLoopAsync(() => 1, Token);
+
+        Assert.True(running.Wait(TimeSpan.FromSeconds(5), Token), "The control loop never picked the work up.");
 
         Task stopping = Task.Run(live.Stop, Token);
 
