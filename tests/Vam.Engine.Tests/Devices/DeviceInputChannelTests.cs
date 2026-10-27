@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Vam.Engine.Devices;
 using Vam.Engine.Devices.Abstractions;
 using Vam.Engine.Devices.Clock;
+using Vam.Engine.Diagnostics;
 using Vam.TestKit.Allocations;
 using Vam.TestKit.Harness;
 using Vam.TestKit.Logging;
@@ -170,7 +171,72 @@ public class DeviceInputChannelTests
         Assert.Equal(0.0, telemetry.DriftPpm);
     }
 
-    static DeviceInputChannel CreateChannel(ILogger<DeviceInputChannel>? logger = null) =>
+    [Theory]
+    [Trait("Category", TestCategories.Unit)]
+    [InlineData(DeviceStreamState.Absent)]
+    [InlineData(DeviceStreamState.Faulted)]
+    public void AChannelWithNoDeviceIsSilenceRatherThanADropout(DeviceStreamState state)
+    {
+        DropoutLog dropouts = new();
+        DeviceInputChannel channel = CreateChannel(dropouts: dropouts);
+        float[] block = new float[BlockFrames];
+
+        channel.State = state;
+        Array.Fill(block, 1.0f);
+
+        for (int pass = 0; pass < 400; pass++)
+        {
+            channel.Pull(block);
+        }
+
+        // The strip is already muted and its absence reported once. Four hundred blocks of it in
+        // the dropout count is what buried a real problem on 27 October.
+        Assert.All(block, sample => Assert.Equal(0f, sample));
+        Assert.Equal(0, channel.GetTelemetry().UnderrunCount);
+        Assert.Equal(0, dropouts.TotalRecorded);
+    }
+
+    [Theory]
+    [Trait("Category", TestCategories.Unit)]
+    [InlineData(DeviceStreamState.Absent)]
+    [InlineData(DeviceStreamState.Faulted)]
+    public void NoCorrectionRunsWithNoDevice(DeviceStreamState state)
+    {
+        RecordingLogger<DeviceInputChannel> logger = new();
+        DropoutLog dropouts = new();
+        DeviceInputChannel channel = CreateChannel(logger, dropouts);
+
+        channel.State = state;
+
+        for (int update = 0; update < 200; update++)
+        {
+            channel.UpdateCorrection(Interval);
+        }
+
+        Assert.Equal(1.0, channel.Ratio);
+        Assert.Equal(0, channel.CorrectionCount);
+        Assert.Equal(0, channel.ClampCount);
+        Assert.Empty(logger.Problems);
+        Assert.Equal(0, dropouts.TotalRecorded);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void ARunningDeviceThatFallsShortStillCounts()
+    {
+        DropoutLog dropouts = new();
+        DeviceInputChannel channel = CreateChannel(dropouts: dropouts);
+
+        channel.State = DeviceStreamState.Running;
+        channel.Pull(new float[BlockFrames]);
+
+        Assert.Equal(BlockFrames, channel.GetTelemetry().UnderrunCount);
+        Assert.Equal(1, dropouts.TotalRecorded);
+    }
+
+    static DeviceInputChannel CreateChannel(
+        ILogger<DeviceInputChannel>? logger = null,
+        DropoutLog? dropouts = null) =>
         new(
             new AudioDeviceId("null:test"),
             new DeviceInputChannelOptions
@@ -179,7 +245,8 @@ public class DeviceInputChannelTests
                 ChannelCount = 1,
                 BlockFrames = BlockFrames,
                 RingCapacityFrames = RingCapacityFrames,
-                TargetFillFrames = TargetFillFrames
+                TargetFillFrames = TargetFillFrames,
+                Dropouts = dropouts
             },
             logger ?? new RecordingLogger<DeviceInputChannel>());
 

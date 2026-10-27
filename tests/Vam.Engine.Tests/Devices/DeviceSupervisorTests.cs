@@ -159,6 +159,42 @@ public class DeviceSupervisorTests
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
+    public void AnAbsentDeviceCostsNoDropoutsAndReturnsWithACleanCorrection()
+    {
+        using NullAudioBackend backend = new();
+        AudioDeviceId late = new("null:Capture:late");
+
+        using Fixture fixture = new(backend);
+        DeviceInputChannel channel = fixture.Track(late);
+        float[] block = new float[BlockFrames];
+
+        // Several seconds of a running mix and a running correction timer, with retries in between.
+        for (int tick = 0; tick < 60; tick++)
+        {
+            channel.Pull(block);
+            channel.UpdateCorrection(Tick);
+            fixture.Supervisor.Poll(Tick);
+        }
+
+        Assert.Equal(DeviceStreamState.Absent, channel.State);
+        Assert.Equal(0, channel.GetTelemetry().UnderrunCount);
+        Assert.Equal(0, fixture.Loggers.CountMentioning("ppm limit"));
+
+        backend.AddDevice(late, DeviceDirection.Capture, new NullDeviceOptions("Late microphone"));
+        fixture.Arrive(late);
+
+        Assert.Equal(DeviceStreamState.Running, channel.State);
+        Assert.Equal(1.0, channel.Ratio);
+        Assert.Equal(0, channel.ClampCount);
+
+        // Back and running, a shortfall is a real dropout again.
+        channel.Pull(block);
+
+        Assert.Equal(BlockFrames, channel.GetTelemetry().UnderrunCount);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
     public void AMissedNotificationIsCaughtByTheReconcile()
     {
         using NullAudioBackend backend = new();
