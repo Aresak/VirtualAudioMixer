@@ -138,30 +138,57 @@ public partial class RecordingView
         string name = session.Directory.FolderName();
 
         exported = string.Empty;
-
-        if (await Platform.CreateFileAsync(name + ".zip") is not { } file)
-        {
-            return;
-        }
-
         exporting = session.Directory;
-        await InvokeAsync(StateHasChanged);
 
-        string? problem;
+        string? problem = "recording.exportFailed";
+        string? written = null;
 
-        await using (file)
+        try
         {
-            problem = await Session.ExportPastSessionAsync(session.Directory, file);
+            if (await Platform.CreateFileAsync(name + ".zip") is not { } file)
+            {
+                problem = null;
+
+                return;
+            }
+
+            written = (file as FileStream)?.Name;
+
+            await InvokeAsync(StateHasChanged);
+
+            await using (file)
+            {
+                problem = await Session.ExportPastSessionAsync(session.Directory, file);
+            }
+
+            exported = problem is null ? L.Format("recording.exported", name) : string.Empty;
         }
-
-        exporting = null;
-        refusal = problem is null ? string.Empty : L[problem];
-        exported = problem is null ? L.Format("recording.exported", name) : string.Empty;
-
-        if (problem is not null && file is FileStream written)
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException or InvalidDataException or NotSupportedException or OperationCanceledException)
         {
-            // Half an archive looks like a whole one until somebody opens it.
-            File.Delete(written.Name);
+            problem = failure.Message;
+        }
+        finally
+        {
+            exporting = null;
+            refusal = problem is null ? string.Empty : L[problem];
+
+            if (problem is not null && written is not null)
+            {
+                // Half an archive looks like a whole one until somebody opens it.
+                TryDelete(written);
+            }
+        }
+    }
+
+    static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
+        {
+            // Nothing more to do: the refusal already says the export did not finish.
         }
     }
 

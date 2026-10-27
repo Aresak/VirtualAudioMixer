@@ -65,6 +65,9 @@ public sealed class VamEngine : IDisposable
     TimeSpan sinceMoved;
     string lastRecordingRoot = string.Empty;
 
+    // Past sessions being exported, by folder, so one is not deleted or renamed underneath.
+    readonly ConcurrentDictionary<string, int> exports = new();
+
     readonly IAudioBackend? supplied;
 
     /// <summary>Builds the engine from a configuration on disk.</summary>
@@ -516,8 +519,44 @@ public sealed class VamEngine : IDisposable
         RecordedSession? session = new RecordingCatalogue(loggers.CreateLogger<RecordingCatalogue>())
             .Find([options.RecordingDirectory, lastRecordingRoot], directory);
 
-        return session is null ? "That folder is not a past session this engine lists." : null;
+        return session is null ? "That folder is not a session this engine recorded and closed." : null;
     }
+
+    /// <summary>Marks a past session as being exported, so it is not deleted or renamed underneath.</summary>
+    /// <param name="directory">The folder, as <see cref="ReadPastSessions"/> gave it.</param>
+    /// <returns>Null when the export may go ahead, otherwise why not.</returns>
+    public string? BeginExport(string directory)
+    {
+        if (RefusePastSession(directory) is { } refusal)
+        {
+            return refusal;
+        }
+
+        exports.AddOrUpdate(ExportKey(directory), 1, static (_, count) => count + 1);
+
+        return null;
+    }
+
+    /// <summary>Ends what <see cref="BeginExport"/> started.</summary>
+    /// <param name="directory">The same folder.</param>
+    public void EndExport(string directory)
+    {
+        string key = ExportKey(directory);
+
+        if (exports.AddOrUpdate(key, 0, static (_, count) => count - 1) <= 0)
+        {
+            exports.TryRemove(new KeyValuePair<string, int>(key, 0));
+        }
+    }
+
+    string? RefuseChange(string directory) =>
+        RefusePastSession(directory) ??
+        (exports.TryGetValue(ExportKey(directory), out int count) && count > 0
+            ? "That session is being exported. Try again when the export has finished."
+            : null);
+
+    static string ExportKey(string directory) =>
+        Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory)).ToUpperInvariant();
 
     /// <summary>Deletes a past session's folder and everything in it.</summary>
     /// <param name="directory">The folder, as <see cref="ReadPastSessions"/> gave it.</param>
@@ -525,7 +564,7 @@ public sealed class VamEngine : IDisposable
     /// <remarks>Disk I/O on the calling thread, like <see cref="ReadPastSessions"/>.</remarks>
     public string? DeletePastSession(string directory)
     {
-        if (RefusePastSession(directory) is { } refusal)
+        if (RefuseChange(directory) is { } refusal)
         {
             return refusal;
         }
@@ -560,7 +599,7 @@ public sealed class VamEngine : IDisposable
             return "That is not a name a folder can have.";
         }
 
-        if (RefusePastSession(directory) is { } refusal)
+        if (RefuseChange(directory) is { } refusal)
         {
             return refusal;
         }

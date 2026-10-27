@@ -60,10 +60,13 @@ public sealed class RecordingCatalogue(ILogger<RecordingCatalogue> logger)
     /// <summary>The session in one folder, if it is one this catalogue would list.</summary>
     /// <param name="roots">Where recordings go.</param>
     /// <param name="directory">The folder, as <see cref="Read"/> gave it.</param>
-    /// <returns>The session, or null when the folder is not a session directly under one of the roots.</returns>
+    /// <returns>
+    /// The session, or null when the folder is not a session with a manifest directly under one of the roots.
+    /// </returns>
     /// <remarks>
-    /// What stands between a console and deleting an arbitrary folder on the engine's machine. Only a
-    /// folder this catalogue could have listed is a past session.
+    /// What stands between a console and deleting an arbitrary folder on the engine's machine. A
+    /// session from before manifests, or one whose engine died before writing it, is listed but not
+    /// found here.
     /// </remarks>
     public RecordedSession? Find(IEnumerable<string> roots, string directory)
     {
@@ -81,7 +84,9 @@ public sealed class RecordingCatalogue(ILogger<RecordingCatalogue> logger)
             return null;
         }
 
-        return Describe(folder);
+        // Only a folder VAM closed. A root can be any folder a console names, and audio files under
+        // it are not enough to make somebody's music collection a session.
+        return SessionManifest.Read(folder) is null ? null : Describe(folder);
     }
 
     /// <summary>Whether two paths name the same folder.</summary>

@@ -100,6 +100,37 @@ public partial class ProtocolGateTests
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
+    public async Task AudioUnderARootThatVamDidNotRecordIsRefused()
+    {
+        // Any folder can become a root by recording into it once, so audio under one is not enough.
+        string music = Path.Combine(workspace, "music");
+        string album = Path.Combine(music, "album");
+
+        Directory.CreateDirectory(album);
+        await File.WriteAllBytesAsync(Path.Combine(album, "track.wav"), [1, 2, 3], Token);
+
+        CommandReply started = await client!.ApplyAsync(
+            new Command { SetRecording = new SetRecording { Recording = true, Directory = music } },
+            cancellationToken: Token);
+
+        Assert.True(started.Accepted, started.Reason);
+
+        await client.ApplyAsync(new Command { SetRecording = new SetRecording { Recording = false } }, cancellationToken: Token);
+
+        CommandReply deleted = await client.DeletePastSessionAsync(
+            new PastSessionTarget { Directory = album },
+            cancellationToken: Token);
+        CommandReply renamed = await client.RenamePastSessionAsync(
+            new PastSessionRename { Directory = album, Name = "gone" },
+            cancellationToken: Token);
+
+        Assert.False(deleted.Accepted);
+        Assert.False(renamed.Accepted);
+        Assert.True(File.Exists(Path.Combine(album, "track.wav")));
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
     public async Task ARenameThatIsAPathOrTakenIsRefused()
     {
         PastSession session = await RecordOneSessionAsync();

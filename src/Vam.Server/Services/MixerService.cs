@@ -253,7 +253,7 @@ public sealed class MixerService(
     {
         string folder = request.Directory;
 
-        if (await Task.Run(() => engine.RefusePastSession(folder), context.CancellationToken) is { } refusal)
+        if (await Task.Run(() => engine.BeginExport(folder), context.CancellationToken) is { } refusal)
         {
             throw new RpcException(new Status(StatusCode.FailedPrecondition, refusal));
         }
@@ -272,6 +272,10 @@ public sealed class MixerService(
             logger.LogWarning(failure, "The session in {Directory} could not be exported.", folder);
 
             throw new RpcException(new Status(StatusCode.Aborted, failure.Message));
+        }
+        finally
+        {
+            engine.EndExport(folder);
         }
     }
 
