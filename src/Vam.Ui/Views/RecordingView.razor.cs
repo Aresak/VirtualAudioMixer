@@ -114,12 +114,16 @@ public partial class RecordingView
     static string FormatLabel(string format) => format switch
     {
         "wav24" => "WAV · 24-bit",
+        "flac24" => "FLAC · 24-bit",
         _ => format
     };
 
-    string FormatTitle(RecordingState recording) => recording.IsRecording
-        ? L["recording.captureLocked"]
-        : L["recording.formatOnlyOne"];
+    string FormatTitle(RecordingState recording) => recording switch
+    {
+        { IsRecording: true } => L["recording.captureLocked"],
+        { AvailableFormats.Count: < 2 } => L["recording.formatOnlyOne"],
+        _ => string.Empty
+    };
 
     static string ExpectedHours(RecordingState recording) =>
         (recording.ExpectedSeconds / 3600.0).ToString("0.#", CultureInfo.InvariantCulture);

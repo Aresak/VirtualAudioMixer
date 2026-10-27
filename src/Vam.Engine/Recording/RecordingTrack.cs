@@ -24,7 +24,7 @@ public sealed class RecordingTrack : IDisposable
     public const double RingSeconds = 2.0;
 
     readonly AudioRingBuffer ring;
-    readonly WaveWriter writer;
+    readonly ITrackWriter writer;
     readonly float[] drain;
 
     long droppedFrames;
@@ -45,7 +45,7 @@ public sealed class RecordingTrack : IDisposable
         Source = source;
 
         ring = new AudioRingBuffer((int)(format.SampleRate * RingSeconds), format.ChannelCount);
-        writer = new WaveWriter(path, format.SampleRate, format.ChannelCount, format.BlockFrames);
+        writer = format.OpenWriter(path);
         drain = new float[format.BlockFrames * format.ChannelCount];
     }
 
@@ -73,8 +73,11 @@ public sealed class RecordingTrack : IDisposable
     /// </remarks>
     public long DroppedFrames => Interlocked.Read(ref droppedFrames);
 
-    /// <summary>Whether the file has outgrown a plain RIFF header.</summary>
-    public bool NeedsRf64 => writer.NeedsRf64;
+    /// <summary>Bytes its file holds so far.</summary>
+    public long BytesWritten => writer.BytesWritten;
+
+    /// <summary>Whether the file is a WAV that has outgrown a plain RIFF header.</summary>
+    public bool NeedsRf64 => writer is WaveWriter { NeedsRf64: true };
 
     /// <summary>
     /// Hands one block to the recorder. Audio thread, inside the audio path.

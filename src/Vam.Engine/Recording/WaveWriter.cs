@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using Vam.Engine.Recording.Extensions;
 
 namespace Vam.Engine.Recording;
 
@@ -24,7 +25,7 @@ namespace Vam.Engine.Recording;
 /// record of a meeting should not have been through a lossy step or a needless requantisation.
 /// </para>
 /// </remarks>
-public sealed class WaveWriter : IDisposable
+public sealed class WaveWriter : ITrackWriter
 {
     /// <summary>Bytes a <c>ds64</c> chunk body takes, and therefore what the placeholder reserves.</summary>
     public const int Ds64BodyBytes = 28;
@@ -34,9 +35,6 @@ public sealed class WaveWriter : IDisposable
 
     /// <summary>The largest size a plain RIFF header can express.</summary>
     public const long RiffLimitBytes = 0xFFFFFFFFL;
-
-    /// <summary>Full scale for a signed twenty-four bit sample.</summary>
-    const float FullScale = 8388607f;
 
     readonly FileStream stream;
     readonly byte[] block;
@@ -68,25 +66,28 @@ public sealed class WaveWriter : IDisposable
         WriteHeader();
     }
 
-    /// <summary>Where the file is.</summary>
+    /// <inheritdoc />
     public string Path { get; }
 
     /// <summary>The rate declared in the header.</summary>
     public int SampleRate { get; }
 
-    /// <summary>Frames written so far.</summary>
+    /// <inheritdoc />
     public long FrameCount => dataBytes / (channelCount * BytesPerSample);
 
     /// <summary>Bytes of audio written so far.</summary>
     public long DataBytes => dataBytes;
+
+    /// <inheritdoc />
+    /// <remarks>The audio only, as it always has been counted here.</remarks>
+    public long BytesWritten => dataBytes;
 
     /// <summary>Whether the file has outgrown what a plain RIFF header can express.</summary>
     public bool NeedsRf64 => dataBytes + HeaderBytes > RiffLimitBytes;
 
     static int HeaderBytes => 12 + 8 + Ds64BodyBytes + 8 + 16 + 8;
 
-    /// <summary>Writes one block of interleaved samples.</summary>
-    /// <param name="samples">The audio, interleaved at the declared channel count.</param>
+    /// <inheritdoc />
     public void Write(ReadOnlySpan<float> samples)
     {
         ObjectDisposedException.ThrowIf(isFinished, this);
@@ -95,7 +96,7 @@ public sealed class WaveWriter : IDisposable
 
         for (int index = 0; index < samples.Length; index++)
         {
-            int value = (int)Math.Clamp(samples[index] * FullScale, -FullScale, FullScale);
+            int value = samples[index].ToPcm24();
             int at = index * BytesPerSample;
 
             block[at] = (byte)value;

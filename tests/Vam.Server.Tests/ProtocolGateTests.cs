@@ -689,12 +689,12 @@ public class ProtocolGateTests : IAsyncLifetime
         {
             SetCaptureOptions = new SetCaptureOptions
             {
-                Captures = new RecordingCapture { Inputs = true, Format = "flac24" }
+                Captures = new RecordingCapture { Inputs = true, Format = "mp3" }
             }
         }, cancellationToken: Token);
 
         Assert.False(reply.Accepted);
-        Assert.Contains("flac24", reply.Reason, StringComparison.Ordinal);
+        Assert.Contains("mp3", reply.Reason, StringComparison.Ordinal);
     }
 
     [Fact]

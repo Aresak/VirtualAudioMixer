@@ -87,7 +87,7 @@ public sealed class RecordingCatalogue(ILogger<RecordingCatalogue> logger)
     {
         try
         {
-            string[] files = Directory.GetFiles(directory, "*.wav");
+            string[] files = [.. Directory.GetFiles(directory, "*.wav"), .. Directory.GetFiles(directory, "*.flac")];
 
             if (files.Length == 0)
             {
