@@ -129,4 +129,21 @@ public class SliderDragTests
 
         Assert.Equal(799, drag.Draw(799));
     }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public async Task AValueTheEngineRefusedIsDrawnBackAfterRelease()
+    {
+        SliderDrag drag = new();
+
+        drag.Draw(300);
+        drag.Hold();
+        await drag.MoveAsync(700, _ => Task.CompletedTask);
+        drag.Release();
+
+        // Drawn once at the value let go at, so that drawing the unchanged engine value next is a
+        // change the browser is told about.
+        Assert.Equal(700, drag.Draw(300));
+        Assert.Equal(300, drag.Draw(300));
+    }
 }

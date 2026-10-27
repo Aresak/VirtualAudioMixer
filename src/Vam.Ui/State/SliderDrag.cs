@@ -25,6 +25,7 @@ public sealed class SliderDrag
     double? queued;
     double latest;
     double drawn;
+    bool isSettling;
 
     /// <summary>Whether the pointer is holding the slider.</summary>
     public bool IsHeld { get; private set; }
@@ -39,17 +40,34 @@ public sealed class SliderDrag
     {
         if (!IsHeld)
         {
-            drawn = IsSending ? latest : engineValue;
+            drawn = IsSending || isSettling ? latest : engineValue;
+            isSettling = false;
         }
 
         return drawn;
     }
 
     /// <summary>The pointer took hold of the slider.</summary>
-    public void Hold() => IsHeld = true;
+    public void Hold()
+    {
+        IsHeld = true;
+        latest = drawn;
+    }
 
     /// <summary>The pointer let go of the slider.</summary>
-    public void Release() => IsHeld = false;
+    /// <remarks>
+    /// The next draw is the value let go at and the one after it the engine's. Going straight to the
+    /// engine's would draw nothing when it still equals the value from before the hold, and the
+    /// browser would keep showing a position the engine refused.
+    /// </remarks>
+    public void Release()
+    {
+        if (IsHeld)
+        {
+            IsHeld = false;
+            isSettling = true;
+        }
+    }
 
     /// <summary>
     /// Sends <paramref name="value"/>, or queues it behind the command already in flight.

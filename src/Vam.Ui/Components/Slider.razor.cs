@@ -33,6 +33,13 @@ public partial class Slider
     [Parameter]
     public EventCallback<double> Changed { get; set; }
 
+    // Yielding renders twice: once at the value let go at, then at the engine's. See SliderDrag.Release.
+    async Task ReleaseAsync()
+    {
+        drag.Release();
+        await Task.Yield();
+    }
+
     Task OnInputAsync(ChangeEventArgs arguments) =>
         double.TryParse(arguments.Value?.ToString(), CultureInfo.InvariantCulture, out double value)
             ? drag.MoveAsync(value, Changed.InvokeAsync)
