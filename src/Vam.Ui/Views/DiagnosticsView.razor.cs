@@ -48,6 +48,7 @@ public partial class DiagnosticsView
 
     // The log as it was when the reader scrolled away from the newest line. Null while following.
     IReadOnlyList<LogLine>? held;
+    int resumed;
 
     /// <inheritdoc />
     protected override void OnInitialized()
@@ -129,6 +130,9 @@ public partial class DiagnosticsView
 
     IReadOnlyList<LogLine> Shown(DiagnosticsState state) => (held ?? state.Log).Filter(level, filter);
 
+    int Waiting(DiagnosticsState state) =>
+        held is null ? 0 : state.Log.Filter(level, filter).CountNewerThan(held.Filter(level, filter));
+
     void Select(DiagnosticsTab id)
     {
         tab = id;
@@ -142,12 +146,19 @@ public partial class DiagnosticsView
             return false;
         }
 
+        int before = resumed;
+
         try
         {
-            return !await logModule.InvokeAsync<bool>("isAtNewest", logBox);
+            bool atNewest = await logModule.InvokeAsync<bool>("isAtNewest", logBox);
+
+            // A click on "back to newest" during the call wins over what the call read.
+            return !atNewest && before == resumed;
         }
-        catch (JSDisconnectedException)
+        catch (Exception exception) when (exception is JSException or JSDisconnectedException
+            or ObjectDisposedException or TaskCanceledException)
         {
+            // Following the newest line is the safe answer, and the poll must not stop over it.
             return false;
         }
     }
@@ -155,6 +166,7 @@ public partial class DiagnosticsView
     async Task ToNewestAsync()
     {
         held = null;
+        resumed++;
 
         if (logModule is not null)
         {

@@ -237,7 +237,7 @@
                             {
                                 <button type="button"
                                         class="btn sm"
-                                        @onclick="ToNewestAsync">@L.Format("diag.newLines", state.Log.CountNewerThan(held))</button>
+                                        @onclick="ToNewestAsync">@L.Format("diag.newLines", Waiting(state))</button>
                             }
                         </div>
 
