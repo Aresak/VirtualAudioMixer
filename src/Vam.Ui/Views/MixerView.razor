@@ -65,8 +65,10 @@
                     U17. A tile at the end of the strips rather than a button in the toolbar, because
                     that is where an operator looks for the place a new strip would go.
                 *@
-                <button type="button" class="addtile" title="@L["help.addInput"]"
-                        @onclick="() => Shell.Overlay = OverlayId.Add">
+                <button type="button"
+                        class="addtile"
+                        title="@L["help.addInput"]"
+                        @onclick="Shell.OpenAddChannel">
                     <span>＋</span>
                     <em>@L["mixer.addInput"]</em>
                 </button>
@@ -79,6 +81,15 @@
                               Bus="bus"
                               IsMaster="@IsMaster(bus)" />
                 }
+
+                @* U17. The same tile at the end of the buses, opening the overlay at the bus section. *@
+                <button type="button"
+                        class="addtile"
+                        title="@L["help.addOutput"]"
+                        @onclick="Shell.OpenAddBus">
+                    <span>＋</span>
+                    <em>@L["mixer.addOutput"]</em>
+                </button>
             </div>
         </div>
 

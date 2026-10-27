@@ -23,12 +23,34 @@ public partial class AddOverlay
     string busRole = "Output";
     string refusal = string.Empty;
     bool participates = true;
+    ElementReference busNameInput;
+    bool isBusFocused;
+
+    string Title => Shell.IsAddingBus ? L["mixer.addBusTitle"] : L["mixer.add"];
 
     IEnumerable<DeviceInfo> Captures =>
         Session.Devices.Where(device => device.Direction.Equals("Capture", StringComparison.OrdinalIgnoreCase));
 
     IEnumerable<DeviceInfo> Renders =>
         Session.Devices.Where(device => device.Direction.Equals("Render", StringComparison.OrdinalIgnoreCase));
+
+    /// <inheritdoc />
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Focusing the bus name scrolls its section into view when the overlay came from the buses.
+        // Tracked rather than tied to the first render, because the overlay may already be open.
+        if (Shell.IsAddingBus == isBusFocused)
+        {
+            return;
+        }
+
+        isBusFocused = Shell.IsAddingBus;
+
+        if (isBusFocused)
+        {
+            await busNameInput.FocusAsync();
+        }
+    }
 
     async Task AddChannelAsync()
     {

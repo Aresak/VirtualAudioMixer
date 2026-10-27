@@ -10,9 +10,9 @@
 
 <aside class="ovl"
        role="dialog"
-       aria-label="@L["mixer.add"]">
+       aria-label="@Title">
     <div class="ohd">
-        <span class="nm">@L["mixer.add"]</span>
+        <span class="nm">@Title</span>
         <button type="button"
                 class="btn sm"
                 @onclick="Shell.CloseOverlay">@L["common.close"]</button>
@@ -63,7 +63,8 @@
             <div class="between"><span>@L["strip.name"]</span></div>
             <input type="text"
                    @bind="busName"
-                   aria-label="@L["strip.name"]" />
+                   aria-label="@L["strip.name"]"
+                   @ref="busNameInput" />
         </div>
 
         <div class="knob">
