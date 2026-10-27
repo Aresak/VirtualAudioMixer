@@ -57,6 +57,41 @@ public sealed class RecordingCatalogue(ILogger<RecordingCatalogue> logger)
             : new RecordedSessionList { Sessions = sessions };
     }
 
+    /// <summary>The session in one folder, if it is one this catalogue would list.</summary>
+    /// <param name="roots">Where recordings go.</param>
+    /// <param name="directory">The folder, as <see cref="Read"/> gave it.</param>
+    /// <returns>The session, or null when the folder is not a session directly under one of the roots.</returns>
+    /// <remarks>
+    /// What stands between a console and deleting an arbitrary folder on the engine's machine. Only a
+    /// folder this catalogue could have listed is a past session.
+    /// </remarks>
+    public RecordedSession? Find(IEnumerable<string> roots, string directory)
+    {
+        if (directory.Length == 0 || !Path.IsPathFullyQualified(directory))
+        {
+            return null;
+        }
+
+        string folder = Normalise(directory);
+
+        if (Path.GetDirectoryName(folder) is not { } parent ||
+            !roots.Any(root => root.Length > 0 && string.Equals(Normalise(root), parent, StringComparison.OrdinalIgnoreCase)) ||
+            !Directory.Exists(folder))
+        {
+            return null;
+        }
+
+        return Describe(folder);
+    }
+
+    /// <summary>Whether two paths name the same folder.</summary>
+    /// <param name="left">One folder.</param>
+    /// <param name="right">The other.</param>
+    /// <returns>True when they are the same folder.</returns>
+    public static bool SameFolder(string left, string right) =>
+        left.Length > 0 && right.Length > 0 &&
+        string.Equals(Normalise(left), Normalise(right), StringComparison.OrdinalIgnoreCase);
+
     static string Normalise(string directory) =>
         Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
 

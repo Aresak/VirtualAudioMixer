@@ -499,6 +499,95 @@ public sealed class VamEngine : IDisposable
         new RecordingCatalogue(loggers.CreateLogger<RecordingCatalogue>())
             .Read([options.RecordingDirectory, lastRecordingRoot], Recording?.Directory ?? string.Empty);
 
+    /// <summary>Why a past session cannot be deleted, renamed or exported, or null when it can.</summary>
+    /// <param name="directory">The folder, as <see cref="ReadPastSessions"/> gave it.</param>
+    /// <returns>A sentence for the console, or null.</returns>
+    /// <remarks>
+    /// Only a folder the catalogue would list. Anything else would let a console delete any folder
+    /// on this machine by naming it.
+    /// </remarks>
+    public string? RefusePastSession(string directory)
+    {
+        if (Recording is { } recording && RecordingCatalogue.SameFolder(recording.Directory, directory))
+        {
+            return "That session is being recorded. Stop the recording first.";
+        }
+
+        RecordedSession? session = new RecordingCatalogue(loggers.CreateLogger<RecordingCatalogue>())
+            .Find([options.RecordingDirectory, lastRecordingRoot], directory);
+
+        return session is null ? "That folder is not a past session this engine lists." : null;
+    }
+
+    /// <summary>Deletes a past session's folder and everything in it.</summary>
+    /// <param name="directory">The folder, as <see cref="ReadPastSessions"/> gave it.</param>
+    /// <returns>Null when it was deleted, otherwise why not.</returns>
+    /// <remarks>Disk I/O on the calling thread, like <see cref="ReadPastSessions"/>.</remarks>
+    public string? DeletePastSession(string directory)
+    {
+        if (RefusePastSession(directory) is { } refusal)
+        {
+            return refusal;
+        }
+
+        try
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(failure, "The session in {Directory} could not be deleted.", directory);
+
+            return failure.Message;
+        }
+
+        logger.LogInformation("Deleted the session in {Directory}.", directory);
+
+        return null;
+    }
+
+    /// <summary>Renames a past session's folder, keeping it under the same root.</summary>
+    /// <param name="directory">The folder, as <see cref="ReadPastSessions"/> gave it.</param>
+    /// <param name="name">The new folder name. Not a path.</param>
+    /// <returns>Null when it was renamed, otherwise why not.</returns>
+    public string? RenamePastSession(string directory, string name)
+    {
+        string wanted = name.Trim();
+
+        if (wanted.Length == 0 || wanted is "." or ".." || wanted.EndsWith('.') ||
+            wanted.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            return "That is not a name a folder can have.";
+        }
+
+        if (RefusePastSession(directory) is { } refusal)
+        {
+            return refusal;
+        }
+
+        string target = Path.Combine(Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(directory))!, wanted);
+
+        if (Directory.Exists(target) || File.Exists(target))
+        {
+            return $"There is already a folder called {wanted}.";
+        }
+
+        try
+        {
+            Directory.Move(directory, target);
+        }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(failure, "The session in {Directory} could not be renamed.", directory);
+
+            return failure.Message;
+        }
+
+        logger.LogInformation("Renamed the session in {Directory} to {Name}.", directory, wanted);
+
+        return null;
+    }
+
     /// <summary>Where the engine keeps things.</summary>
     /// <remarks>
     /// The modifier folder is empty because nothing loads modifiers from disk yet. A path shown for

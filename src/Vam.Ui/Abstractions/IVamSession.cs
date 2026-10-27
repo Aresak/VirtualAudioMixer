@@ -139,4 +139,24 @@ public interface IVamSession
     /// during a meeting.
     /// </remarks>
     ValueTask<PastSessionList?> GetPastSessionsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes a past session from the engine's disk. #99.</summary>
+    /// <param name="directory">The folder, as the engine listed it.</param>
+    /// <param name="cancellationToken">Gives up waiting.</param>
+    /// <returns>The engine's answer, or null when it did not answer.</returns>
+    ValueTask<CommandReply?> DeletePastSessionAsync(string directory, CancellationToken cancellationToken = default);
+
+    /// <summary>Renames a past session's folder on the engine's disk. #99.</summary>
+    /// <param name="directory">The folder, as the engine listed it.</param>
+    /// <param name="name">The new folder name.</param>
+    /// <param name="cancellationToken">Gives up waiting.</param>
+    /// <returns>The engine's answer, or null when it did not answer.</returns>
+    ValueTask<CommandReply?> RenamePastSessionAsync(string directory, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>Copies a past session off the engine into one zip archive. #99.</summary>
+    /// <param name="directory">The folder, as the engine listed it.</param>
+    /// <param name="destination">Where the archive is written. Left open.</param>
+    /// <param name="cancellationToken">Gives up.</param>
+    /// <returns>Null when the whole session arrived, otherwise why not.</returns>
+    ValueTask<string?> ExportPastSessionAsync(string directory, Stream destination, CancellationToken cancellationToken = default);
 }

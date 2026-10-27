@@ -105,6 +105,7 @@ public class VamSessionExtensionsTests
         Assert.Null(older.RecordingCaptures());
         Assert.Null(older.EnginePaths());
         Assert.False(older.CanListPastSessions());
+        Assert.False(older.CanManagePastSessions());
     }
 
     [Fact]
@@ -121,6 +122,7 @@ public class VamSessionExtensionsTests
         Assert.Null(current.RecordingCaptures());
         Assert.Null(current.EnginePaths());
         Assert.True(current.CanListPastSessions());
+        Assert.True(current.CanManagePastSessions());
     }
 
     [Fact]
@@ -189,6 +191,15 @@ public class VamSessionExtensionsTests
             throw new NotSupportedException();
 
         public ValueTask<PastSessionList?> GetPastSessionsAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<CommandReply?> DeletePastSessionAsync(string directory, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<CommandReply?> RenamePastSessionAsync(string directory, string name, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<string?> ExportPastSessionAsync(string directory, Stream destination, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }
 }

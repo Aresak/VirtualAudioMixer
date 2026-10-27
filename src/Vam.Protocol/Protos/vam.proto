@@ -52,6 +52,14 @@ service Mixer {
   // every snapshot: it is not a number that changes during a meeting, and enumerating a folder on a
   // network share is not something the console should do twenty-five times a second.
   rpc ListPastSessions(Empty) returns (PastSessionList);
+
+  // A past session deleted, renamed or copied off the engine's disk. Each names its folder as
+  // ListPastSessions gave it, and the engine refuses one it did not list, or the one being recorded.
+  rpc DeletePastSession(PastSessionTarget) returns (CommandReply);
+  rpc RenamePastSession(PastSessionRename) returns (CommandReply);
+  // The session's files one after another, so a console on another machine can keep a copy. The
+  // console puts them together; the engine only reads.
+  rpc ExportPastSession(PastSessionTarget) returns (stream PastSessionChunk);
 }
 
 message Empty {}
@@ -365,6 +373,13 @@ message PastSession {
   int64 duration_seconds = 5;
   int64 dropped_frames = 6;
 }
+
+message PastSessionTarget { string directory = 1; }
+// The folder's new name, not a path: a session stays under the root it was recorded into.
+message PastSessionRename { string directory = 1; string name = 2; }
+// Part of one file, named relative to the session folder. A file can arrive in many chunks; an
+// export that fails part way ends the call with an error rather than a short file.
+message PastSessionChunk { string file = 1; bytes data = 2; }
 
 message SetRecording { bool recording = 1; string directory = 2; }
 // E3. What the next session writes. A session already running keeps the tracks it opened with -

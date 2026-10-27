@@ -230,6 +230,9 @@
                                     @L["recording.date"]
                                 </th>
                                 <th>
+                                    @L["recording.name"]
+                                </th>
+                                <th>
                                     @L["recording.duration"]
                                 </th>
                                 <th>
@@ -242,6 +245,10 @@
                                     @L["recording.dropped"]
                                 </th>
                                 <th></th>
+                                @if (CanManage)
+                                {
+                                    <th></th>
+                                }
                             </tr>
                         </thead>
 
@@ -251,6 +258,27 @@
                                 <tr @key="session.Directory">
                                     <td>
                                         @Started(session)
+                                    </td>
+                                    <td>
+                                        @if (renaming == session.Directory)
+                                        {
+                                            <div class="row">
+                                                <input type="text"
+                                                       @bind="newName"
+                                                       spellcheck="false"
+                                                       autocomplete="off" />
+                                                <button type="button"
+                                                        class="btn sm"
+                                                        @onclick="() => RenameAsync(session)">@L["recording.rename"]</button>
+                                                <button type="button"
+                                                        class="btn sm"
+                                                        @onclick="() => renaming = null">@L["common.cancel"]</button>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="mono">@Name(session)</span>
+                                        }
                                     </td>
                                     <td class="mono">
                                         @Ran(session)
@@ -288,6 +316,31 @@
                                             <span class="sub mono">@session.Directory</span>
                                         }
                                     </td>
+                                    @if (CanManage)
+                                    {
+                                        <td>
+                                            <div class="row">
+                                                <button type="button"
+                                                        class="btn sm"
+                                                        disabled="@(exporting is not null)"
+                                                        @onclick="() => BeginRename(session)">@L["recording.rename"]</button>
+
+                                                @if (Platform.CanSaveFiles)
+                                                {
+                                                    <button type="button"
+                                                            class="btn sm"
+                                                            disabled="@(exporting is not null)"
+                                                            @onclick="() => ExportAsync(session)">
+                                                        @(exporting == session.Directory ? L["recording.exporting"] : L["recording.export"])
+                                                    </button>
+                                                }
+
+                                                <ConfirmButton Label="@L["recording.delete"]"
+                                                               Question="@L.Format("recording.deleteWhy", Name(session))"
+                                                               Confirmed="() => DeleteAsync(session)" />
+                                            </div>
+                                        </td>
+                                    }
                                 </tr>
                             }
                         </tbody>
@@ -307,6 +360,16 @@
                         told, so the console tells them apart.
                     *@
                     <p class="note">@L[NoOpenBecause]</p>
+                }
+
+                @if (CanManage && !Platform.CanSaveFiles)
+                {
+                    <p class="note">@L["recording.exportNoHost"]</p>
+                }
+
+                @if (exported.Length > 0)
+                {
+                    <p class="note">@exported</p>
                 }
             }
 

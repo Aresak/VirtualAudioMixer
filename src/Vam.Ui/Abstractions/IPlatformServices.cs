@@ -50,6 +50,15 @@ public interface IPlatformServices
     /// </returns>
     ValueTask<string?> OpenFolderAsync(string path, CancellationToken cancellationToken = default);
 
+    /// <summary>Whether this host can save a file on the machine the operator is at. #99.</summary>
+    bool CanSaveFiles { get; }
+
+    /// <summary>Asks where to save a file, and opens it for writing.</summary>
+    /// <param name="suggestedName">The file name offered, with its extension.</param>
+    /// <param name="cancellationToken">Abandons the wait, not the dialog.</param>
+    /// <returns>The file, empty and writable, or null if the person changed their mind.</returns>
+    ValueTask<Stream?> CreateFileAsync(string suggestedName, CancellationToken cancellationToken = default);
+
     /// <summary>Whether this host can start an engine on the machine it is running on.</summary>
     /// <remarks>
     /// A desktop console can: the engine ships beside it and starting a process is what a desktop

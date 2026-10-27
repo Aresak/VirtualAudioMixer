@@ -233,6 +233,88 @@ public sealed class MixerService(
     }
 
     /// <inheritdoc />
+    /// <remarks>On the pool, for the same reason as <see cref="ListPastSessions"/>.</remarks>
+    public override async Task<CommandReply> DeletePastSession(PastSessionTarget request, ServerCallContext context) =>
+        Reply(await Task.Run(() => engine.DeletePastSession(request.Directory), context.CancellationToken));
+
+    /// <inheritdoc />
+    public override async Task<CommandReply> RenamePastSession(PastSessionRename request, ServerCallContext context) =>
+        Reply(await Task.Run(() => engine.RenamePastSession(request.Directory, request.Name), context.CancellationToken));
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The files as they are, uncompressed. Compressing gigabytes of audio would cost the engine's
+    /// CPU during a meeting to save a few percent; the console puts the files into one archive.
+    /// </remarks>
+    public override async Task ExportPastSession(
+        PastSessionTarget request,
+        IServerStreamWriter<PastSessionChunk> responseStream,
+        ServerCallContext context)
+    {
+        string folder = request.Directory;
+
+        if (await Task.Run(() => engine.RefusePastSession(folder), context.CancellationToken) is { } refusal)
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, refusal));
+        }
+
+        try
+        {
+            foreach (string file in Directory.GetFiles(folder, "*", SearchOption.AllDirectories))
+            {
+                string name = Path.GetRelativePath(folder, file).Replace('\\', '/');
+
+                await SendFileAsync(file, name, responseStream, context.CancellationToken);
+            }
+        }
+        catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(failure, "The session in {Directory} could not be exported.", folder);
+
+            throw new RpcException(new Status(StatusCode.Aborted, failure.Message));
+        }
+    }
+
+    static async Task SendFileAsync(
+        string path,
+        string name,
+        IServerStreamWriter<PastSessionChunk> responseStream,
+        CancellationToken cancellationToken)
+    {
+        const int ChunkBytes = 256 * 1024;
+
+        await using FileStream file = new(path, FileMode.Open, FileAccess.Read, FileShare.Read, ChunkBytes, useAsync: true);
+
+        byte[] buffer = new byte[ChunkBytes];
+        bool sent = false;
+
+        while (true)
+        {
+            int read = await file.ReadAsync(buffer, cancellationToken);
+
+            // An empty file is still sent once, so the copy has it too.
+            if (read == 0 && sent)
+            {
+                return;
+            }
+
+            await responseStream.WriteAsync(
+                new PastSessionChunk { File = name, Data = Google.Protobuf.ByteString.CopyFrom(buffer, 0, read) },
+                cancellationToken);
+
+            sent = true;
+
+            if (read == 0)
+            {
+                return;
+            }
+        }
+    }
+
+    static CommandReply Reply(string? refusal) =>
+        refusal is null ? new CommandReply { Accepted = true } : new CommandReply { Accepted = false, Reason = refusal };
+
+    /// <inheritdoc />
     public override Task<DiagnosticsState> GetDiagnostics(Empty request, ServerCallContext context) =>
         ReadAsync(() => MixerDiagnostics.Build(engine), context);
 

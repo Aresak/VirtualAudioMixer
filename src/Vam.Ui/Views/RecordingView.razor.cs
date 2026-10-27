@@ -23,6 +23,12 @@ public partial class RecordingView
     bool sessionsTruncated;
     bool sessionsAsked;
 
+    // #99. The folder being renamed or exported, if any.
+    string? renaming;
+    string newName = string.Empty;
+    string? exporting;
+    string exported = string.Empty;
+
     /// <summary>Whether the engine's recordings are on a disk this console can show.</summary>
     [Inject]
     public required EngineConnector Connector { get; set; }
@@ -84,6 +90,79 @@ public partial class RecordingView
         // A key where the console owns the words, the operating system's own sentence where it does
         // not. A key the tables do not have renders as itself, so both arrive readable.
         refusal = problem is null ? string.Empty : L[problem];
+    }
+
+    bool CanManage => Session.CanManagePastSessions();
+
+    static string Name(PastSession session) => session.Directory.FolderName();
+
+    void BeginRename(PastSession session)
+    {
+        renaming = session.Directory;
+        newName = session.Directory.FolderName();
+    }
+
+    async Task RenameAsync(PastSession session)
+    {
+        CommandReply? reply = await Session.RenamePastSessionAsync(session.Directory, newName);
+
+        if (Refused(reply))
+        {
+            return;
+        }
+
+        renaming = null;
+
+        await LoadSessionsAsync();
+    }
+
+    async Task DeleteAsync(PastSession session)
+    {
+        CommandReply? reply = await Session.DeletePastSessionAsync(session.Directory);
+
+        if (!Refused(reply))
+        {
+            await LoadSessionsAsync();
+        }
+    }
+
+    bool Refused(CommandReply? reply)
+    {
+        refusal = reply is null ? L["recording.pastFailed"] : reply.Accepted ? string.Empty : reply.Reason;
+
+        return refusal.Length > 0;
+    }
+
+    async Task ExportAsync(PastSession session)
+    {
+        string name = session.Directory.FolderName();
+
+        exported = string.Empty;
+
+        if (await Platform.CreateFileAsync(name + ".zip") is not { } file)
+        {
+            return;
+        }
+
+        exporting = session.Directory;
+        await InvokeAsync(StateHasChanged);
+
+        string? problem;
+
+        await using (file)
+        {
+            problem = await Session.ExportPastSessionAsync(session.Directory, file);
+        }
+
+        exporting = null;
+        refusal = problem is null ? string.Empty : L[problem];
+        exported = problem is null ? L.Format("recording.exported", name) : string.Empty;
+
+        if (problem is not null && file is FileStream written)
+        {
+            // Half an archive looks like a whole one until somebody opens it.
+            File.Delete(written.Name);
+        }
     }
 
     // Two reasons the button is missing, and they are different things to tell somebody.
