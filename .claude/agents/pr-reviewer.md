@@ -37,6 +37,13 @@ run, say so and stop — an unverified review is worse than none, because it pro
 finding, even if it is an improvement. Especially if it is an improvement — that is how tasks become
 unreviewable.
 
+Then check the fence the other way. Every item in a task's `Not in scope` names the issue that will do it, by
+number, or says it will not be done and why. "A follow-up" with no number is not enough. For each item without
+one, report it as a finding. So is anything the pull request itself says it found and left.
+
+And check that what the task's title promises an operator can be reached from the console. A feature the
+engine can do but no screen offers is not done, whatever the tests say.
+
 **5. Check the two non-negotiables** from `AGENTS.md`:
 
 - Nothing in the audio path allocates, locks or waits. `new`, LINQ, string formatting, boxing, closures,
@@ -49,7 +56,8 @@ purpose. Do not report formatting. Do not suggest adding a linter.
 
 ## What counts as a finding
 
-Report: a criterion not met, a violation of either non-negotiable, work outside the fence, a test that could
+Report: a criterion not met, a violation of either non-negotiable, work outside the fence, an item left out
+with no issue number or reason, a feature the console cannot reach, a test that could
 pass while the thing is broken, a race, an unbounded buffer, a silent failure path.
 
 Do not report: style, naming preferences, "you could also", speculative future problems, or anything you

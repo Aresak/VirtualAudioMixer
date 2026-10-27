@@ -60,7 +60,15 @@ reads the repository never looks — so it was followed by whoever remembered an
 ### The fence
 
 A task's **Not in scope** section is binding. If you find a real problem outside it — and you will — open an
-issue or write it down. Do not fix it in this branch.
+issue. Do not fix it in this branch.
+
+**Every item in a task's `Not in scope` names the issue that will do it, by number, or says it will not be
+done and why. "A follow-up" with no number is not enough.** A line in `Not in scope` is not a record that
+anyone will come back to: #55 left out the console's process picker that way, and merged a feature nobody
+could reach from the console. The same goes for anything a pull request finds and leaves.
+
+When a feature is split into an engine half and a console half, the first half's title says only what that
+half does, so closing it does not read as the feature being done.
 
 Open issues with the `new-issue` skill (`.claude/skills/new-issue`). It searches for the same defect
 first, because several sessions work here at once and a problem filed twice gets fixed twice.

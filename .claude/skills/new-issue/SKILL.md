@@ -70,7 +70,8 @@ What is wrong, where in the code, and how it was seen. Evidence: a log line, a f
 What to build. Where a choice is genuinely open, say "decide in the task".
 
 ## Not in scope
-The fence. Name the neighbouring issues by number.
+The fence. Every item in a task's `Not in scope` names the issue that will do it, by number,
+or says it will not be done and why. "A follow-up" with no number is not enough.
 
 ## Acceptance
 How a reviewer knows it is done. Testable, and tested with `NullAudioBackend` where it can be.
@@ -82,6 +83,8 @@ How a reviewer knows it is done. Testable, and tested with `NullAudioBackend` wh
 - **Title:** the behaviour that should be true, stated plainly. "An absent device is not a stream of
   dropouts", not "Fix dropout bug".
 - **Labels:** from the existing set only (`gh label list`). `bug` or `task`, plus one or more `area:*`.
+- **An item in `Not in scope` with no issue yet:** open that one too, so the number exists when this
+  one is written.
 - **Issues opened together** reference each other. Open both, then edit each body to put in the
   other's number.
 

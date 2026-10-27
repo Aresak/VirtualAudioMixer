@@ -10,7 +10,7 @@ only repeats what must never be missed.
 - **Allocate, lock or wait in the audio path.** See `docs/audio-path.md`. Enforced by a test
 - **Mention Claude or AI in a commit message.** No `Co-Authored-By` for a tool, no "generated with"
 - **Merge your own pull request.** Every pull request is reviewed first — use the `pr-reviewer` agent
-- **Work outside a task's `Not in scope` section.** Found something? Write it down, do not fix it here
+- **Work outside a task's `Not in scope` section.** Found something? Open an issue, do not fix it here
 
 ## Always
 
@@ -20,6 +20,8 @@ only repeats what must never be missed.
 - Stop and say so when a task is `needs-hardware`, wrong, or blocked. Guessing is worse than stopping
 - Open an issue only through the `new-issue` skill, which checks for duplicates first. Before starting a
   task, fetch and check that no pull request already does it
+- Every item in a task's `Not in scope` names the issue that will do it, by number, or says it will not be
+  done and why. "A follow-up" with no number is not enough
 
 ## Where things are
 
