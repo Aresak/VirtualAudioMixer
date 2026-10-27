@@ -8,8 +8,8 @@ public static class AudioProcessExtensions
 {
     /// <summary>The programs not already offered as a device.</summary>
     /// <remarks>
-    /// A program a strip already uses is listed by <c>ListDevices</c> too, and offering it twice
-    /// would be two options for one source.
+    /// A program a strip used when the console connected is listed by <c>ListDevices</c> too, and
+    /// offering it twice would be two options for one source.
     /// </remarks>
     /// <param name="processes">The programs.</param>
     /// <param name="devices">The capture devices offered beside them.</param>
@@ -22,6 +22,24 @@ public static class AudioProcessExtensions
         HashSet<string> offered = devices.Select(device => device.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         return [.. processes.Where(process => !offered.Contains(process.Id))];
+    }
+
+    /// <summary>Whether a selector offering these programs and devices has an option for this source.</summary>
+    /// <remarks>
+    /// The devices are read once per connection and the programs only while they have audio, so a
+    /// strip's own source can be in neither. Without its own option the selector would show the
+    /// first device instead, and claim the strip takes a microphone when it takes the browser.
+    /// </remarks>
+    /// <param name="processes">The programs offered.</param>
+    /// <param name="devices">The capture devices offered.</param>
+    /// <param name="deviceId">The source.</param>
+    /// <returns>True when one of them has that ID.</returns>
+    public static bool Offer(this IEnumerable<AudioProcess> processes, IEnumerable<DeviceInfo> devices, string? deviceId)
+    {
+        ArgumentNullException.ThrowIfNull(processes);
+        ArgumentNullException.ThrowIfNull(devices);
+
+        return devices.Any(device => device.Id == deviceId) || processes.Any(process => process.Id == deviceId);
     }
 
     /// <summary>The name of the program with this ID, for a selector's hover text.</summary>

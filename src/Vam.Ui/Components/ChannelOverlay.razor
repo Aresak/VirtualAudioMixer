@@ -52,6 +52,11 @@
                                 title="@SourceName(channel.DeviceId)"
                                 aria-label="@L["strip.device"]"
                                 @onchange="argument => SetDeviceAsync(channel, argument)">
+                            @if (!Programs.Offer(Captures, channel.DeviceId))
+                            {
+                                <option value="@channel.DeviceId">@channel.DeviceId</option>
+                            }
+
                             @if (Programs.Count == 0)
                             {
                                 @foreach (DeviceInfo device in Captures)

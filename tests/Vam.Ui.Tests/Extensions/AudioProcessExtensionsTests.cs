@@ -23,6 +23,18 @@ public class AudioProcessExtensionsTests
         Assert.Equal(["process:Spotify.exe"], Programs.Besides(devices).Select(process => process.Id));
     }
 
+    [Theory]
+    [InlineData("mic", true)]
+    [InlineData("process:Spotify.exe", true)]
+    [InlineData("process:firefox.exe", false)]
+    [Trait("Category", TestCategories.Unit)]
+    public void AStripsSourceInNeitherListIsNotOffered(string deviceId, bool isOffered)
+    {
+        DeviceInfo[] devices = [new() { Id = "mic", Name = "Lectern" }];
+
+        Assert.Equal(isOffered, Programs.Offer(devices, deviceId));
+    }
+
     [Fact]
     [Trait("Category", TestCategories.Unit)]
     public void TheSelectedProgramGivesItsName() => Assert.Equal("Spotify", Programs.NameOf("process:Spotify.exe"));
