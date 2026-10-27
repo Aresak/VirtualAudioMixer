@@ -13,6 +13,7 @@ using Vam.Engine.Modifiers;
 using Vam.Engine.Recording;
 using Vam.Engine.Recording.Flac;
 using Vam.Engine.Modifiers.BuiltIn;
+using Vam.Engine.Windows.Devices.ProcessLoopback;
 using Vam.Engine.Windows.Devices.Wasapi;
 using Vam.Engine.Windows.Dsp;
 using Vam.Server.Logging;
@@ -219,7 +220,7 @@ public sealed class VamEngine : IDisposable
             return;
         }
 
-        backend = supplied ?? new WasapiBackend(loggers.CreateLogger<WasapiBackend>());
+        backend = supplied ?? OpenWindowsBackend();
 
         ChooseNoiseSuppressor();
 
@@ -1280,6 +1281,17 @@ public sealed class VamEngine : IDisposable
         Callbacks.Record(Stopwatch.GetTimestamp() - started, Graph.BlockTicks);
 
         return written;
+    }
+
+    /// <summary>The real devices, and the process sources a strip names.</summary>
+    IAudioBackend OpenWindowsBackend()
+    {
+        WasapiBackend wasapi = new(loggers.CreateLogger<WasapiBackend>());
+        ProcessLoopbackSources sources = new(
+            new ToolhelpProcessSnapshot(),
+            loggers.CreateLogger<ProcessLoopbackSources>());
+
+        return new ProcessLoopbackBackend(wasapi, wasapi, sources);
     }
 
     /// <summary>

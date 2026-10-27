@@ -1,5 +1,6 @@
 using Vam.Engine.Devices;
 using Vam.Engine.Devices.Abstractions;
+using Vam.Engine.Windows.Devices.ProcessLoopback;
 using Vam.TestKit.Devices;
 using Vam.TestKit.Harness;
 using Vam.TestKit.Logging;
@@ -12,8 +13,9 @@ namespace Vam.Engine.Windows.Tests.Devices.ProcessLoopback;
 /// when it is back, through the same supervisor path an unplugged microphone takes.
 /// </summary>
 /// <remarks>
-/// <see cref="NullAudioBackend"/> stands in for the Windows one: the point is that nothing above the
-/// backend needs to know the identity is a process.
+/// Drives the supervisor over <see cref="ProcessLoopbackBackend"/> with a scripted process list, so
+/// the listing and the lease are the real ones (#104). Only the WASAPI activation is stood in for,
+/// and that is left to the manual check with a real browser (#103).
 /// </remarks>
 public class ProcessSourceStripTests
 {
@@ -26,14 +28,13 @@ public class ProcessSourceStripTests
     [Trait("Category", TestCategories.Unit)]
     public void ABrowserNotYetRunningLeavesTheStripUnavailableUntilItStarts()
     {
-        using NullAudioBackend backend = new();
-        using Fixture fixture = new(backend);
+        using Fixture fixture = new();
 
         DeviceInputChannel channel = fixture.Track(Meeting);
 
         Assert.Equal(DeviceStreamState.Absent, channel.State);
 
-        backend.AddDevice(Meeting, DeviceDirection.Capture, new NullDeviceOptions("msedge.exe"));
+        fixture.Processes.Start(200, 1, "msedge.exe");
         fixture.PullThrough(channel, PastReconcile);
 
         Assert.Equal(DeviceStreamState.Running, channel.State);
@@ -43,42 +44,68 @@ public class ProcessSourceStripTests
     [Trait("Category", TestCategories.Unit)]
     public void ClosingTheBrowserMarksTheStripUnavailableAndReopeningRecoversIt()
     {
-        using NullAudioBackend backend = new();
-        backend.AddDevice(Meeting, DeviceDirection.Capture, new NullDeviceOptions("msedge.exe"));
+        using Fixture fixture = new();
+        fixture.Processes.Start(200, 1, "msedge.exe");
 
-        using Fixture fixture = new(backend);
         DeviceInputChannel channel = fixture.Track(Meeting);
 
         Assert.Equal(DeviceStreamState.Running, channel.State);
 
         // No notification: a process exit only shows up as the source missing from the listing.
-        backend.RemoveDevice(Meeting);
+        fixture.Processes.Exit(200);
         fixture.PullThrough(channel, PastReconcile);
 
         Assert.Equal(DeviceStreamState.Absent, channel.State);
         Assert.Contains(fixture.Changes, change => change.Kind == DeviceChangeKind.Removed && change.DeviceId == Meeting);
+        Assert.True(fixture.Opener.Opened[0].IsDisposed);
 
-        backend.AddDevice(Meeting, DeviceDirection.Capture, new NullDeviceOptions("msedge.exe"));
+        fixture.Processes.Start(200, 1, "msedge.exe");
         fixture.PullThrough(channel, PastReconcile);
 
         Assert.Equal(DeviceStreamState.Running, channel.State);
-        Assert.Equal(2, backend.CaptureStreams.Count);
-        Assert.Equal(DeviceStreamState.Running, backend.CaptureStreams[^1].State);
-        Assert.NotEqual(DeviceStreamState.Running, backend.CaptureStreams[0].State);
+        Assert.Equal(2, fixture.Opener.Opened.Count);
     }
 
-    /// <summary>Wires a supervisor to a backend and collects what it announces.</summary>
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void ABrowserRestartedUnderANewProcessIdIsCapturedAgain()
+    {
+        using Fixture fixture = new();
+        fixture.Processes.Start(200, 1, "msedge.exe");
+
+        DeviceInputChannel channel = fixture.Track(Meeting);
+
+        // Restarted between two reconciles, so the strip never sees the browser missing by name.
+        fixture.Processes.Exit(200);
+        fixture.Processes.Start(300, 1, "msedge.exe");
+        fixture.PullThrough(channel, PastReconcile + PastReconcile);
+
+        Assert.Equal(DeviceStreamState.Running, channel.State);
+        Assert.Equal(300, fixture.Opener.Opened[^1].Process.ProcessId);
+        Assert.True(fixture.Opener.Opened[0].IsDisposed);
+    }
+
+    /// <summary>Wires a supervisor to the process backend and collects what it announces.</summary>
     sealed class Fixture : IDisposable
     {
         readonly List<DeviceChange> changes = [];
         readonly RecordingLoggerFactory loggers = new();
+        readonly ProcessLoopbackBackend backend;
         readonly DeviceSupervisor supervisor;
 
-        public Fixture(NullAudioBackend backend)
+        public Fixture()
         {
+            backend = new ProcessLoopbackBackend(
+                new NullAudioBackend(),
+                Opener,
+                new ProcessLoopbackSources(Processes, loggers.CreateLogger("sources")));
             supervisor = new DeviceSupervisor(backend, new DeviceInputChannelRegistry(), loggers);
             supervisor.Changed += (_, change) => changes.Add(change);
         }
+
+        public ScriptedProcessSnapshot Processes { get; } = new();
+
+        public StandInProcessOpener Opener { get; } = new();
 
         public IReadOnlyList<DeviceChange> Changes => changes;
 
@@ -111,6 +138,7 @@ public class ProcessSourceStripTests
         public void Dispose()
         {
             supervisor.Dispose();
+            backend.Dispose();
             loggers.Dispose();
         }
     }
