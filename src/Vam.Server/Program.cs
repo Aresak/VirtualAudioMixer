@@ -53,6 +53,11 @@ builder.Services.AddSingleton(new EngineOptions
 });
 builder.Services.AddSingleton<VamEngine>();
 
+// The browser the meeting runs in. VAM starting it is what tells one browser's tree from another's.
+builder.Services.AddSingleton(
+    builder.Configuration.GetSection(MeetingBrowserOptions.Section).Get<MeetingBrowserOptions>() ?? new MeetingBrowserOptions());
+builder.Services.AddSingleton<MeetingBrowser>();
+
 // Shows that the engine is running, since it has no window. Off with Vam:Tray=false, and silent
 // without an interactive session.
 if (builder.Configuration.WantsTray())

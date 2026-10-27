@@ -15,6 +15,9 @@ public sealed record TrayStatus
     /// <summary>How long the recording has run, or null when nothing is recording.</summary>
     public TimeSpan? RecordingFor { get; init; }
 
+    /// <summary>Whether a meeting browser is configured, so the tray can start it.</summary>
+    public bool CanStartMeetingBrowser { get; init; }
+
     /// <summary>Whether a recording is open.</summary>
     public bool IsRecording => RecordingFor is not null;
 }

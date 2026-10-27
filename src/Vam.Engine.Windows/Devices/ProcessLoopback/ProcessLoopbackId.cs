@@ -75,15 +75,24 @@ public readonly record struct ProcessLoopbackId
     /// <remarks>
     /// By executable, it is the root of the tree: a process of that name whose parent is not one too.
     /// Chromium plays audio from a child, and capturing only a child's tree would miss the rest of the
-    /// browser. Two roots are two instances, and choosing between them is refused rather than guessed.
+    /// browser. Two roots are two instances, and choosing between them is refused rather than guessed,
+    /// unless VAM started one of them itself: then it is that one, and only that one.
     /// </remarks>
     /// <param name="processes">What is running.</param>
+    /// <param name="launchedProcessId">The PID VAM started this executable under, or 0.</param>
     /// <returns>The process, or why there is none.</returns>
-    public ProcessResolution Resolve(IReadOnlyList<ProcessEntry> processes)
+    public ProcessResolution Resolve(IReadOnlyList<ProcessEntry> processes, int launchedProcessId = 0)
     {
         ArgumentNullException.ThrowIfNull(processes);
 
-        return IsByProcessId ? ResolveProcessId(processes) : ResolveExecutable(processes);
+        if (IsByProcessId)
+        {
+            return ResolveProcessId(processes, ProcessId, string.Empty);
+        }
+
+        return launchedProcessId > 0
+            ? ResolveProcessId(processes, launchedProcessId, ExecutableName)
+            : ResolveExecutable(processes);
     }
 
     /// <summary>What the operator sees this source called.</summary>
@@ -92,11 +101,13 @@ public readonly record struct ProcessLoopbackId
     public string Describe(ProcessEntry process) =>
         IsByProcessId ? $"{process.ExecutableName}, PID {process.ProcessId}" : ExecutableName;
 
-    ProcessResolution ResolveProcessId(IReadOnlyList<ProcessEntry> processes)
+    static ProcessResolution ResolveProcessId(IReadOnlyList<ProcessEntry> processes, int processId, string executableName)
     {
         foreach (ProcessEntry process in processes)
         {
-            if (process.ProcessId == ProcessId)
+            if (process.ProcessId == processId
+                && (executableName.Length == 0
+                    || string.Equals(process.ExecutableName, executableName, StringComparison.OrdinalIgnoreCase)))
             {
                 return new ProcessResolution(ProcessResolutionOutcome.Found, process, 1);
             }

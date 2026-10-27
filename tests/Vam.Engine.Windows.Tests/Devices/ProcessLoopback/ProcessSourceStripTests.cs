@@ -22,6 +22,7 @@ public class ProcessSourceStripTests
     const int BlockFrames = 120;
 
     static readonly AudioDeviceId Meeting = new("process:msedge.exe");
+    static readonly AudioDeviceId Chrome = new("process:chrome.exe");
     static readonly TimeSpan PastReconcile = TimeSpan.FromSeconds(6);
 
     [Fact]
@@ -85,6 +86,62 @@ public class ProcessSourceStripTests
         Assert.True(fixture.Opener.Opened[0].IsDisposed);
     }
 
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void WithTwoChromeTreesRunningTheOneVamStartedIsCapturedAndTheOtherIsNot()
+    {
+        // #96. The operator's own Chrome, and the meeting browser VAM starts beside it.
+        using Fixture fixture = new();
+        fixture.Processes.Start(200, 1, "chrome.exe");
+        fixture.Processes.Start(210, 200, "chrome.exe");
+        fixture.Processes.Start(500, 4, "chrome.exe");
+        fixture.Processes.Start(510, 500, "chrome.exe");
+        fixture.Sources.Launched(500, "chrome.exe");
+
+        DeviceInputChannel channel = fixture.Track(Chrome);
+
+        Assert.Equal(DeviceStreamState.Running, channel.State);
+        Assert.Equal(500, Assert.Single(fixture.Opener.Opened).Process.ProcessId);
+
+        // Closed: the operator's Chrome is still running, and is still not the meeting.
+        fixture.Processes.Exit(510);
+        fixture.Processes.Exit(500);
+        fixture.PullThrough(channel, PastReconcile);
+
+        Assert.Equal(DeviceStreamState.Absent, channel.State);
+        Assert.Single(fixture.Opener.Opened);
+
+        // Started again from VAM, under a new PID, and the strip follows it.
+        fixture.Processes.Start(700, 4, "chrome.exe");
+        fixture.Sources.Launched(700, "chrome.exe");
+        fixture.PullThrough(channel, PastReconcile);
+
+        Assert.Equal(DeviceStreamState.Running, channel.State);
+        Assert.Equal(700, fixture.Opener.Opened[^1].Process.ProcessId);
+        Assert.DoesNotContain(fixture.Opener.Opened, opened => opened.Process.ProcessId == 200);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void ARestartFromVamWhileTheStripIsCapturingMovesTheStripToTheNewTree()
+    {
+        using Fixture fixture = new();
+        fixture.Processes.Start(200, 1, "chrome.exe");
+        fixture.Processes.Start(500, 4, "chrome.exe");
+        fixture.Sources.Launched(500, "chrome.exe");
+
+        DeviceInputChannel channel = fixture.Track(Chrome);
+
+        fixture.Processes.Exit(500);
+        fixture.Processes.Start(700, 4, "chrome.exe");
+        fixture.Sources.Launched(700, "chrome.exe");
+        fixture.PullThrough(channel, PastReconcile + PastReconcile);
+
+        Assert.Equal(DeviceStreamState.Running, channel.State);
+        Assert.Equal(700, fixture.Opener.Opened[^1].Process.ProcessId);
+        Assert.True(fixture.Opener.Opened[0].IsDisposed);
+    }
+
     /// <summary>Wires a supervisor to the process backend and collects what it announces.</summary>
     sealed class Fixture : IDisposable
     {
@@ -95,10 +152,8 @@ public class ProcessSourceStripTests
 
         public Fixture()
         {
-            backend = new ProcessLoopbackBackend(
-                new NullAudioBackend(),
-                Opener,
-                new ProcessLoopbackSources(Processes, loggers.CreateLogger("sources")));
+            Sources = new ProcessLoopbackSources(Processes, loggers.CreateLogger("sources"));
+            backend = new ProcessLoopbackBackend(new NullAudioBackend(), Opener, Sources);
             supervisor = new DeviceSupervisor(backend, new DeviceInputChannelRegistry(), loggers);
             supervisor.Changed += (_, change) => changes.Add(change);
         }
@@ -106,6 +161,8 @@ public class ProcessSourceStripTests
         public ScriptedProcessSnapshot Processes { get; } = new();
 
         public StandInProcessOpener Opener { get; } = new();
+
+        public ProcessLoopbackSources Sources { get; }
 
         public IReadOnlyList<DeviceChange> Changes => changes;
 

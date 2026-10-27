@@ -28,6 +28,7 @@ public sealed class ProcessLoopbackSources(IProcessSnapshot snapshot, ILogger lo
     readonly Dictionary<AudioDeviceId, ProcessLoopbackId> named = [];
     readonly Dictionary<AudioDeviceId, int> captured = [];
     readonly Dictionary<AudioDeviceId, string> executables = [];
+    readonly Dictionary<string, int> launched = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Whether no source is named, either yet or any more.</summary>
     public bool IsEmpty
@@ -58,7 +59,7 @@ public sealed class ProcessLoopbackSources(IProcessSnapshot snapshot, ILogger lo
         {
             foreach ((AudioDeviceId deviceId, ProcessLoopbackId target) in named)
             {
-                ProcessResolution resolution = target.Resolve(processes);
+                ProcessResolution resolution = target.Resolve(processes, LaunchedId(target));
 
                 // A capture still bound to a PID that is no longer the one named has outlived its
                 // process: absent until it is closed, so the next open follows the new one.
@@ -89,18 +90,21 @@ public sealed class ProcessLoopbackSources(IProcessSnapshot snapshot, ILogger lo
     /// <exception cref="DeviceNotFoundException">The process is not running, or the name fits more than one.</exception>
     public ProcessCaptureLease Lease(AudioDeviceId deviceId, ProcessLoopbackId target)
     {
+        int launchedProcessId;
+
         lock (gate)
         {
             named[deviceId] = target;
+            launchedProcessId = LaunchedId(target);
         }
 
-        ProcessResolution resolution = target.Resolve(snapshot.Take());
+        ProcessResolution resolution = target.Resolve(snapshot.Take(), launchedProcessId);
 
         if (resolution.Outcome == ProcessResolutionOutcome.Ambiguous)
         {
             logger.LogWarning(
                 "{DeviceId} fits {Candidates} separate process trees, so none is captured. Start the meeting "
-                + "browser as its own instance, or name it by PID.",
+                + "browser from VAM's tray, or name it by PID.",
                 deviceId.Value,
                 resolution.Candidates);
         }
@@ -128,6 +132,34 @@ public sealed class ProcessLoopbackSources(IProcessSnapshot snapshot, ILogger lo
         return new ProcessCaptureLease(this, deviceId, resolution.Process);
     }
 
+    /// <summary>Says that VAM started a process, so a source naming its executable means that tree.</summary>
+    /// <remarks>
+    /// From then on <c>process:&lt;executable&gt;</c> is the tree VAM started and never another one of the
+    /// same name, and a strip follows each new start. A start while the previous one still runs keeps
+    /// the previous one: a browser handed an already-open profile passes the URL on to it and exits.
+    /// </remarks>
+    /// <param name="processId">Its PID.</param>
+    /// <param name="executableName">Its executable's file name, such as <c>chrome.exe</c>.</param>
+    public void Launched(int processId, string executableName)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(executableName);
+
+        IReadOnlyList<ProcessEntry> processes = snapshot.Take();
+
+        lock (gate)
+        {
+            if (launched.TryGetValue(executableName, out int previous)
+                && previous != processId
+                && processes.Any(process => process.ProcessId == previous
+                    && string.Equals(process.ExecutableName, executableName, StringComparison.OrdinalIgnoreCase)))
+            {
+                return;
+            }
+
+            launched[executableName] = processId;
+        }
+    }
+
     /// <summary>Stops listing a source, because no strip uses it any more.</summary>
     /// <remarks>
     /// A capture still open keeps its claim until its lease is disposed. Once nothing is named, listing
@@ -142,6 +174,9 @@ public sealed class ProcessLoopbackSources(IProcessSnapshot snapshot, ILogger lo
             executables.Remove(deviceId);
         }
     }
+
+    int LaunchedId(ProcessLoopbackId target) =>
+        !target.IsByProcessId && launched.TryGetValue(target.ExecutableName, out int processId) ? processId : 0;
 
     // Windows reuses PIDs. A PID that now belongs to a different executable is not the process that
     // was named, and following it would put an unrelated program on the strip.
