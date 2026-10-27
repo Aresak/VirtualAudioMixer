@@ -1,9 +1,11 @@
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using Vam.Engine.Devices;
 using Vam.Engine.Devices.Abstractions;
+using Vam.Engine.Windows.Devices.ProcessLoopback;
 
 namespace Vam.Engine.Windows.Devices.Wasapi;
 
@@ -37,6 +39,12 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
         | AudioClientStreamFlags.AutoConvertPcm
         | AudioClientStreamFlags.SrcDefaultQuality;
 
+    /// <summary>A process source: loopback, always converting, because it has no format of its own to match.</summary>
+    const AudioClientStreamFlags ProcessLoopbackFlags = ConvertingFlags | AudioClientStreamFlags.Loopback;
+
+    /// <summary>The rate a process source opens at when nothing asks for one.</summary>
+    const int DefaultProcessSampleRate = 48000;
+
     /// <summary>Bits per sample the engine speaks. Shared mode is float everywhere this will run.</summary>
     const int FloatBits = 32;
 
@@ -55,7 +63,11 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
     /// <summary>WAVE_FORMAT_EXTENSIBLE, as the tag at the front of the blob.</summary>
     const ushort ExtensibleTag = 0xFFFE;
 
+    /// <summary>How long a process source's activation may take before the open gives up.</summary>
+    static readonly TimeSpan ActivationTimeout = TimeSpan.FromSeconds(5);
+
     readonly MMDeviceEnumerator enumerator = new();
+    readonly ProcessLoopbackSources processes = new(new ToolhelpProcessSnapshot(), logger);
 
     /// <inheritdoc />
     public string Id => "wasapi";
@@ -80,6 +92,12 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
                     present.Add(info);
                 }
             }
+        }
+
+        if (direction == DeviceDirection.Capture && !processes.IsEmpty)
+        {
+            // A process plays into the default output's mix, so that is the rate it nominally runs at.
+            present.AddRange(processes.Describe(DefaultDevice(DeviceDirection.Render)?.NominalSampleRate ?? 0));
         }
 
         return present;
@@ -107,6 +125,11 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
     /// <inheritdoc />
     public ICaptureStream OpenCapture(AudioDeviceId deviceId, CaptureOptions options)
     {
+        if (ProcessLoopbackId.TryParse(deviceId, out ProcessLoopbackId target))
+        {
+            return OpenProcessCapture(deviceId, target, options);
+        }
+
         MMDevice device = Resolve(deviceId);
         OpenedClient? opened = null;
 
@@ -150,6 +173,63 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
 
     /// <inheritdoc />
     public void Dispose() => enumerator.Dispose();
+
+    /// <summary>
+    /// Opens what one process tree plays, as a capture stream.
+    /// </summary>
+    /// <remarks>
+    /// <c>PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE</c>, because Chromium plays from an
+    /// audio-service child and the main PID alone captures silence. Always shared and converting:
+    /// the virtual device has no mix format, so the engine's format is asked for and Windows converts.
+    /// </remarks>
+    /// <param name="deviceId">The identity it was asked for under.</param>
+    /// <param name="target">That identity, parsed.</param>
+    /// <param name="options">What the engine needs.</param>
+    /// <returns>A stopped stream.</returns>
+    ICaptureStream OpenProcessCapture(AudioDeviceId deviceId, ProcessLoopbackId target, CaptureOptions options)
+    {
+        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
+        {
+            throw new PlatformNotSupportedException("Capturing a process needs Windows 10 version 2004 or later.");
+        }
+
+        ProcessCaptureLease lease = processes.Lease(deviceId, target);
+        AudioClient? client = null;
+
+        try
+        {
+            WaveFormat format = FloatFormat(
+                options.SampleRate > 0 ? options.SampleRate : DefaultProcessSampleRate,
+                options.ChannelCount > 0 ? options.ChannelCount : ProcessLoopbackSources.DefaultChannelCount);
+
+            client = Activate(lease.Process);
+            client.Initialize(
+                AudioClientShareMode.Shared,
+                ProcessLoopbackFlags,
+                options.BufferDuration.Ticks,
+                0,
+                format,
+                Guid.Empty);
+
+            logger.LogInformation(
+                "Capturing what {ExecutableName} (PID {ProcessId}) and its children play, at {SampleRate} Hz "
+                + "{ChannelCount} ch, shared whatever share mode was asked for.",
+                lease.Process.ExecutableName,
+                lease.Process.ProcessId,
+                format.SampleRate,
+                format.Channels);
+
+            OpenedClient opened = new(client, format, ShareMode.Shared, 0);
+
+            return new WasapiCaptureStream(deviceId, lease, client, opened.Describe(), format, logger);
+        }
+        catch
+        {
+            client?.Dispose();
+            lease.Dispose();
+            throw;
+        }
+    }
 
     /// <summary>
     /// Opens a client in the best mode this device can honestly be given.
@@ -406,12 +486,43 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
             return mix;
         }
 
+        return FloatFormat(rate, channels);
+    }
+
+    static WaveFormat FloatFormat(int rate, int channels)
+    {
         // Float, because that is what the shared engine speaks and what WasapiSampleReader copies
         // without converting. Anything wider than stereo needs a channel mask, and that is what an
         // extensible format carries.
         return channels > PlainFormatChannelLimit
             ? new WaveFormatExtensible(rate, FloatBits, channels)
             : WaveFormat.CreateIeeeFloatWaveFormat(rate, channels);
+    }
+
+    [SupportedOSPlatform("windows10.0.19041")]
+    static AudioClient Activate(ProcessEntry process)
+    {
+        Task<AudioClient> activation = AudioClient.ActivateProcessLoopbackAsync(
+            (uint)process.ProcessId,
+            ProcessLoopbackMode.IncludeTargetProcessTree);
+
+        // OpenCapture is synchronous and runs on the control thread, which may block. The activation
+        // completes on a system worker thread, so this wait cannot deadlock on itself.
+#pragma warning disable VSTHRD002
+        if (!((IAsyncResult)activation).AsyncWaitHandle.WaitOne(ActivationTimeout))
+        {
+            // A late activation still hands back a client, and nobody else will dispose it.
+            _ = activation.ContinueWith(
+                static late => late.Result.Dispose(),
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnRanToCompletion,
+                TaskScheduler.Default);
+
+            throw new TimeoutException($"Process loopback for PID {process.ProcessId} did not activate in time.");
+        }
+
+        return activation.GetAwaiter().GetResult();
+#pragma warning restore VSTHRD002
     }
 
     /// <summary>

@@ -30,7 +30,8 @@ public sealed class WasapiCaptureStream : ICaptureStream
     /// </summary>
     static readonly TimeSpan DeviceTimeout = TimeSpan.FromSeconds(2);
 
-    readonly MMDevice device;
+    // The MMDevice, or a process source's lease: whatever the client was activated from.
+    readonly IDisposable endpoint;
     readonly AudioClient client;
     readonly AudioCaptureClient capture;
     readonly WasapiSampleReader reader;
@@ -44,7 +45,7 @@ public sealed class WasapiCaptureStream : ICaptureStream
 
     internal WasapiCaptureStream(
         AudioDeviceId deviceId,
-        MMDevice device,
+        IDisposable endpoint,
         AudioClient client,
         AudioStreamFormat format,
         WaveFormat granted,
@@ -53,7 +54,7 @@ public sealed class WasapiCaptureStream : ICaptureStream
         DeviceId = deviceId;
         Format = format;
 
-        this.device = device;
+        this.endpoint = endpoint;
         this.client = client;
         this.logger = logger;
 
@@ -155,7 +156,7 @@ public sealed class WasapiCaptureStream : ICaptureStream
         packetReady.Dispose();
         capture.Dispose();
         client.Dispose();
-        device.Dispose();
+        endpoint.Dispose();
     }
 
     void Run()
