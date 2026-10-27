@@ -125,6 +125,50 @@ public class EngineConnectorTests
         Assert.True(connector.OffersStop);
     }
 
+    [Theory]
+    [InlineData(ConnectionState.Idle)]
+    [InlineData(ConnectionState.Connecting)]
+    [InlineData(ConnectionState.Reconnecting)]
+    [InlineData(ConnectionState.Refused)]
+    [Trait("Category", TestCategories.Unit)]
+    public void ClosingWithNoEngineAsksNothing(ConnectionState connection)
+    {
+        EngineConnector connector = Connector(new FakeSession { Connection = connection });
+
+        Assert.False(connector.AsksOnClose);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void ClosingWhileConnectedToALocalEngineAsks()
+    {
+        EngineConnector connector = Connector(new FakeSession { Connection = ConnectionState.Connected });
+
+        Assert.True(connector.AsksOnClose);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void ClosingWhileConnectedToARemoteEngineAsksNothing()
+    {
+        EngineConnector connector = Connector(
+            new FakeSession { Connection = ConnectionState.Connected },
+            "http://studio-pc:5211");
+
+        Assert.False(connector.AsksOnClose);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public async Task ClosingWhileAStopIsPendingAsksNothing()
+    {
+        EngineConnector connector = Connector(new FakeSession { Connection = ConnectionState.Connected });
+
+        await connector.StopEngineAsync("test", TestContext.Current.CancellationToken);
+
+        Assert.False(connector.AsksOnClose);
+    }
+
     static EngineConnector Connector(
         FakeSession session,
         string address = VamSessionOptions.LocalAddress,
