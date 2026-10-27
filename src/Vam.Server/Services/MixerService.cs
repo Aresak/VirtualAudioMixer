@@ -76,7 +76,7 @@ public sealed class MixerService(
 
     /// <inheritdoc />
     public override Task<ConsoleState> GetConsole(Empty request, ServerCallContext context) =>
-        Task.FromResult(BuildConsole());
+        ReadAsync(BuildConsole, context);
 
     /// <inheritdoc />
     /// <remarks>
@@ -118,18 +118,20 @@ public sealed class MixerService(
     }
 
     /// <inheritdoc />
-    public override Task<DeviceList> ListDevices(Empty request, ServerCallContext context)
+    public override async Task<DeviceList> ListDevices(Empty request, ServerCallContext context)
     {
         DeviceList list = new();
 
         if (engine.Backend is not { } backend)
         {
-            return Task.FromResult(list);
+            return list;
         }
 
-        HashSet<string> inUse = engine.Graph is { } graph
-            ? [.. graph.Config.Channels.Select(channel => channel.DeviceId.Value)]
-            : [];
+        HashSet<string> inUse = await ReadAsync(
+            () => engine.Graph is { } graph
+                ? [.. graph.Config.Channels.Select(channel => channel.DeviceId.Value)]
+                : new HashSet<string>(),
+            context);
 
         foreach (DeviceDirection direction in (ReadOnlySpan<DeviceDirection>)[DeviceDirection.Capture, DeviceDirection.Render])
         {
@@ -152,7 +154,7 @@ public sealed class MixerService(
             }
         }
 
-        return Task.FromResult(list);
+        return list;
     }
 
     /// <inheritdoc />
@@ -232,7 +234,25 @@ public sealed class MixerService(
 
     /// <inheritdoc />
     public override Task<DiagnosticsState> GetDiagnostics(Empty request, ServerCallContext context) =>
-        Task.FromResult(MixerDiagnostics.Build(engine));
+        ReadAsync(() => MixerDiagnostics.Build(engine), context);
+
+    /// <summary>
+    /// Reads the console on the control loop, which is the only thread that changes it.
+    /// </summary>
+    /// <remarks>
+    /// Inline once the loop has gone, because then nothing changes it either.
+    /// </remarks>
+    async Task<T> ReadAsync<T>(Func<T> read, ServerCallContext context)
+    {
+        try
+        {
+            return await engine.OnControlLoopAsync(read, context.CancellationToken).ConfigureAwait(false);
+        }
+        catch (EngineStoppedException)
+        {
+            return read();
+        }
+    }
 
     /// <inheritdoc />
     public override async Task StreamMeters(Empty request, IServerStreamWriter<MeterFrame> responses, ServerCallContext context)

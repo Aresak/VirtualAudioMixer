@@ -18,9 +18,9 @@ namespace Vam.Server.Mediator.Handlers;
 /// eleven files that each say <c>Rewrite(graph, index, …)</c> and nothing else.
 /// </para>
 /// <para>
-/// <b>Nothing here touches the audio path.</b> Every one of these either queues a command that the
-/// control thread drains, or rewrites the configuration and recompiles. The audio thread reads a
-/// snapshot and has never heard of the mediator.
+/// <b>Nothing here touches the audio path.</b> Every one of these runs on the control loop, where it
+/// either queues and pumps a command or rewrites the configuration and recompiles. The audio thread
+/// reads a snapshot and has never heard of the mediator.
 /// </para>
 /// </remarks>
 public sealed class ChannelCommandHandler(VamEngine engine) :
@@ -38,15 +38,15 @@ public sealed class ChannelCommandHandler(VamEngine engine) :
 {
     /// <inheritdoc />
     public Task<CommandReply> Handle(SetFaderRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
-        SubmitAsync(graph => graph.Submit(GraphCommand.SetFader(request.ChannelIndex, request.Decibels)));
+        SubmitAsync(GraphCommand.SetFader(request.ChannelIndex, request.Decibels), cancellationToken);
 
     /// <inheritdoc />
     public Task<CommandReply> Handle(SetTrimRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
-        SubmitAsync(graph => graph.Submit(GraphCommand.SetTrim(request.ChannelIndex, request.Decibels)));
+        SubmitAsync(GraphCommand.SetTrim(request.ChannelIndex, request.Decibels), cancellationToken);
 
     /// <inheritdoc />
     public Task<CommandReply> Handle(SetPanRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
-        RewriteAsync(request.ChannelIndex, channel => channel with { Pan = Math.Clamp(request.Pan, -1.0, 1.0) });
+        RewriteAsync(request.ChannelIndex, channel => channel with { Pan = Math.Clamp(request.Pan, -1.0, 1.0) }, cancellationToken);
 
     /// <inheritdoc />
     public Task<CommandReply> Handle(SetChannelFlagRequest request, IMediatorContext context, CancellationToken cancellationToken)
@@ -56,7 +56,7 @@ public sealed class ChannelCommandHandler(VamEngine engine) :
         // strip. It arrives here because to an operator it is the same kind of thing as mute.
         if (string.Equals(request.Flag, "ParticipatesInAutomix", StringComparison.OrdinalIgnoreCase))
         {
-            return RewriteAsync(request.ChannelIndex, channel => channel with { ParticipatesInAutomix = request.Enabled });
+            return RewriteAsync(request.ChannelIndex, channel => channel with { ParticipatesInAutomix = request.Enabled }, cancellationToken);
         }
 
         if (!Enum.TryParse(request.Flag, ignoreCase: true, out ChannelFlags flag))
@@ -64,7 +64,7 @@ public sealed class ChannelCommandHandler(VamEngine engine) :
             return Replies.DoneAsync(Replies.Refused($"There is no flag called '{request.Flag}'."));
         }
 
-        return SubmitAsync(graph => graph.Submit(GraphCommand.SetFlag(request.ChannelIndex, flag, request.Enabled)));
+        return SubmitAsync(GraphCommand.SetFlag(request.ChannelIndex, flag, request.Enabled), cancellationToken);
     }
 
     /// <inheritdoc />
@@ -73,7 +73,7 @@ public sealed class ChannelCommandHandler(VamEngine engine) :
         IMediatorContext context,
         CancellationToken cancellationToken
     ) =>
-        RewriteAsync(request.ChannelIndex, channel => channel with { AutomixWeight = (float)request.Weight });
+        RewriteAsync(request.ChannelIndex, channel => channel with { AutomixWeight = (float)request.Weight }, cancellationToken);
 
     /// <inheritdoc />
     public Task<CommandReply> Handle(
@@ -81,7 +81,7 @@ public sealed class ChannelCommandHandler(VamEngine engine) :
         IMediatorContext context,
         CancellationToken cancellationToken
     ) =>
-        RewriteAsync(request.ChannelIndex, channel => channel with { Name = request.Name });
+        RewriteAsync(request.ChannelIndex, channel => channel with { Name = request.Name }, cancellationToken);
 
     /// <inheritdoc />
     public Task<CommandReply> Handle(
@@ -89,7 +89,7 @@ public sealed class ChannelCommandHandler(VamEngine engine) :
         IMediatorContext context,
         CancellationToken cancellationToken
     ) =>
-        RewriteAsync(request.ChannelIndex, channel => channel with { Colour = request.Colour });
+        RewriteAsync(request.ChannelIndex, channel => channel with { Colour = request.Colour }, cancellationToken);
 
     /// <inheritdoc />
     public Task<CommandReply> Handle(
@@ -97,21 +97,25 @@ public sealed class ChannelCommandHandler(VamEngine engine) :
         IMediatorContext context,
         CancellationToken cancellationToken
     ) =>
-        engine.RetargetChannel(request.ChannelIndex, new AudioDeviceId(request.DeviceId))
-            ? Replies.DoneAsync(Replies.Accepted())
-            : Replies.DoneAsync(Replies.Refused($"There is no strip {request.ChannelIndex}."));
+        engine.CommandAsync(
+            _ => engine.RetargetChannel(request.ChannelIndex, new AudioDeviceId(request.DeviceId))
+                ? Replies.Accepted()
+                : Replies.Refused($"There is no strip {request.ChannelIndex}."),
+            cancellationToken);
 
     /// <inheritdoc />
     public Task<CommandReply> Handle(AddChannelRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
-        engine.AddChannel(new ChannelConfig
-        {
-            DeviceId = new AudioDeviceId(request.DeviceId),
-            Name = request.Name,
-            ChannelCount = Math.Max(request.ChannelCount, 1),
-            ParticipatesInAutomix = request.ParticipatesInAutomix
-        }) >= 0
-            ? Replies.DoneAsync(Replies.Accepted())
-            : Replies.DoneAsync(Replies.Refused("The engine is not running."));
+        engine.CommandAsync(
+            _ => engine.AddChannel(new ChannelConfig
+            {
+                DeviceId = new AudioDeviceId(request.DeviceId),
+                Name = request.Name,
+                ChannelCount = Math.Max(request.ChannelCount, 1),
+                ParticipatesInAutomix = request.ParticipatesInAutomix
+            }) >= 0
+                ? Replies.Accepted()
+                : Replies.Refused("The engine is not running."),
+            cancellationToken);
 
     /// <inheritdoc />
     public Task<CommandReply> Handle(
@@ -119,15 +123,19 @@ public sealed class ChannelCommandHandler(VamEngine engine) :
         IMediatorContext context,
         CancellationToken cancellationToken
     ) =>
-        engine.Graph is { } graph && graph.RemoveChannel(request.ChannelIndex)
-            ? Replies.DoneAsync(Replies.Accepted())
-            : Replies.DoneAsync(Replies.Refused($"There is no strip {request.ChannelIndex}."));
+        engine.CommandAsync(
+            graph => graph.RemoveChannel(request.ChannelIndex)
+                ? Replies.Accepted()
+                : Replies.Refused($"There is no strip {request.ChannelIndex}."),
+            cancellationToken);
 
     /// <inheritdoc />
     public Task<CommandReply> Handle(MoveChannelRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
-        engine.Graph is { } graph && graph.MoveChannel(request.FromIndex, request.ToIndex)
-            ? Replies.DoneAsync(Replies.Accepted())
-            : Replies.DoneAsync(Replies.Refused("A strip cannot be moved to a place that is not there."));
+        engine.CommandAsync(
+            graph => graph.MoveChannel(request.FromIndex, request.ToIndex)
+                ? Replies.Accepted()
+                : Replies.Refused("A strip cannot be moved to a place that is not there."),
+            cancellationToken);
 
     /// <summary>
     /// Rewrites one strip's configuration and recompiles.
@@ -137,29 +145,34 @@ public sealed class ChannelCommandHandler(VamEngine engine) :
     /// put back in place. That is what makes a half-applied strip impossible: either the whole thing
     /// went in or none of it did.
     /// </remarks>
-    Task<CommandReply> RewriteAsync(int index, Func<ChannelConfig, ChannelConfig> change)
-    {
-        if (engine.Graph is not { } graph || index < 0 || index >= graph.Config.Channels.Count)
-        {
-            return Replies.DoneAsync(Replies.Refused($"There is no strip {index}."));
-        }
+    Task<CommandReply> RewriteAsync(
+        int index,
+        Func<ChannelConfig, ChannelConfig> change,
+        CancellationToken cancellationToken
+    ) =>
+        engine.CommandAsync(
+            graph =>
+            {
+                if (index < 0 || index >= graph.Config.Channels.Count)
+                {
+                    return Replies.Refused($"There is no strip {index}.");
+                }
 
-        graph.Config.Channels[index] = change(graph.Config.Channels[index]);
-        graph.Recompile();
+                graph.Config.Channels[index] = change(graph.Config.Channels[index]);
+                graph.Recompile();
 
-        return Replies.DoneAsync(Replies.Accepted());
-    }
+                return Replies.Accepted();
+            },
+            cancellationToken);
 
-    Task<CommandReply> SubmitAsync(Action<GraphController> queue)
-    {
-        if (engine.Graph is not { } graph)
-        {
-            return Replies.DoneAsync(Replies.Refused("The engine is not running."));
-        }
+    Task<CommandReply> SubmitAsync(GraphCommand command, CancellationToken cancellationToken) =>
+        engine.CommandAsync(
+            graph =>
+            {
+                graph.Submit(command);
+                graph.Pump();
 
-        queue(graph);
-        graph.Pump();
-
-        return Replies.DoneAsync(Replies.Accepted());
-    }
+                return Replies.Accepted();
+            },
+            cancellationToken);
 }

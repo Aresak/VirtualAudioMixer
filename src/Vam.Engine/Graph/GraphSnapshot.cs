@@ -227,6 +227,20 @@ public sealed class GraphSnapshot
         return new GraphSnapshot(Plan, channels, buses, Sends, changed, Automix, Version + 1);
     }
 
+    /// <summary>The same snapshot, numbered to follow one it replaces.</summary>
+    /// <remarks>
+    /// A compiled snapshot starts at zero. Published as it is, it reads as older than everything it
+    /// retires, and the retire queue never lets any of them go.
+    /// </remarks>
+    /// <param name="previous">The snapshot it replaces.</param>
+    /// <returns>The new snapshot.</returns>
+    public GraphSnapshot Succeeding(GraphSnapshot previous)
+    {
+        ArgumentNullException.ThrowIfNull(previous);
+
+        return new GraphSnapshot(Plan, channels, buses, Sends, chains, Automix, previous.Version + 1);
+    }
+
     /// <summary>Produces a snapshot with new automixer settings and the plan shared.</summary>
     /// <param name="parameters">The new settings.</param>
     /// <returns>The new snapshot.</returns>

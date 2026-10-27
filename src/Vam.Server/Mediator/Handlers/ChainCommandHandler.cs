@@ -23,14 +23,14 @@ public sealed class ChainCommandHandler(VamEngine engine) :
 {
     /// <inheritdoc />
     public Task<CommandReply> Handle(AddModifierRequest request, IMediatorContext context, CancellationToken cancellationToken) =>
-        engine.Graph is { } graph
-            ? Replies.DoneAsync(ChainCommands.Add(graph, engine.Modifiers, new AddModifier
+        engine.CommandAsync(
+            graph => ChainCommands.Add(graph, engine.Modifiers, new AddModifier
             {
                 Target = request.Target,
                 ModifierId = request.ModifierId,
                 AtIndex = request.AtIndex
-            }))
-            : Replies.DoneAsync(Replies.Refused("The engine is not running."));
+            }),
+            cancellationToken);
 
     /// <inheritdoc />
     public Task<CommandReply> Handle(
@@ -38,13 +38,13 @@ public sealed class ChainCommandHandler(VamEngine engine) :
         IMediatorContext context,
         CancellationToken cancellationToken
     ) =>
-        engine.Graph is { } graph
-            ? Replies.DoneAsync(ChainCommands.Remove(graph, new RemoveModifier
+        engine.CommandAsync(
+            graph => ChainCommands.Remove(graph, new RemoveModifier
             {
                 Target = request.Target,
                 LinkIndex = request.LinkIndex
-            }))
-            : Replies.DoneAsync(Replies.Refused("The engine is not running."));
+            }),
+            cancellationToken);
 
     /// <inheritdoc />
     public Task<CommandReply> Handle(
@@ -52,14 +52,14 @@ public sealed class ChainCommandHandler(VamEngine engine) :
         IMediatorContext context,
         CancellationToken cancellationToken
     ) =>
-        engine.Graph is { } graph
-            ? Replies.DoneAsync(ChainCommands.Move(graph, new MoveModifier
+        engine.CommandAsync(
+            graph => ChainCommands.Move(graph, new MoveModifier
             {
                 Target = request.Target,
                 FromIndex = request.FromIndex,
                 ToIndex = request.ToIndex
-            }))
-            : Replies.DoneAsync(Replies.Refused("The engine is not running."));
+            }),
+            cancellationToken);
 
     /// <inheritdoc />
     public Task<CommandReply> Handle(
@@ -67,14 +67,14 @@ public sealed class ChainCommandHandler(VamEngine engine) :
         IMediatorContext context,
         CancellationToken cancellationToken
     ) =>
-        engine.Graph is { } graph
-            ? Replies.DoneAsync(ChainCommands.SetBypass(graph, new SetModifierBypass
-            {
-                Target = request.Target,
-                LinkIndex = request.LinkIndex,
-                Bypassed = request.Bypassed
-            }))
-            : Replies.DoneAsync(Replies.Refused("The engine is not running."));
+        engine.CommandAsync(
+            graph => ChainCommands.SetBypass(graph, new SetModifierBypass
+        {
+            Target = request.Target,
+            LinkIndex = request.LinkIndex,
+            Bypassed = request.Bypassed
+        }),
+            cancellationToken);
 
     /// <inheritdoc />
     public Task<CommandReply> Handle(
@@ -82,13 +82,13 @@ public sealed class ChainCommandHandler(VamEngine engine) :
         IMediatorContext context,
         CancellationToken cancellationToken
     ) =>
-        engine.Graph is { } graph
-            ? Replies.DoneAsync(ChainCommands.SetParameter(graph, new SetModifierParameter
-            {
-                Target = request.Target,
-                LinkIndex = request.LinkIndex,
-                ParameterId = request.ParameterId,
-                Value = request.Value
-            }))
-            : Replies.DoneAsync(Replies.Refused("The engine is not running."));
+        engine.CommandAsync(
+            graph => ChainCommands.SetParameter(graph, new SetModifierParameter
+        {
+            Target = request.Target,
+            LinkIndex = request.LinkIndex,
+            ParameterId = request.ParameterId,
+            Value = request.Value
+        }),
+            cancellationToken);
 }

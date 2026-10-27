@@ -8,6 +8,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Vam.Engine.Devices;
 using Vam.Engine.Devices.Abstractions;
+using BusConfig = Vam.Engine.Graph.BusConfig;
+using GraphController = Vam.Engine.Graph.GraphController;
+using SendConfig = Vam.Engine.Graph.SendConfig;
 using Vam.Engine.Recording;
 using Vam.Protocol;
 using Vam.Protocol.V1;
@@ -861,6 +864,163 @@ public class ProtocolGateTests : IAsyncLifetime
         Assert.Equal(-12, reopened.Graph!.Config.Channels[1].FaderDb, 3);
         Assert.Equal(4, reopened.Graph.Config.Channels[1].TrimDb, 3);
         Assert.Equal("Lectern", reopened.Graph.Config.Channels[1].Name);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public async Task BusesAddedAndRemovedByManyClientsAtOnceLeaveOneConsistentConsole()
+    {
+        const int Clients = 8;
+        const int Rounds = 20;
+
+        // Two commands a round and two publishes a command. A retire queue that never lets go holds all
+        // of them; one that works holds what the audio thread has not caught up with, which on a busy
+        // machine can be a few ticks' worth, but nowhere near half.
+        const int Publishes = Clients * Rounds * 2 * 2;
+        const int MostPending = Publishes / 2;
+
+        VamEngine live = engine!;
+        GraphController graph = live.Graph!;
+
+        (List<BusConfig> buses, List<SendConfig> sends) before =
+            await live.OnControlLoopAsync(() => (graph.Config.Buses.ToList(), graph.Config.Sends.ToList()), Token);
+
+        int worstPending = 0;
+        using CancellationTokenSource finished = CancellationTokenSource.CreateLinkedTokenSource(Token);
+
+        // Stands in for the audio thread: takes each snapshot the way a block would, without rendering
+        // it. Nothing else acquires here, because nothing pumps the null devices.
+        Thread audio = new(() =>
+        {
+            while (!finished.IsCancellationRequested)
+            {
+                graph.Publisher.Acquire();
+                Thread.Sleep(1);
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "test-audio"
+        };
+
+        audio.Start();
+
+        using CancellationTokenSource commandsDone = CancellationTokenSource.CreateLinkedTokenSource(Token);
+
+        Task watching = Task.Run(
+            async () =>
+            {
+                while (!commandsDone.IsCancellationRequested)
+                {
+                    int pending = await live.OnControlLoopAsync(() => graph.Publisher.PendingRetirements, Token);
+
+                    worstPending = Math.Max(worstPending, pending);
+                }
+            },
+            Token);
+
+        // Each client removes only after its own add has been answered, so every removal has a bus
+        // past the originals to take, and every one of them should be accepted.
+        CommandReply[][] replies = await Task.WhenAll(Enumerable.Range(0, Clients).Select(caller => Task.Run(
+            async () =>
+            {
+                List<CommandReply> answered = [];
+
+                for (int round = 0; round < Rounds; round++)
+                {
+                    answered.Add(await client!.ApplyAsync(
+                        new Command { AddBus = new AddBus { Name = $"Client {caller} round {round}", Role = "Monitor", ChannelCount = 2 } },
+                        cancellationToken: Token));
+
+                    answered.Add(await client.ApplyAsync(
+                        new Command { RemoveBus = new RemoveBus { BusIndex = before.buses.Count } },
+                        cancellationToken: Token));
+                }
+
+                return answered.ToArray();
+            },
+            Token)));
+
+        await commandsDone.CancelAsync();
+        await watching;
+
+        Assert.All(replies.SelectMany(reply => reply), reply => Assert.True(reply.Accepted, reply.Reason));
+        Assert.InRange(worstPending, 0, MostPending);
+
+        (List<BusConfig> buses, List<SendConfig> sends) after =
+            await live.OnControlLoopAsync(() => (graph.Config.Buses.ToList(), graph.Config.Sends.ToList()), Token);
+
+        // Every add was undone by a remove, so the console is exactly what it was: not a bus left over
+        // from an edit that tore, and not a send re-aimed by a reindex that ran twice.
+        Assert.Equal(before.buses, after.buses);
+        Assert.Equal(before.sends, after.sends);
+
+        ConsoleState console = await client!.GetConsoleAsync(new Empty(), cancellationToken: Token);
+
+        Assert.Equal(before.buses.Count, console.Buses.Count);
+
+        // And once the audio thread has moved past them, the retired snapshots are let go.
+        int pendingNow = int.MaxValue;
+
+        for (int attempt = 0; attempt < 200 && pendingNow > 1; attempt++)
+        {
+            await Task.Delay(10, Token);
+
+            pendingNow = await live.OnControlLoopAsync(() => graph.Publisher.PendingRetirements, Token);
+        }
+
+        await finished.CancelAsync();
+        audio.Join();
+
+        Assert.InRange(pendingNow, 0, 1);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public async Task ACommandWaitingOnAStoppedEngineIsRefusedRatherThanLeftHanging()
+    {
+        engine!.Stop();
+
+        CommandReply reply = await client!.ApplyAsync(
+            new Command { AddBus = new AddBus { Name = "Too late", Role = "Monitor", ChannelCount = 2 } },
+            deadline: DateTime.UtcNow.AddSeconds(5),
+            cancellationToken: Token);
+
+        Assert.False(reply.Accepted);
+        Assert.Equal("The engine is not running.", reply.Reason);
+
+        await Assert.ThrowsAsync<EngineStoppedException>(() => engine.OnControlLoopAsync(() => 0, Token));
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public async Task WorkQueuedWhenTheEngineStopsIsFinishedOrRefusedButNeverLeftWaiting()
+    {
+        VamEngine live = engine!;
+        using ManualResetEventSlim gate = new();
+
+        // One piece of work holds the loop, so the next is still queued when Stop arrives.
+        Task<int> holding = live.OnControlLoopAsync(
+            () =>
+            {
+                gate.Wait(TimeSpan.FromSeconds(10));
+                return 0;
+            },
+            Token);
+        Task<int> queued = live.OnControlLoopAsync(() => 1, Token);
+
+        Task stopping = Task.Run(live.Stop, Token);
+
+        await Task.Delay(100, Token);
+        gate.Set();
+        await stopping.WaitAsync(TimeSpan.FromSeconds(10), Token);
+
+        foreach (Task<int> work in (Task<int>[])[holding, queued])
+        {
+            Exception? refused = await Record.ExceptionAsync(() => work.WaitAsync(TimeSpan.FromSeconds(5), Token));
+
+            Assert.True(refused is null or EngineStoppedException, refused?.ToString());
+        }
     }
 
     /// <summary>The token the runner cancels, so a hung call fails the test rather than the run.</summary>
