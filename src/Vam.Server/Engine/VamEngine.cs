@@ -766,11 +766,31 @@ public sealed class VamEngine : IDisposable
             return -1;
         }
 
-        int index = Graph.AddChannel(channel);
+        Track(channel, Graph.Config.Channels.Count);
+        FollowRegistryOrder(Graph.Config);
 
-        Track(channel, index);
+        return Graph.AddChannel(channel);
+    }
 
-        return index;
+    /// <summary>Removes a strip, and stops tracking its device when no other strip uses it.</summary>
+    /// <param name="channelIndex">Which strip.</param>
+    /// <returns>Whether it was there.</returns>
+    public bool RemoveChannel(int channelIndex)
+    {
+        if (Graph is not { } graph || channelIndex < 0 || channelIndex >= graph.Config.Channels.Count)
+        {
+            return false;
+        }
+
+        AudioDeviceId device = graph.Config.Channels[channelIndex].DeviceId;
+
+        if (!IsUsedByAnotherStrip(graph.Config, device, channelIndex))
+        {
+            Supervisor!.Forget(device);
+            FollowRegistryOrder(graph.Config);
+        }
+
+        return graph.RemoveChannel(channelIndex);
     }
 
     void OpenDevices(GraphConfig config)
@@ -779,9 +799,44 @@ public sealed class VamEngine : IDisposable
         {
             Track(config.Channels[index], index);
         }
+
+        // A saved console lists one device per strip, so two strips sharing a device would push
+        // every later strip one place past its channel.
+        FollowRegistryOrder(config);
+    }
+
+    /// <summary>Rewrites the order the compiler finds inputs by to the order the clock pulls them in.</summary>
+    void FollowRegistryOrder(GraphConfig config)
+    {
+        config.InputDeviceOrder.Clear();
+
+        foreach (DeviceInputChannel channel in Channels.Channels)
+        {
+            config.InputDeviceOrder.Add(DeviceSupervisor.DeviceInSlot(channel));
+        }
+    }
+
+    static bool IsUsedByAnotherStrip(GraphConfig config, AudioDeviceId deviceId, int channelIndex)
+    {
+        for (int index = 0; index < config.Channels.Count; index++)
+        {
+            if (index != channelIndex && config.Channels[index].DeviceId == deviceId)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     void Track(ChannelConfig channel, int index)
+    {
+        (DeviceInputChannelOptions options, CaptureOptions capture) = CaptureSettingsFor(channel, index);
+
+        Supervisor!.Track(channel.DeviceId, options, capture);
+    }
+
+    (DeviceInputChannelOptions Options, CaptureOptions Capture) CaptureSettingsFor(ChannelConfig channel, int index)
     {
         // The device's count, not the strip's. A ring narrower than the stream feeding it takes the
         // first half of every buffer and reads interleaved channels as consecutive frames: half the
@@ -793,8 +848,7 @@ public sealed class VamEngine : IDisposable
         // .MonoFold is how the strip asks for it. That fold needs both channels to arrive first.
         int width = CaptureWidthOf(channel);
 
-        Supervisor!.Track(
-            channel.DeviceId,
+        return (
             new DeviceInputChannelOptions
             {
                 NominalSampleRate = options.SampleRate,
@@ -1157,14 +1211,39 @@ public sealed class VamEngine : IDisposable
             return false;
         }
 
+        AudioDeviceId previous = graph.Config.Channels[channelIndex].DeviceId;
         ChannelConfig channel = graph.Config.Channels[channelIndex] with { DeviceId = deviceId };
 
         graph.Config.Channels[channelIndex] = channel;
 
-        Track(channel, channelIndex);
+        if (previous != deviceId)
+        {
+            MoveDevice(previous, channel, channelIndex);
+            FollowRegistryOrder(graph.Config);
+        }
+
         graph.Recompile();
 
         return true;
+    }
+
+    /// <summary>Gives a strip its new device, in the old one's registry slot when nothing else shares either.</summary>
+    void MoveDevice(AudioDeviceId previous, ChannelConfig channel, int channelIndex)
+    {
+        bool isShared = IsUsedByAnotherStrip(Graph!.Config, previous, channelIndex);
+        (DeviceInputChannelOptions options, CaptureOptions capture) = CaptureSettingsFor(channel, channelIndex);
+
+        if (!isShared && Supervisor!.Replace(previous, channel.DeviceId, options, capture))
+        {
+            return;
+        }
+
+        Supervisor!.Track(channel.DeviceId, options, capture);
+
+        if (!isShared)
+        {
+            Supervisor.Forget(previous);
+        }
     }
 
     /// <summary>

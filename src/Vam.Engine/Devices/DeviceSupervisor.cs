@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Vam.Engine.Devices.Abstractions;
 using Vam.Engine.Devices.Extensions;
@@ -55,11 +56,15 @@ public sealed class DeviceSupervisor(
     readonly ILogger<DeviceSupervisor> logger = loggerFactory.CreateLogger<DeviceSupervisor>();
     readonly ConcurrentQueue<DeviceChange> pending = new();
     readonly Dictionary<AudioDeviceId, TrackedCaptureDevice> tracked = [];
+    readonly List<DeviceInputChannel> vacated = [];
 
     TimeSpan sinceReconcile = ReconcileInterval;
 
     /// <summary>Raised for every arrival, departure and failed open. Control thread.</summary>
     public event EventHandler<DeviceChange>? Changed;
+
+    /// <summary>What a vacant registry slot reports as its device. Never a real endpoint, and never <see cref="AudioDeviceId.None"/>.</summary>
+    public static AudioDeviceId VacantSlot { get; } = new("vam:vacant-slot");
 
     /// <summary>The devices being kept open.</summary>
     public IReadOnlyCollection<AudioDeviceId> TrackedDevices => tracked.Keys;
@@ -88,7 +93,18 @@ public sealed class DeviceSupervisor(
         TrackedCaptureDevice device = new(deviceId, channel, captureOptions);
 
         tracked[deviceId] = device;
-        channels.Add(channel);
+
+        if (vacated.Count > 0)
+        {
+            bool isReplaced = channels.Replace(vacated[0], channel);
+
+            Debug.Assert(isReplaced, "A vacant slot's channel was not in the registry.");
+            vacated.RemoveAt(0);
+        }
+        else
+        {
+            channels.Add(channel);
+        }
 
         TryOpen(device);
 
@@ -96,6 +112,11 @@ public sealed class DeviceSupervisor(
     }
 
     /// <summary>Stops looking after a device and closes it.</summary>
+    /// <remarks>
+    /// Its registry slot is left vacant until <see cref="Track"/> reuses it, rather than removed.
+    /// Removing it would shift every later channel down one place under a plan compiled for the old
+    /// places, and the clock would hand each strip its neighbour's microphone until the next one.
+    /// </remarks>
     /// <param name="deviceId">Which device.</param>
     /// <returns>Whether it was being tracked.</returns>
     public bool Forget(AudioDeviceId deviceId)
@@ -106,9 +127,20 @@ public sealed class DeviceSupervisor(
         }
 
         Close(device, DeviceStreamState.Stopped);
-        channels.Remove(device.Channel);
+        device.Channel.Vacate();
+        vacated.Add(device.Channel);
 
         return true;
+    }
+
+    /// <summary>The device a registry slot holds, or <see cref="VacantSlot"/> when it holds none.</summary>
+    /// <param name="channel">A registered channel.</param>
+    /// <returns>Its device.</returns>
+    public static AudioDeviceId DeviceInSlot(DeviceInputChannel channel)
+    {
+        ArgumentNullException.ThrowIfNull(channel);
+
+        return channel.IsVacant ? VacantSlot : channel.DeviceId;
     }
 
     /// <summary>
@@ -134,6 +166,46 @@ public sealed class DeviceSupervisor(
         device.Channel.DeviceId = to;
         device.CancelRetry();
         tracked[to] = device;
+
+        TryOpen(device);
+
+        return true;
+    }
+
+    /// <summary>
+    /// Stops tracking one device and tracks another in its registry slot, then tries to open it.
+    /// </summary>
+    /// <remarks>
+    /// A new channel rather than <see cref="Retarget"/>'s kept one, because the new device may be a
+    /// different width and a channel's width is fixed when it is built.
+    /// </remarks>
+    /// <param name="from">The tracked device to let go of.</param>
+    /// <param name="to">The device to take its slot.</param>
+    /// <param name="options">How to build the new channel.</param>
+    /// <param name="captureOptions">What to ask the new device for.</param>
+    /// <returns>Whether <paramref name="from"/> was tracked and <paramref name="to"/> was not.</returns>
+    public bool Replace(
+        AudioDeviceId from,
+        AudioDeviceId to,
+        DeviceInputChannelOptions options,
+        CaptureOptions captureOptions)
+    {
+        if (tracked.ContainsKey(to) || !tracked.Remove(from, out TrackedCaptureDevice? previous))
+        {
+            return false;
+        }
+
+        Close(previous, DeviceStreamState.Stopped);
+        previous.Channel.Vacate();
+
+        DeviceInputChannel channel = new(to, options, loggerFactory.CreateLogger<DeviceInputChannel>());
+        TrackedCaptureDevice device = new(to, channel, captureOptions);
+
+        tracked[to] = device;
+
+        bool isReplaced = channels.Replace(previous.Channel, channel);
+
+        Debug.Assert(isReplaced, "A tracked device's channel was not in the registry.");
 
         TryOpen(device);
 

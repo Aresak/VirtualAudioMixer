@@ -124,7 +124,7 @@ public sealed class ChannelCommandHandler(VamEngine engine) :
         CancellationToken cancellationToken
     ) =>
         engine.CommandAsync(
-            graph => graph.RemoveChannel(request.ChannelIndex)
+            _ => engine.RemoveChannel(request.ChannelIndex)
                 ? Replies.Accepted()
                 : Replies.Refused($"There is no strip {request.ChannelIndex}."),
             cancellationToken);
