@@ -13,6 +13,7 @@ using Vam.Engine.Metering;
 using Vam.Protocol;
 using Vam.Protocol.V1;
 using Vam.Server.Engine;
+using EngineAudioProcess = Vam.Engine.Windows.Devices.ProcessLoopback.AudioProcess;
 using EngineSendState = Vam.Engine.Graph.SendState;
 using WireAutomixState = Vam.Protocol.V1.AutomixState;
 using WireSendState = Vam.Protocol.V1.SendState;
@@ -152,6 +153,39 @@ public sealed class MixerService(
                     NativeSampleRate = device.NativeSampleRate
                 });
             }
+        }
+
+        return list;
+    }
+
+    /// <inheritdoc />
+    /// <remarks>On the pool: walking every output's sessions is COM work that can take a while.</remarks>
+    public override async Task<AudioProcessList> ListAudioProcesses(Empty request, ServerCallContext context)
+    {
+        AudioProcessList list = new();
+
+        if (engine.AudioProcesses is not { } catalogue)
+        {
+            return list;
+        }
+
+        IReadOnlyList<EngineAudioProcess> processes = await Task.Run(catalogue.List, context.CancellationToken);
+
+        HashSet<string> inUse = await ReadAsync(
+            () => engine.Graph is { } graph
+                ? graph.Config.Channels.Select(channel => channel.DeviceId.Value).ToHashSet(StringComparer.OrdinalIgnoreCase)
+                : new HashSet<string>(),
+            context);
+
+        foreach (EngineAudioProcess process in processes)
+        {
+            list.Processes.Add(new AudioProcess
+            {
+                Id = process.DeviceId.Value,
+                Name = process.Name,
+                IsPlaying = process.IsPlaying,
+                IsInUse = inUse.Contains(process.DeviceId.Value)
+            });
         }
 
         return list;

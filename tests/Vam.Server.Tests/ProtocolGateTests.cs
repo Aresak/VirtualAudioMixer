@@ -12,6 +12,7 @@ using BusConfig = Vam.Engine.Graph.BusConfig;
 using GraphController = Vam.Engine.Graph.GraphController;
 using SendConfig = Vam.Engine.Graph.SendConfig;
 using Vam.Engine.Recording;
+using Vam.Engine.Windows.Devices.ProcessLoopback;
 using Vam.Protocol;
 using Vam.Protocol.V1;
 using Vam.Server.Engine;
@@ -45,6 +46,8 @@ public partial class ProtocolGateTests : IAsyncLifetime
     const double ToneRmsDb = -3.01;
 
     readonly NullAudioBackend devices = new();
+    readonly ScriptedAudioSessions audioSessions = new();
+    readonly ScriptedProcesses processes = new();
     readonly string workspace = Path.Combine(Path.GetTempPath(), "vam-server-" + Guid.NewGuid().ToString("n"));
 
     WebApplication? host;
@@ -99,7 +102,8 @@ public partial class ProtocolGateTests : IAsyncLifetime
                 ExpectedSessionDuration = TimeSpan.FromMinutes(1)
             },
             NullLoggerFactory.Instance,
-            devices);
+            devices,
+            new AudioProcessCatalogue(audioSessions, processes, EngineProcessId));
 
         builder.Services.AddSingleton(engine);
 

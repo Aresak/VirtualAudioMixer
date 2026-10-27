@@ -28,6 +28,9 @@ public static class EngineFeatures
     /// <summary><c>DeletePastSession</c>, <c>RenamePastSession</c> and <c>ExportPastSession</c>.</summary>
     public const string ManagePastSessions = "recording.manage-past-sessions";
 
+    /// <summary><c>ListAudioProcesses</c>. #95.</summary>
+    public const string AudioProcesses = "device.audio-processes";
+
     /// <summary>Every name above, which is what an engine built from this source has.</summary>
     public static IReadOnlyList<string> All { get; } =
     [
@@ -35,6 +38,7 @@ public static class EngineFeatures
         ShareMode,
         RecordingCaptures,
         PastSessions,
-        ManagePastSessions
+        ManagePastSessions,
+        AudioProcesses
     ];
 }

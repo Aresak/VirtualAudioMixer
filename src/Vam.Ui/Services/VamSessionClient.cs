@@ -1,6 +1,7 @@
 using Grpc.Core;
 using Grpc.Net.Client;
 using Microsoft.Extensions.Logging;
+using Vam.Protocol;
 using Vam.Protocol.V1;
 using Vam.Ui.Abstractions;
 using Vam.Ui.Extensions;
@@ -239,6 +240,26 @@ public sealed class VamSessionClient(
             logger.LogWarning(failure, "The past sessions did not come back.");
 
             return null;
+        }
+    }
+
+    /// <inheritdoc />
+    public async ValueTask<IReadOnlyList<AudioProcess>> GetAudioProcessesAsync(CancellationToken cancellationToken = default)
+    {
+        if (client is not { } current || !Features.Contains(EngineFeatures.AudioProcesses))
+        {
+            return [];
+        }
+
+        try
+        {
+            return (await current.ListAudioProcessesAsync(new Empty(), cancellationToken: cancellationToken)).Processes;
+        }
+        catch (RpcException failure)
+        {
+            logger.LogWarning(failure, "The programs with audio did not come back.");
+
+            return [];
         }
     }
 
