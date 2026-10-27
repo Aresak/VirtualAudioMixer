@@ -37,7 +37,7 @@ namespace Vam.Server.Tests;
 /// things that go wrong with a protocol are transport-shaped.
 /// </para>
 /// </remarks>
-public class ProtocolGateTests : IAsyncLifetime
+public partial class ProtocolGateTests : IAsyncLifetime
 {
     const string Speakerphone = "{11111111-2222-3333-4444-555555555555}";
 

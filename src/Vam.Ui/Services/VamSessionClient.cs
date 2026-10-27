@@ -3,6 +3,7 @@ using Grpc.Net.Client;
 using Microsoft.Extensions.Logging;
 using Vam.Protocol.V1;
 using Vam.Ui.Abstractions;
+using Vam.Ui.Extensions;
 
 namespace Vam.Ui.Services;
 
@@ -236,6 +237,70 @@ public sealed class VamSessionClient(
         catch (RpcException failure)
         {
             logger.LogWarning(failure, "The past sessions did not come back.");
+
+            return null;
+        }
+    }
+
+    /// <inheritdoc />
+    public ValueTask<CommandReply?> DeletePastSessionAsync(string directory, CancellationToken cancellationToken = default) =>
+        AskAsync(
+            current => current.DeletePastSessionAsync(new PastSessionTarget { Directory = directory }, cancellationToken: cancellationToken),
+            "delete");
+
+    /// <inheritdoc />
+    public ValueTask<CommandReply?> RenamePastSessionAsync(string directory, string name, CancellationToken cancellationToken = default) =>
+        AskAsync(
+            current => current.RenamePastSessionAsync(new PastSessionRename { Directory = directory, Name = name }, cancellationToken: cancellationToken),
+            "rename");
+
+    /// <inheritdoc />
+    public async ValueTask<string?> ExportPastSessionAsync(string directory, Stream destination, CancellationToken cancellationToken = default)
+    {
+        if (client is not { } current)
+        {
+            return "recording.exportNoEngine";
+        }
+
+        try
+        {
+            using AsyncServerStreamingCall<PastSessionChunk> call = current.ExportPastSession(
+                new PastSessionTarget { Directory = directory },
+                cancellationToken: cancellationToken);
+
+            await call.ResponseStream.ReadAllAsync(cancellationToken)
+                .WriteZipAsync(directory.FolderName(), destination, cancellationToken);
+
+            return null;
+        }
+        catch (RpcException failure)
+        {
+            logger.LogWarning(failure, "The export of {Directory} did not finish.", directory);
+
+            return failure.Status.Detail.Length > 0 ? failure.Status.Detail : "recording.exportFailed";
+        }
+        catch (IOException failure)
+        {
+            logger.LogWarning(failure, "The export of {Directory} could not be written.", directory);
+
+            return failure.Message;
+        }
+    }
+
+    async ValueTask<CommandReply?> AskAsync(Func<Mixer.MixerClient, AsyncUnaryCall<CommandReply>> call, string what)
+    {
+        if (client is not { } current)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await call(current);
+        }
+        catch (RpcException failure)
+        {
+            logger.LogWarning(failure, "The {What} of a past session did not come back.", what);
 
             return null;
         }

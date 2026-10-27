@@ -200,6 +200,11 @@ public class EngineConnectorTests
         public ValueTask<string?> OpenFolderAsync(string path, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+        public bool CanSaveFiles => false;
+
+        public ValueTask<Stream?> CreateFileAsync(string suggestedName, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public ValueTask<string?> StartEngineAsync(string address, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }
@@ -261,6 +266,15 @@ public class EngineConnectorTests
             throw new NotSupportedException();
 
         public ValueTask<PastSessionList?> GetPastSessionsAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<CommandReply?> DeletePastSessionAsync(string directory, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<CommandReply?> RenamePastSessionAsync(string directory, string name, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<string?> ExportPastSessionAsync(string directory, Stream destination, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }
 }

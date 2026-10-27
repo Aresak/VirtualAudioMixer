@@ -52,6 +52,15 @@ public static class VamSessionExtensions
         return session.Connection != ConnectionState.Connected || session.Supports(EngineFeatures.PastSessions);
     }
 
+    /// <summary>Whether past sessions can be deleted, renamed and exported. #99.</summary>
+    /// <param name="session">The session.</param>
+    public static bool CanManagePastSessions(this IVamSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+
+        return session.Supports(EngineFeatures.ManagePastSessions);
+    }
+
     /// <summary>Whether the connected engine lacks something this console knows, so is older than it.</summary>
     /// <param name="session">The session.</param>
     public static bool IsOlderEngine(this IVamSession session)

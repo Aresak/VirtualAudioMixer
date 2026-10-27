@@ -25,12 +25,16 @@ public static class EngineFeatures
     /// <summary><c>ListPastSessions</c>.</summary>
     public const string PastSessions = "recording.past-sessions";
 
+    /// <summary><c>DeletePastSession</c>, <c>RenamePastSession</c> and <c>ExportPastSession</c>.</summary>
+    public const string ManagePastSessions = "recording.manage-past-sessions";
+
     /// <summary>Every name above, which is what an engine built from this source has.</summary>
     public static IReadOnlyList<string> All { get; } =
     [
         EnginePaths,
         ShareMode,
         RecordingCaptures,
-        PastSessions
+        PastSessions,
+        ManagePastSessions
     ];
 }

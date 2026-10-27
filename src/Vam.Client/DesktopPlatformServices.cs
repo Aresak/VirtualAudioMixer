@@ -86,6 +86,32 @@ public sealed class DesktopPlatformServices(EngineLauncher launcher) : IPlatform
     }
 
     /// <inheritdoc />
+    public bool CanSaveFiles => true;
+
+    /// <inheritdoc />
+    public async ValueTask<Stream?> CreateFileAsync(string suggestedName, CancellationToken cancellationToken = default)
+    {
+        if (Application.Current?.Windows.FirstOrDefault()?.Handler?.PlatformView is not
+            Microsoft.UI.Xaml.Window window)
+        {
+            return null;
+        }
+
+        FileSavePicker picker = new()
+        {
+            SuggestedStartLocation = PickerLocationId.Downloads,
+            SuggestedFileName = Path.GetFileNameWithoutExtension(suggestedName)
+        };
+
+        picker.FileTypeChoices.Add(Path.GetExtension(suggestedName), [Path.GetExtension(suggestedName)]);
+        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(window));
+
+        StorageFile? file = await picker.PickSaveFileAsync().AsTask(cancellationToken);
+
+        return file is null ? null : new FileStream(file.Path, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16, useAsync: true);
+    }
+
+    /// <inheritdoc />
     /// <remarks>The engine ships beside this application, so this host can.</remarks>
     public bool CanStartEngine => true;
 
