@@ -55,11 +55,15 @@ public sealed class DeviceSupervisor(
     readonly ILogger<DeviceSupervisor> logger = loggerFactory.CreateLogger<DeviceSupervisor>();
     readonly ConcurrentQueue<DeviceChange> pending = new();
     readonly Dictionary<AudioDeviceId, TrackedCaptureDevice> tracked = [];
+    readonly List<DeviceInputChannel> vacated = [];
 
     TimeSpan sinceReconcile = ReconcileInterval;
 
     /// <summary>Raised for every arrival, departure and failed open. Control thread.</summary>
     public event EventHandler<DeviceChange>? Changed;
+
+    /// <summary>What a vacant registry slot reports as its device. Never a real endpoint, and never <see cref="AudioDeviceId.None"/>.</summary>
+    public static AudioDeviceId VacantSlot { get; } = new("vam:vacant-slot");
 
     /// <summary>The devices being kept open.</summary>
     public IReadOnlyCollection<AudioDeviceId> TrackedDevices => tracked.Keys;
@@ -88,7 +92,16 @@ public sealed class DeviceSupervisor(
         TrackedCaptureDevice device = new(deviceId, channel, captureOptions);
 
         tracked[deviceId] = device;
-        channels.Add(channel);
+
+        if (vacated.Count > 0)
+        {
+            channels.Replace(vacated[0], channel);
+            vacated.RemoveAt(0);
+        }
+        else
+        {
+            channels.Add(channel);
+        }
 
         TryOpen(device);
 
@@ -96,6 +109,11 @@ public sealed class DeviceSupervisor(
     }
 
     /// <summary>Stops looking after a device and closes it.</summary>
+    /// <remarks>
+    /// Its registry slot is left vacant until <see cref="Track"/> reuses it, rather than removed.
+    /// Removing it would shift every later channel down one place under a plan compiled for the old
+    /// places, and the clock would hand each strip its neighbour's microphone until the next one.
+    /// </remarks>
     /// <param name="deviceId">Which device.</param>
     /// <returns>Whether it was being tracked.</returns>
     public bool Forget(AudioDeviceId deviceId)
@@ -106,10 +124,16 @@ public sealed class DeviceSupervisor(
         }
 
         Close(device, DeviceStreamState.Stopped);
-        channels.Remove(device.Channel);
+        vacated.Add(device.Channel);
 
         return true;
     }
+
+    /// <summary>The device a registry slot holds, or <see cref="VacantSlot"/> when it holds none.</summary>
+    /// <param name="channel">A registered channel.</param>
+    /// <returns>Its device.</returns>
+    public AudioDeviceId DeviceInSlot(DeviceInputChannel channel) =>
+        vacated.Contains(channel) ? VacantSlot : channel.DeviceId;
 
     /// <summary>
     /// Moves a tracked device to the endpoint ID Windows now knows it by, and tries to open it.

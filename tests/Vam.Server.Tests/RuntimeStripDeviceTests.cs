@@ -102,12 +102,25 @@ public sealed class RuntimeStripDeviceTests : IDisposable
             () => engine.RemoveChannel(0)
         ];
 
-        await AssertInStepAsync(engine);
+        AudioDeviceId[] before = await AssertInStepAsync(engine);
 
         foreach (Func<bool> step in steps)
         {
             Assert.True(await engine.OnControlLoopAsync(step, Token));
-            await AssertInStepAsync(engine);
+
+            AudioDeviceId[] after = await AssertInStepAsync(engine);
+
+            // The clock pulls by slot under whichever plan is published, so a device that stays must
+            // not move: a shift would hand a strip its neighbour's microphone until the recompile.
+            for (int slot = 0; slot < before.Length; slot++)
+            {
+                if (before[slot] != DeviceSupervisor.VacantSlot && after.Contains(before[slot]))
+                {
+                    Assert.Equal(before[slot], after[slot]);
+                }
+            }
+
+            before = after;
         }
     }
 
@@ -122,12 +135,12 @@ public sealed class RuntimeStripDeviceTests : IDisposable
         }
     }
 
-    static async Task AssertInStepAsync(VamEngine engine)
+    static async Task<AudioDeviceId[]> AssertInStepAsync(VamEngine engine)
     {
         (AudioDeviceId[] Registry, AudioDeviceId[] Order, AudioDeviceId[] Tracked, AudioDeviceId[] Strips) state =
             await engine.OnControlLoopAsync(
                 () => (
-                    engine.Channels.Channels.Select(channel => channel.DeviceId).ToArray(),
+                    engine.Channels.Channels.Select(engine.Supervisor!.DeviceInSlot).ToArray(),
                     engine.Graph!.Config.InputDeviceOrder.ToArray(),
                     engine.Supervisor!.TrackedDevices.ToArray(),
                     engine.Graph.Config.Channels.Select(channel => channel.DeviceId).ToArray()),
@@ -137,7 +150,10 @@ public sealed class RuntimeStripDeviceTests : IDisposable
 
         // Nothing tracked that no strip uses, and nothing a strip uses left untracked.
         Assert.Equal(state.Strips.ToHashSet(), state.Tracked.ToHashSet());
-        Assert.Equal(state.Registry.Length, state.Registry.Distinct().Count());
+        Assert.Equal(state.Tracked.ToHashSet(), state.Registry.Where(device => device != DeviceSupervisor.VacantSlot).ToHashSet());
+        Assert.Equal(state.Tracked.Length, state.Registry.Count(device => device != DeviceSupervisor.VacantSlot));
+
+        return state.Registry;
     }
 
     static async Task<bool> HearsToneAsync(VamEngine engine, int channelIndex)
