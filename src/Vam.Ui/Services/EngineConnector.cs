@@ -38,6 +38,9 @@ public sealed class EngineConnector(
     /// <summary>How often to ask, while waiting for one to come up.</summary>
     static readonly TimeSpan StartPollInterval = TimeSpan.FromMilliseconds(400);
 
+    // The connection a stop was sent over. Null when no stop is pending.
+    ConnectionState? stoppingOver;
+
     /// <summary>Whether the console has already done this.</summary>
     public bool HasStarted { get; private set; }
 
@@ -108,12 +111,33 @@ public sealed class EngineConnector(
     /// </remarks>
     public bool CanRestartEngine => CanStopEngine && platform.CanStartEngine;
 
+    /// <summary>Whether settings offers to stop the engine.</summary>
+    /// <remarks>
+    /// Only while connected. With no engine there is nothing to stop, and a button that sends
+    /// <c>Shutdown</c> to nobody looks like it worked.
+    /// </remarks>
+    public bool OffersStop => CanStopEngine && session.Connection == ConnectionState.Connected;
+
+    /// <summary>Whether settings offers to restart the engine. Never with no engine running.</summary>
+    public bool OffersRestart => OffersStop && platform.CanStartEngine;
+
+    /// <summary>Whether a stop was sent and the connection has not changed since.</summary>
+    public bool IsStopping => stoppingOver is not null;
+
     /// <summary>Stops the engine this console is looking at.</summary>
     /// <param name="reason">What the engine should write in its log.</param>
     /// <param name="cancellationToken">Abandons the wait, not the request.</param>
     /// <returns>Whether it was asked.</returns>
     public async ValueTask<bool> StopEngineAsync(string reason, CancellationToken cancellationToken = default)
     {
+        if (IsStopping)
+        {
+            return false;
+        }
+
+        stoppingOver = session.Connection;
+        session.Changed += OnSessionChangedWhileStopping;
+
         // Asked, never killed. The engine saves the console, closes the recording files and lets go
         // of the devices on the way out, and none of that happens to a process that is simply gone.
         CommandReply reply = await session
@@ -122,6 +146,7 @@ public sealed class EngineConnector(
 
         if (!reply.Accepted)
         {
+            EndStopping();
             Report("settings.stopRefused", reply.Reason);
         }
 
@@ -237,6 +262,20 @@ public sealed class EngineConnector(
         }
 
         return false;
+    }
+
+    void OnSessionChangedWhileStopping()
+    {
+        if (session.Connection != stoppingOver)
+        {
+            EndStopping();
+        }
+    }
+
+    void EndStopping()
+    {
+        session.Changed -= OnSessionChangedWhileStopping;
+        stoppingOver = null;
     }
 
     void Report(string problem, string detail = "")

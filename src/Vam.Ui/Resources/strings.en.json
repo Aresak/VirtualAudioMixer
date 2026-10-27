@@ -99,6 +99,7 @@
   "settings.startedButSilent": "An engine was started here but never answered. Its own log will say why.",
   "settings.restartEngine": "Restart the engine",
   "settings.stopEngine": "Stop the engine",
+  "settings.stoppingEngine": "Stopping the engine…",
   "settings.stopEngineConfirm": "Stop the engine? Sound stops, and any recording is closed.",
   "settings.engineLifeWhy": "The engine keeps running when this window is closed, so a meeting is not ended by closing a console. Stopping it here is how you end one on purpose.",
   "settings.stopRefused": "The engine would not stop.",
