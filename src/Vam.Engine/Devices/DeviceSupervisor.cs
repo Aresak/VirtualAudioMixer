@@ -112,6 +112,35 @@ public sealed class DeviceSupervisor(
     }
 
     /// <summary>
+    /// Moves a tracked device to the endpoint ID Windows now knows it by, and tries to open it.
+    /// </summary>
+    /// <remarks>
+    /// The channel is kept rather than replaced, so the strip keeps its place in the registry and
+    /// nothing the clock pulls from is added or removed under it.
+    /// </remarks>
+    /// <param name="from">The ID it was tracked under.</param>
+    /// <param name="to">The ID it is present under now.</param>
+    /// <returns>Whether it was tracked under <paramref name="from"/> and <paramref name="to"/> was free.</returns>
+    public bool Retarget(AudioDeviceId from, AudioDeviceId to)
+    {
+        if (tracked.ContainsKey(to) || !tracked.Remove(from, out TrackedCaptureDevice? device))
+        {
+            return false;
+        }
+
+        Close(device, DeviceStreamState.Absent);
+
+        device.DeviceId = to;
+        device.Channel.DeviceId = to;
+        device.CancelRetry();
+        tracked[to] = device;
+
+        TryOpen(device);
+
+        return true;
+    }
+
+    /// <summary>
     /// Queues a device notification. Safe from any thread, and does nothing else.
     /// </summary>
     /// <param name="change">What the operating system reported.</param>

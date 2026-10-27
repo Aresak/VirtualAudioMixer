@@ -115,7 +115,7 @@ public sealed class DeviceInputChannel
     }
 
     /// <summary>Which device this channel carries.</summary>
-    public AudioDeviceId DeviceId { get; }
+    public AudioDeviceId DeviceId { get; internal set; }
 
     /// <summary>Channels interleaved in every buffer.</summary>
     public int ChannelCount => channelCount;
