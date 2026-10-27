@@ -59,6 +59,10 @@ public sealed class MeterPublisher
         holdRemaining = new double[heldPeaks.Length];
         smoothedRms = new double[heldPeaks.Length];
 
+        // A default reading is 0 dB, full scale, and would flash every meter until the first frame.
+        MeterReading silent = new(SilenceDb, SilenceDb, 0.0, 0.0, false);
+        Array.Fill(channels, silent);
+        Array.Fill(buses, silent);
         Array.Fill(heldPeaks, SilenceDb);
         Array.Fill(smoothedRms, SilenceDb);
     }
