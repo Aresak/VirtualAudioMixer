@@ -34,6 +34,7 @@ public sealed class FlacWriter : ITrackWriter
     int pendingFrames;
     long frameNumber;
     long frameCount;
+    long bytesWritten;
     int minFrameBytes;
     int maxFrameBytes;
     bool isFinished;
@@ -68,6 +69,8 @@ public sealed class FlacWriter : ITrackWriter
 
         stream.Write("fLaC"u8);
         WriteStreamInfo(stackalloc byte[16]);
+
+        bytesWritten = stream.Position;
     }
 
     /// <inheritdoc />
@@ -80,7 +83,8 @@ public sealed class FlacWriter : ITrackWriter
     public long FrameCount => frameCount;
 
     /// <inheritdoc />
-    public long BytesWritten => stream.Position;
+    /// <remarks>Counted rather than read off the stream, which the console asks from another thread.</remarks>
+    public long BytesWritten => bytesWritten;
 
     /// <inheritdoc />
     public void Write(ReadOnlySpan<float> samples)
@@ -165,6 +169,7 @@ public sealed class FlacWriter : ITrackWriter
         ReadOnlySpan<byte> frame = encoder.Encode(pending, pendingFrames, frameNumber);
 
         stream.Write(frame);
+        bytesWritten += frame.Length;
 
         minFrameBytes = minFrameBytes == 0 ? frame.Length : Math.Min(minFrameBytes, frame.Length);
         maxFrameBytes = Math.Max(maxFrameBytes, frame.Length);

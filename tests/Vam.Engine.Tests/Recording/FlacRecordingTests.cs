@@ -117,6 +117,28 @@ public class FlacRecordingTests : IDisposable
         Assert.Equal(1, listed.Tracks);
     }
 
+    // Every real recording passes frame 128 after about eleven seconds, where the number goes multi-byte.
+    [Theory]
+    [Trait("Category", TestCategories.Unit)]
+    [InlineData(0)]
+    [InlineData(127)]
+    [InlineData(128)]
+    [InlineData(2047)]
+    [InlineData(2048)]
+    [InlineData(65535)]
+    [InlineData(65536)]
+    [InlineData(2097152)]
+    [InlineData(int.MaxValue)]
+    [InlineData(68719476735)]
+    public void FrameNumbersReadBackAsWritten(long value)
+    {
+        FlacBitWriter bits = new(8);
+
+        bits.WriteUtf8(value);
+
+        Assert.Equal(value, FlacTestDecoder.ReadFrameNumber(bits.Written.ToArray()));
+    }
+
     string Record(float[] input, int channels, RecordingContainer container)
     {
         RecordingFormat format = new() { SampleRate = SampleRate, ChannelCount = channels, BlockFrames = BlockFrames, Container = container };

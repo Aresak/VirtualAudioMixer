@@ -10,8 +10,12 @@ sealed class FlacTestDecoder
     readonly byte[] bytes;
 
     int bit;
+    long frameNumber;
 
     FlacTestDecoder(byte[] bytes) => this.bytes = bytes;
+
+    /// <summary>Reads one number in FLAC's extended UTF-8 coding from the start of some bytes.</summary>
+    public static long ReadFrameNumber(byte[] bytes) => new FlacTestDecoder(bytes).ReadUtf8();
 
     /// <summary>Decodes a whole file into interleaved integers.</summary>
     public static (FlacStreamInfo Info, int[] Samples) Decode(string path)
@@ -100,7 +104,15 @@ sealed class FlacTestDecoder
         int sizeCode = (int)Read(3);
 
         Read(1);
-        ReadUtf8();
+
+        long number = ReadUtf8();
+
+        if (number != frameNumber)
+        {
+            throw new InvalidDataException($"Frame {frameNumber} says it is frame {number}.");
+        }
+
+        frameNumber++;
 
         int blockSize = blockCode switch
         {
@@ -315,23 +327,36 @@ sealed class FlacTestDecoder
         }
     }
 
-    void ReadUtf8()
+    long ReadUtf8()
     {
         long lead = Read(8);
         int extra = 0;
 
-        while ((lead & (0x80 >> extra)) != 0)
+        while (extra < 8 && (lead & (0x80 >> extra)) != 0)
         {
             extra++;
         }
 
+        if (extra == 0)
+        {
+            return lead;
+        }
+
+        long value = lead & (0x7F >> extra);
+
         for (int index = 1; index < extra; index++)
         {
-            if ((Read(8) & 0xC0) != 0x80)
+            long next = Read(8);
+
+            if ((next & 0xC0) != 0x80)
             {
                 throw new InvalidDataException("Malformed frame number.");
             }
+
+            value = (value << 6) | (next & 0x3F);
         }
+
+        return value;
     }
 
     long ReadSigned(int count)
