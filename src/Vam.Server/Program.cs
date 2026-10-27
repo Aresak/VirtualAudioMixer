@@ -2,6 +2,7 @@ using Vam.Server.Engine;
 using Vam.Server.Mediator;
 using Vam.Server.Logging;
 using Vam.Server.Services;
+using Vam.Server.Tray;
 
 // The process that runs a meeting. It owns the devices, the graph, the clock and the recording, and
 // it keeps running whether or not anything is looking at it - G1. A console closing, crashing, or
@@ -51,6 +52,13 @@ builder.Services.AddSingleton(new EngineOptions
     LogDirectory = builder.Configuration["Vam:LogDirectory"]
 });
 builder.Services.AddSingleton<VamEngine>();
+
+// Shows that the engine is running, since it has no window. Off with Vam:Tray=false, and silent
+// without an interactive session.
+if (builder.Configuration.WantsTray())
+{
+    builder.Services.AddHostedService<EngineTray>();
+}
 
 WebApplication app = builder.Build();
 

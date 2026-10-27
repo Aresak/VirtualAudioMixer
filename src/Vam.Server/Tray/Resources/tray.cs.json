@@ -1,0 +1,16 @@
+{
+  "tray.caption": "VAM engine",
+  "tray.running": "VAM engine — běží",
+  "tray.recording": "VAM engine — nahrává {0}",
+  "tray.fault": "Ztlumeno, zařízení selhalo: {0}",
+  "tray.address": "Naslouchá na {0}",
+  "tray.dropouts": "Výpadky: {0}",
+  "tray.openConsole": "Otevřít konzoli",
+  "tray.startRecording": "Spustit nahrávání",
+  "tray.stopRecording": "Zastavit nahrávání",
+  "tray.stopRecordingWhy": "Zastavit nahrávání? Soubory se zavřou a další nahrávka začne novou složkou.",
+  "tray.stopEngine": "Vypnout engine",
+  "tray.stopEngineWhy": "Vypnout engine? Probíhající nahrávání skončí a jeho soubory se uzavřou, zvuk se zastaví.",
+  "tray.notDone": "Neprovedeno",
+  "tray.noConsole": "Konzoli se nepodařilo otevřít. Důvod je v logu enginu."
+}
