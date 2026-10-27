@@ -10,10 +10,15 @@
     Tiered compilation is off so the allocation gate cannot flake: tier-1 rejit and
     on-stack replacement allocate on the measuring thread, which would make a passing
     body fail at random. See docs/audio-path.md.
+
+    Background GC is off for the same reason: the end of a background mark voids every
+    thread's allocation context without crediting it back, so the measuring thread's counter
+    jumps by up to 8 KB that nothing allocated (#50).
   -->
   <PropertyGroup>
     <TieredCompilation>false</TieredCompilation>
     <TieredPGO>false</TieredPGO>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
   </PropertyGroup>
 
   <ItemGroup>

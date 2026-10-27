@@ -7,10 +7,11 @@
     <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
   </PropertyGroup>
 
-  <!-- Same reason as Vam.Engine.Tests: tier-1 rejit allocates on the measuring thread. -->
+  <!-- Same reasons as Vam.Engine.Tests: tier-1 rejit and background GC both move the measuring thread's counter. -->
   <PropertyGroup>
     <TieredCompilation>false</TieredCompilation>
     <TieredPGO>false</TieredPGO>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
   </PropertyGroup>
 
   <ItemGroup>
