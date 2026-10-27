@@ -24,7 +24,7 @@ namespace Vam.Engine.Windows.Devices.Wasapi;
 /// engine samples nothing converts. See the decision of 2026-09-16.
 /// </para>
 /// </remarks>
-public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
+public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend, IProcessCaptureOpener
 {
     /// <summary>
     /// What shared mode is opened with when the engine's format is not the device's mix format.
@@ -67,7 +67,6 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
     static readonly TimeSpan ActivationTimeout = TimeSpan.FromSeconds(5);
 
     readonly MMDeviceEnumerator enumerator = new();
-    readonly ProcessLoopbackSources processes = new(new ToolhelpProcessSnapshot(), logger);
 
     /// <inheritdoc />
     public string Id => "wasapi";
@@ -92,12 +91,6 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
                     present.Add(info);
                 }
             }
-        }
-
-        if (direction == DeviceDirection.Capture && !processes.IsEmpty)
-        {
-            // A process plays into the default output's mix, so that is the rate it nominally runs at.
-            present.AddRange(processes.Describe(DefaultDevice(DeviceDirection.Render)?.NominalSampleRate ?? 0));
         }
 
         return present;
@@ -125,11 +118,6 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
     /// <inheritdoc />
     public ICaptureStream OpenCapture(AudioDeviceId deviceId, CaptureOptions options)
     {
-        if (ProcessLoopbackId.TryParse(deviceId, out ProcessLoopbackId target))
-        {
-            return OpenProcessCapture(deviceId, target, options);
-        }
-
         MMDevice device = Resolve(deviceId);
         OpenedClient? opened = null;
 
@@ -172,31 +160,23 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
     }
 
     /// <inheritdoc />
-    public void Forget(AudioDeviceId deviceId) => processes.Forget(deviceId);
+    public void Forget(AudioDeviceId deviceId)
+    {
+    }
 
     /// <inheritdoc />
-    public void Dispose() => enumerator.Dispose();
-
-    /// <summary>
-    /// Opens what one process tree plays, as a capture stream.
-    /// </summary>
     /// <remarks>
     /// <c>PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE</c>, because Chromium plays from an
     /// audio-service child and the main PID alone captures silence. Always shared and converting:
     /// the virtual device has no mix format, so the engine's format is asked for and Windows converts.
     /// </remarks>
-    /// <param name="deviceId">The identity it was asked for under.</param>
-    /// <param name="target">That identity, parsed.</param>
-    /// <param name="options">What the engine needs.</param>
-    /// <returns>A stopped stream.</returns>
-    ICaptureStream OpenProcessCapture(AudioDeviceId deviceId, ProcessLoopbackId target, CaptureOptions options)
+    public ICaptureStream OpenProcess(AudioDeviceId deviceId, ProcessEntry process, CaptureOptions options)
     {
         if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
         {
             throw new PlatformNotSupportedException("Capturing a process needs Windows 10 version 2004 or later.");
         }
 
-        ProcessCaptureLease lease = processes.Lease(deviceId, target);
         AudioClient? client = null;
 
         try
@@ -205,7 +185,7 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
                 options.SampleRate > 0 ? options.SampleRate : DefaultProcessSampleRate,
                 options.ChannelCount > 0 ? options.ChannelCount : ProcessLoopbackSources.DefaultChannelCount);
 
-            client = Activate(lease.Process);
+            client = Activate(process);
             client.Initialize(
                 AudioClientShareMode.Shared,
                 ProcessLoopbackFlags,
@@ -217,22 +197,24 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
             logger.LogInformation(
                 "Capturing what {ExecutableName} (PID {ProcessId}) and its children play, at {SampleRate} Hz "
                 + "{ChannelCount} ch, shared whatever share mode was asked for.",
-                lease.Process.ExecutableName,
-                lease.Process.ProcessId,
+                process.ExecutableName,
+                process.ProcessId,
                 format.SampleRate,
                 format.Channels);
 
             OpenedClient opened = new(client, format, ShareMode.Shared, 0);
 
-            return new WasapiCaptureStream(deviceId, lease, client, opened.Describe(), format, logger);
+            return new WasapiCaptureStream(deviceId, endpoint: null, client, opened.Describe(), format, logger);
         }
         catch
         {
             client?.Dispose();
-            lease.Dispose();
             throw;
         }
     }
+
+    /// <inheritdoc />
+    public void Dispose() => enumerator.Dispose();
 
     /// <summary>
     /// Opens a client in the best mode this device can honestly be given.
