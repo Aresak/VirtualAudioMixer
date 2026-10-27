@@ -403,10 +403,32 @@ public sealed class VamSessionClient(
 
         Set(ConnectionState.Connected, string.Empty);
 
-        await Task.WhenAll(
-            MeterPumpAsync(client, cancellationToken),
-            EventPumpAsync(client, cancellationToken),
-            RefreshPumpAsync(cancellationToken));
+        await PumpAsync(client, cancellationToken);
+    }
+
+    // Any one pump ending ends the session. Waiting for all three left a console saying Connected to
+    // a stopped engine, because the refresh pump survives a failed read and never ends on its own.
+    async Task PumpAsync(Mixer.MixerClient current, CancellationToken cancellationToken)
+    {
+        using CancellationTokenSource stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        Task[] pumps =
+        [
+            MeterPumpAsync(current, stop.Token),
+            EventPumpAsync(current, stop.Token),
+            RefreshPumpAsync(stop.Token)
+        ];
+
+        Task ended = await Task.WhenAny(pumps);
+
+        await stop.CancelAsync();
+        await Task.WhenAll(pumps).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+
+        await ended;
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // A stream the engine closed cleanly is still the engine going away.
+        throw new InvalidOperationException("The engine closed the connection.");
     }
 
     async Task MeterPumpAsync(Mixer.MixerClient current, CancellationToken cancellationToken)

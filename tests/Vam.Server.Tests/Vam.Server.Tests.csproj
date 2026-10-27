@@ -14,6 +14,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Vam.Server\Vam.Server.csproj" />
+    <ProjectReference Include="..\..\src\Vam.Ui\Vam.Ui.csproj" />
     <ProjectReference Include="..\Vam.TestKit\Vam.TestKit.csproj" />
   </ItemGroup>
 
