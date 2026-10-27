@@ -43,12 +43,6 @@
             <p class="sub">@L["mixer.notConnected"]</p>
         </div>
     }
-    else if (Session.Console.Channels.Count == 0)
-    {
-        <div class="pad">
-            <p class="sub">@L["mixer.noChannels"]</p>
-        </div>
-    }
     else
     {
         <div class="mixer">
@@ -59,6 +53,12 @@
                                   Channel="channel"
                                   Buses="Session.Console.Buses"
                                   Reordered="OnReorderedAsync" />
+                }
+
+                @* An empty mixer keeps both add tiles; the message only points at them. *@
+                @if (Session.Console.Channels.Count == 0)
+                {
+                    <p class="sub empty">@L["mixer.noChannels"]</p>
                 }
 
                 @*
