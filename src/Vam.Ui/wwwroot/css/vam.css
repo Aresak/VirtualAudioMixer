@@ -338,6 +338,7 @@ input.num { min-width: 0; width: 62px; text-align: right; }
 
 .mixer { display: grid; grid-template-columns: 1fr auto; flex: 1; min-height: 0; }
 .strips { display: flex; gap: 2px; padding: 10px 10px 10px 12px; overflow-x: auto; align-items: stretch; }
+.strips > .sub.empty { align-self: center; margin: 0 12px 0 0; }
 
 .buses {
   display: flex;
