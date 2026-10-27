@@ -511,6 +511,13 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
 #pragma warning disable VSTHRD002
         if (!((IAsyncResult)activation).AsyncWaitHandle.WaitOne(ActivationTimeout))
         {
+            // A late activation still hands back a client, and nobody else will dispose it.
+            _ = activation.ContinueWith(
+                static late => late.Result.Dispose(),
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnRanToCompletion,
+                TaskScheduler.Default);
+
             throw new TimeoutException($"Process loopback for PID {process.ProcessId} did not activate in time.");
         }
 

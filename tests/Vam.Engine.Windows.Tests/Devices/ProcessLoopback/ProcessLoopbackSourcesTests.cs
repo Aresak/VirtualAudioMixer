@@ -82,6 +82,25 @@ public class ProcessLoopbackSourcesTests
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
+    public void AReusedProcessIdDoesNotBringTheStripBackOnAnotherProgram()
+    {
+        AudioDeviceId byProcessId = new("process:4242");
+        ScriptedProcessSnapshot processes = new();
+        processes.Start(4242, 1, "msedge.exe");
+
+        using RecordingLoggerFactory loggers = new();
+        ProcessLoopbackSources sources = new(processes, loggers.CreateLogger("sources"));
+        sources.Lease(byProcessId, Parse(byProcessId)).Dispose();
+
+        processes.Exit(4242);
+        processes.Start(4242, 1, "notepad.exe");
+
+        Assert.Empty(sources.Describe(SampleRate));
+        Assert.Throws<DeviceNotFoundException>(() => sources.Lease(byProcessId, Parse(byProcessId)));
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
     public void AnAmbiguousNameIsReportedAndNotOpened()
     {
         ScriptedProcessSnapshot processes = new();

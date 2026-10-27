@@ -26,6 +26,7 @@ public sealed class ProcessLoopbackSources(IProcessSnapshot snapshot, ILogger lo
     readonly Lock gate = new();
     readonly Dictionary<AudioDeviceId, ProcessLoopbackId> named = [];
     readonly Dictionary<AudioDeviceId, int> captured = [];
+    readonly Dictionary<AudioDeviceId, string> executables = [];
 
     /// <summary>Whether no source has been named yet.</summary>
     public bool IsEmpty
@@ -61,6 +62,7 @@ public sealed class ProcessLoopbackSources(IProcessSnapshot snapshot, ILogger lo
                 // A capture still bound to a PID that is no longer the one named has outlived its
                 // process: absent until it is closed, so the next open follows the new one.
                 if (resolution.Outcome != ProcessResolutionOutcome.Found
+                    || !IsSameProgram(deviceId, resolution.Process)
                     || (captured.TryGetValue(deviceId, out int processId) && processId != resolution.Process.ProcessId))
                 {
                     continue;
@@ -109,14 +111,27 @@ public sealed class ProcessLoopbackSources(IProcessSnapshot snapshot, ILogger lo
 
         lock (gate)
         {
+            if (!IsSameProgram(deviceId, resolution.Process))
+            {
+                throw new DeviceNotFoundException(deviceId);
+            }
+
             if (!captured.TryAdd(deviceId, resolution.Process.ProcessId))
             {
                 throw new InvalidOperationException($"{deviceId} is already being captured.");
             }
+
+            executables.TryAdd(deviceId, resolution.Process.ExecutableName);
         }
 
         return new ProcessCaptureLease(this, deviceId, resolution.Process);
     }
+
+    // Windows reuses PIDs. A PID that now belongs to a different executable is not the process that
+    // was named, and following it would put an unrelated program on the strip.
+    bool IsSameProgram(AudioDeviceId deviceId, ProcessEntry process) =>
+        !executables.TryGetValue(deviceId, out string? executableName)
+        || string.Equals(executableName, process.ExecutableName, StringComparison.OrdinalIgnoreCase);
 
     internal void Release(AudioDeviceId deviceId, int processId)
     {
