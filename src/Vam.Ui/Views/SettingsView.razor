@@ -59,23 +59,32 @@
                 </div>
 
                 @*
-                    Only for an engine on this machine. Stopping a remote one ends somebody else's
-                    meeting, and a button that can do that from a console across the room is a button
-                    that will eventually be pressed by mistake.
+                    Only for an engine on this machine, and only while connected to it. Stopping a
+                    remote one ends somebody else's meeting, and with no engine there is nothing to stop.
                 *@
-                @if (Connector.CanStopEngine)
+                @if (Connector.OffersStop)
                 {
                     <div class="row"
                          style="margin-top:12px">
-                        @if (Connector.CanRestartEngine)
+                        @if (Connector.OffersRestart)
                         {
                             <button class="btn"
+                                    disabled="@Connector.IsStopping"
                                     @onclick="RestartAsync">@L["settings.restartEngine"]</button>
                         }
 
-                        <ConfirmButton Label="@L["settings.stopEngine"]"
-                                       Question="@L["settings.stopEngineConfirm"]"
-                                       Confirmed="StopAsync" />
+                        @if (Connector.IsStopping)
+                        {
+                            <button type="button"
+                                    class="btn danger"
+                                    disabled>@L["settings.stoppingEngine"]</button>
+                        }
+                        else
+                        {
+                            <ConfirmButton Label="@L["settings.stopEngine"]"
+                                           Question="@L["settings.stopEngineConfirm"]"
+                                           Confirmed="StopAsync" />
+                        }
                     </div>
 
                     <p class="note">@L["settings.engineLifeWhy"]</p>
