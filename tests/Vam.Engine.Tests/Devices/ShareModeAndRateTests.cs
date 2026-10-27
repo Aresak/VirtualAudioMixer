@@ -239,6 +239,8 @@ public class ShareModeAndRateTests
         public IRenderStream OpenRender(AudioDeviceId deviceId, RenderOptions options) =>
             inner.OpenRender(deviceId, options);
 
+        public void Forget(AudioDeviceId deviceId) => inner.Forget(deviceId);
+
         public void Dispose() => inner.Dispose();
 
         sealed class Misreporting(ICaptureStream inner, int rateHz) : ICaptureStream

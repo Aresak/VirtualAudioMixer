@@ -129,6 +129,68 @@ public class ProcessLoopbackSourcesTests
         Assert.Throws<InvalidOperationException>(() => sources.Lease(Meeting, Parse(Meeting)));
     }
 
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void ASourceItsOnlyStripReleasedIsNoLongerListed()
+    {
+        ScriptedProcessSnapshot processes = new();
+        processes.Start(200, 1, "msedge.exe");
+
+        using RecordingLoggerFactory loggers = new();
+        ProcessLoopbackSources sources = new(processes, loggers.CreateLogger("sources"));
+        sources.Lease(Meeting, Parse(Meeting)).Dispose();
+
+        // #105. Closing the capture alone keeps it listed; the browser may only have restarted.
+        Assert.Single(sources.Describe(SampleRate));
+
+        sources.Forget(Meeting);
+        int taken = processes.TakenCount;
+
+        Assert.True(sources.IsEmpty);
+        Assert.Empty(sources.Describe(SampleRate));
+        Assert.Equal(taken, processes.TakenCount);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void AMistypedSourceIsForgottenWithoutEverBeingCaptured()
+    {
+        AudioDeviceId mistyped = new("process:msedg.exe");
+        ScriptedProcessSnapshot processes = new();
+        processes.Start(200, 1, "msedge.exe");
+
+        using RecordingLoggerFactory loggers = new();
+        ProcessLoopbackSources sources = new(processes, loggers.CreateLogger("sources"));
+
+        Assert.Throws<DeviceNotFoundException>(() => sources.Lease(mistyped, Parse(mistyped)));
+        Assert.False(sources.IsEmpty);
+
+        sources.Forget(mistyped);
+
+        Assert.True(sources.IsEmpty);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void ForgettingASourceStillCapturedKeepsItsClaimUntilTheCaptureCloses()
+    {
+        ScriptedProcessSnapshot processes = new();
+        processes.Start(200, 1, "msedge.exe");
+
+        using RecordingLoggerFactory loggers = new();
+        ProcessLoopbackSources sources = new(processes, loggers.CreateLogger("sources"));
+        ProcessCaptureLease lease = sources.Lease(Meeting, Parse(Meeting));
+
+        sources.Forget(Meeting);
+
+        Assert.Throws<InvalidOperationException>(() => sources.Lease(Meeting, Parse(Meeting)));
+
+        lease.Dispose();
+
+        using ProcessCaptureLease reopened = sources.Lease(Meeting, Parse(Meeting));
+        Assert.Equal(200, reopened.Process.ProcessId);
+    }
+
     static ProcessLoopbackId Parse(AudioDeviceId deviceId)
     {
         Assert.True(ProcessLoopbackId.TryParse(deviceId, out ProcessLoopbackId target));

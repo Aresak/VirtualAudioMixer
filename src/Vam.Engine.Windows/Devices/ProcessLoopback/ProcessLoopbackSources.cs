@@ -8,9 +8,10 @@ namespace Vam.Engine.Windows.Devices.ProcessLoopback;
 /// </summary>
 /// <remarks>
 /// <para>
-/// A source is listed once it has been asked for, and only while its process runs. Listing every
-/// process on the machine would be the console picker this does not build; listing a named source
-/// only while it runs is what lets the supervisor treat a closed browser as an unplugged device.
+/// A source is listed once it has been asked for, only while its process runs, and until no strip
+/// uses it. Listing every process on the machine would be the console picker this does not build;
+/// listing a named source only while it runs is what lets the supervisor treat a closed browser as
+/// an unplugged device.
 /// </para>
 /// <para>
 /// Control thread and service threads; never the audio path.
@@ -28,7 +29,7 @@ public sealed class ProcessLoopbackSources(IProcessSnapshot snapshot, ILogger lo
     readonly Dictionary<AudioDeviceId, int> captured = [];
     readonly Dictionary<AudioDeviceId, string> executables = [];
 
-    /// <summary>Whether no source has been named yet.</summary>
+    /// <summary>Whether no source is named, either yet or any more.</summary>
     public bool IsEmpty
     {
         get
@@ -125,6 +126,21 @@ public sealed class ProcessLoopbackSources(IProcessSnapshot snapshot, ILogger lo
         }
 
         return new ProcessCaptureLease(this, deviceId, resolution.Process);
+    }
+
+    /// <summary>Stops listing a source, because no strip uses it any more.</summary>
+    /// <remarks>
+    /// A capture still open keeps its claim until its lease is disposed. Once nothing is named, listing
+    /// takes no process snapshot at all.
+    /// </remarks>
+    /// <param name="deviceId">The identity it was named under.</param>
+    public void Forget(AudioDeviceId deviceId)
+    {
+        lock (gate)
+        {
+            named.Remove(deviceId);
+            executables.Remove(deviceId);
+        }
     }
 
     // Windows reuses PIDs. A PID that now belongs to a different executable is not the process that

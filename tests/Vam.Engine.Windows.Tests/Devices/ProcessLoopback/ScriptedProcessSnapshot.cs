@@ -7,10 +7,17 @@ sealed class ScriptedProcessSnapshot : IProcessSnapshot
 {
     readonly List<ProcessEntry> running = [];
 
+    /// <summary>How many snapshots have been taken, since each is a walk of every process on the machine.</summary>
+    public int TakenCount { get; private set; }
+
     public void Start(int processId, int parentProcessId, string executableName) =>
         running.Add(new ProcessEntry(processId, parentProcessId, executableName));
 
     public void Exit(int processId) => running.RemoveAll(process => process.ProcessId == processId);
 
-    public IReadOnlyList<ProcessEntry> Take() => [.. running];
+    public IReadOnlyList<ProcessEntry> Take()
+    {
+        TakenCount++;
+        return [.. running];
+    }
 }

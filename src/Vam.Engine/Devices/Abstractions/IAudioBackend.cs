@@ -57,4 +57,12 @@ public interface IAudioBackend : IDisposable
     /// <returns>A stopped stream. Call <see cref="IRenderStream.Start"/> to begin.</returns>
     /// <exception cref="DeviceNotFoundException">No device with that identity is present.</exception>
     IRenderStream OpenRender(AudioDeviceId deviceId, RenderOptions options);
+
+    /// <summary>Says that no strip wants a capture device any more.</summary>
+    /// <remarks>
+    /// A backend that lists a device only because it was asked for, such as a process source, stops
+    /// listing it. Any other backend has nothing to forget.
+    /// </remarks>
+    /// <param name="deviceId">Which device.</param>
+    void Forget(AudioDeviceId deviceId);
 }
