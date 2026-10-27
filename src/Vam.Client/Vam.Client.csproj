@@ -45,6 +45,9 @@
 
     A running engine holds its output open and is meant to outlive the console, so while one runs
     the engine is skipped with a message. Building it anyway fails the console's build (#61).
+
+    Visual Studio builds without project references, because it builds them itself. It does not
+    know the engine's, so the engine is built with its own references (#88).
   -->
   <UsingTask TaskName="VamFileIsLocked"
              TaskFactory="RoslynCodeTaskFactory"
@@ -104,7 +107,7 @@
     <MSBuild Projects="$(EngineProject)"
              Targets="Build"
              Properties="$(EngineProperties)"
-             RemoveProperties="RuntimeIdentifier;SelfContained;TargetFramework"
+             RemoveProperties="RuntimeIdentifier;SelfContained;TargetFramework;BuildingInsideVisualStudio;BuildProjectReferences"
              Condition="'$(EngineIsRunning)' != 'true'" />
   </Target>
 
