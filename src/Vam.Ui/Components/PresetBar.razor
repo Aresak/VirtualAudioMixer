@@ -13,6 +13,7 @@
 
 <div class="row">
     <select @bind="chosen"
+            title="@chosen"
             aria-label="@L["preset.title"]">
         <option value="">—</option>
         @foreach (ChainPresetSummary preset in Session.Presets)
