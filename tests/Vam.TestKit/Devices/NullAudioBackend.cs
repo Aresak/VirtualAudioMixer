@@ -30,6 +30,7 @@ public sealed class NullAudioBackend : IAudioBackend
     // Copied on write: the engine opens streams on its control thread while a test reads these.
     NullCaptureStream[] captureStreams = [];
     NullRenderStream[] renderStreams = [];
+    AudioDeviceId[] forgotten = [];
 
     int nextDeviceNumber;
 
@@ -45,6 +46,9 @@ public sealed class NullAudioBackend : IAudioBackend
 
     /// <summary>Render streams opened so far, in the order they were opened.</summary>
     public IReadOnlyList<NullRenderStream> RenderStreams => Volatile.Read(ref renderStreams);
+
+    /// <summary>Devices the engine has said no strip wants, in the order it said so.</summary>
+    public IReadOnlyList<AudioDeviceId> ForgottenDevices => Volatile.Read(ref forgotten);
 
     /// <summary>
     /// Adds a device.
@@ -232,6 +236,16 @@ public sealed class NullAudioBackend : IAudioBackend
         }
 
         return stream;
+    }
+
+    /// <inheritdoc />
+    /// <remarks>Lists nothing on request, so only records it.</remarks>
+    public void Forget(AudioDeviceId deviceId)
+    {
+        lock (opening)
+        {
+            Volatile.Write(ref forgotten, [.. forgotten, deviceId]);
+        }
     }
 
     /// <inheritdoc />

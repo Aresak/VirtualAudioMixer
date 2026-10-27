@@ -172,6 +172,9 @@ public sealed class WasapiBackend(ILogger<WasapiBackend> logger) : IAudioBackend
     }
 
     /// <inheritdoc />
+    public void Forget(AudioDeviceId deviceId) => processes.Forget(deviceId);
+
+    /// <inheritdoc />
     public void Dispose() => enumerator.Dispose();
 
     /// <summary>

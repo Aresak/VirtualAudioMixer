@@ -293,6 +293,34 @@ public class DeviceSupervisorTests
         Assert.Equal(DeviceStreamState.Running, channel.State);
     }
 
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void ADeviceNoStripWantsIsForgottenByTheBackend()
+    {
+        using NullAudioBackend backend = new();
+        AudioDeviceInfo removed = AddDevice(backend, "Mayor 180 degrees");
+        AudioDeviceInfo replaced = AddDevice(backend, "Lectern");
+        AudioDeviceInfo moved = AddDevice(backend, "Clerk");
+        AudioDeviceInfo spare = AddDevice(backend, "Spare");
+        AudioDeviceId renamed = new("null:capture:renamed");
+
+        using Fixture fixture = new(backend);
+        fixture.Track(removed.Id);
+        fixture.Track(replaced.Id);
+        fixture.Track(moved.Id);
+
+        // #105. Unplugged is not unwanted: the backend must keep listing a device that may come back.
+        backend.RemoveDevice(removed.Id);
+        fixture.Remove(removed.Id);
+        Assert.Empty(backend.ForgottenDevices);
+
+        fixture.Supervisor.Forget(removed.Id);
+        fixture.Supervisor.Replace(replaced.Id, spare.Id, fixture.Options, fixture.CaptureOptions);
+        fixture.Supervisor.Retarget(moved.Id, renamed);
+
+        Assert.Equal([removed.Id, replaced.Id, moved.Id], backend.ForgottenDevices);
+    }
+
     /// <summary>Three seconds of a device delivering, the mix pulling and the servo running.</summary>
     static void RunMix(DeviceInputChannel channel, NullCaptureStream stream)
     {
@@ -334,19 +362,20 @@ public class DeviceSupervisorTests
 
         public IReadOnlyList<DeviceChange> Changes => changes;
 
+        public DeviceInputChannelOptions Options { get; } = new()
+        {
+            NominalSampleRate = 48000,
+            ChannelCount = 1,
+            BlockFrames = BlockFrames,
+            RingCapacityFrames = 4096,
+            TargetFillFrames = TargetFillFrames
+        };
+
+        public CaptureOptions CaptureOptions { get; } =
+            new(ShareMode.Shared, TimeSpan.FromMilliseconds(20), ChannelCount: 1);
+
         public DeviceInputChannel Track(AudioDeviceId deviceId, DropoutLog? dropouts = null) =>
-            Supervisor.Track(
-                deviceId,
-                new DeviceInputChannelOptions
-                {
-                    NominalSampleRate = 48000,
-                    ChannelCount = 1,
-                    BlockFrames = BlockFrames,
-                    RingCapacityFrames = 4096,
-                    TargetFillFrames = TargetFillFrames,
-                    Dropouts = dropouts
-                },
-                new CaptureOptions(ShareMode.Shared, TimeSpan.FromMilliseconds(20), ChannelCount: 1));
+            Supervisor.Track(deviceId, Options with { Dropouts = dropouts }, CaptureOptions);
 
         public void Remove(AudioDeviceId deviceId) => PostAndPoll(DeviceChangeKind.Removed, deviceId);
 

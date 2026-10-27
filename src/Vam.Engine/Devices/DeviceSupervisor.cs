@@ -123,6 +123,7 @@ public sealed class DeviceSupervisor(
         }
 
         Close(device, DeviceStreamState.Stopped);
+        backend.Forget(deviceId);
         device.Channel.Vacate();
         vacated.Add(device.Channel);
 
@@ -157,6 +158,7 @@ public sealed class DeviceSupervisor(
         }
 
         Close(device, DeviceStreamState.Absent);
+        backend.Forget(from);
 
         device.DeviceId = to;
         device.Channel.DeviceId = to;
@@ -192,6 +194,7 @@ public sealed class DeviceSupervisor(
         }
 
         Close(previous, DeviceStreamState.Stopped);
+        backend.Forget(from);
         previous.Channel.Vacate();
 
         DeviceInputChannel channel = new(to, options, loggerFactory.CreateLogger<DeviceInputChannel>());
