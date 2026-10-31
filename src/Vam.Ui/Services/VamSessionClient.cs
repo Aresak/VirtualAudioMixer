@@ -60,6 +60,9 @@ public sealed class VamSessionClient(
     public string ServerName { get; private set; } = string.Empty;
 
     /// <inheritdoc />
+    public string EngineAddress { get; private set; } = string.Empty;
+
+    /// <inheritdoc />
     public int SampleRate { get; private set; }
 
     /// <inheritdoc />
@@ -477,7 +480,8 @@ public sealed class VamSessionClient(
             string.Empty);
 
         channel?.Dispose();
-        channel = GrpcChannel.ForAddress(options.Address);
+        EngineAddress = options.Address;
+        channel = GrpcChannel.ForAddress(EngineAddress);
         client = new Mixer.MixerClient(channel);
 
         HelloReply hello = await client.HelloAsync(

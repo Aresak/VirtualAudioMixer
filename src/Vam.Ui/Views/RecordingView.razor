@@ -333,6 +333,18 @@
                                                         @(exporting == session.Directory ? L["recording.exporting"] : L["recording.export"])
                                                     </button>
                                                 }
+                                                else if (Platform.ExportAddress(Session.EngineAddress, session.Directory) is { } address)
+                                                {
+                                                    @*
+                                                        A new tab, so a refusal is read there and the
+                                                        console keeps its place. A download leaves the
+                                                        tab with nothing in it.
+                                                    *@
+                                                    <a class="btn sm"
+                                                       href="@address"
+                                                       target="_blank"
+                                                       rel="noopener">@L["recording.export"]</a>
+                                                }
 
                                                 <ConfirmButton Label="@L["recording.delete"]"
                                                                Question="@L.Format("recording.deleteWhy", Name(session))"
@@ -361,7 +373,7 @@
                     <p class="note">@L[NoOpenBecause]</p>
                 }
 
-                @if (CanManage && !Platform.CanSaveFiles)
+                @if (CanManage && !CanExport)
                 {
                     <p class="note">@L["recording.exportNoHost"]</p>
                 }

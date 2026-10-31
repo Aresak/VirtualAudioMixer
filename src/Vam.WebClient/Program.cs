@@ -28,4 +28,8 @@ app.MapStaticAssets();
 
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
+// A past session as one zip, streamed from the engine to the browser. #118. No authentication of
+// its own, like the console it sits beside: that is #32.
+app.MapGet("/" + PastSessionDownload.Path, PastSessionDownload.HandleAsync);
+
 app.Run();

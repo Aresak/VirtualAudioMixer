@@ -89,6 +89,10 @@ public sealed class DesktopPlatformServices(EngineLauncher launcher) : IPlatform
     public bool CanSaveFiles => true;
 
     /// <inheritdoc />
+    /// <remarks>Null: this host asks where to save and writes the archive itself.</remarks>
+    public string? ExportAddress(string engine, string directory) => null;
+
+    /// <inheritdoc />
     public async ValueTask<Stream?> CreateFileAsync(string suggestedName, CancellationToken cancellationToken = default)
     {
         if (Application.Current?.Windows.FirstOrDefault()?.Handler?.PlatformView is not
