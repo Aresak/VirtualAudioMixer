@@ -28,6 +28,8 @@ public class CallbackBudgetTests
     const int Channels = 5;
     const int BlockFrames = 120;
     const int SampleRate = 48000;
+    const int Batches = 40;
+    const int BlocksPerBatch = 100;
 
     /// <summary>How much of a block the whole graph may take.</summary>
     /// <remarks>
@@ -46,13 +48,23 @@ public class CallbackBudgetTests
     /// result a budget would be asserting something about a binary nobody runs.
     /// </para>
     /// <para>
-    /// So the real budget is asserted in release and a debug build is only required to fit inside a
-    /// block at all. The number is printed either way, which is the part worth having: a build that
-    /// slides from a third of a block to two thirds is visible in the output long before it fails.
+    /// So the real budget is asserted in release, and a debug build is held to the same budget scaled
+    /// by how much slower it is. On the machine this was measured on (#134) a debug build rendered this
+    /// graph about eighteen times slower than release; the factor is sixteen, so a debug build is never
+    /// let off more lightly than release, and both fail at roughly the same slowdown. The limit used to
+    /// be one block, which asked a debug build for what would be five per cent in release, and it
+    /// failed on a developer machine from the day it was written.
+    /// </para>
+    /// <para>
+    /// The number is printed either way, which is the part worth having: a build that slides from a
+    /// third of a block to two thirds is visible in the output long before it fails.
     /// </para>
     /// </remarks>
 #if DEBUG
-    const double Limit = 1.0;
+    /// <summary>How many times slower a debug build renders the graph, rounded down.</summary>
+    const double DebugSlowdown = 16;
+
+    const double Limit = BudgetFraction * DebugSlowdown;
 #else
     const double Limit = BudgetFraction;
 #endif
@@ -76,21 +88,36 @@ public class CallbackBudgetTests
         }
 
         double blockSeconds = (double)BlockFrames / SampleRate;
-        long ticks = Stopwatch.GetTimestamp();
-        const int Blocks = 4000;
+        double fastest = double.MaxValue;
+        double total = 0;
 
-        for (int block = 0; block < Blocks; block++)
+        // Timed in short batches, and the fastest one is the graph's cost. A wall clock also counts
+        // every other thread the machine chose to run instead, and a full test run is several test
+        // projects rendering at once: the mean of one long run measures how busy the machine was,
+        // and it swung from 140 to 206 per cent of a block on the same code (#134).
+        for (int batch = 0; batch < Batches; batch++)
         {
-            console.Render();
+            long ticks = Stopwatch.GetTimestamp();
+
+            for (int block = 0; block < BlocksPerBatch; block++)
+            {
+                console.Render();
+            }
+
+            double seconds = (Stopwatch.GetTimestamp() - ticks) / (double)Stopwatch.Frequency;
+
+            fastest = Math.Min(fastest, seconds);
+            total += seconds;
         }
 
-        double elapsed = (Stopwatch.GetTimestamp() - ticks) / (double)Stopwatch.Frequency;
-        double perBlock = elapsed / Blocks;
+        double perBlock = fastest / BlocksPerBatch;
+        double meanPerBlock = total / (Batches * BlocksPerBatch);
         double fraction = perBlock / blockSeconds;
 
         TestContext.Current.TestOutputHelper?.WriteLine(
             $"{Channels} channels, full chain: {perBlock * 1_000_000:0} us per block, "
-            + $"{fraction:P1} of a {blockSeconds * 1000:0.0} ms budget.");
+            + $"{fraction:P1} of a {blockSeconds * 1000:0.0} ms budget "
+            + $"(mean {meanPerBlock * 1_000_000:0} us, which includes whatever else the machine was doing).");
 
         // Deliberately reported through a failure, so the number is in the test output whether or
         // not it passed. A gate that only says pass or fail hides the day it went from twelve per
