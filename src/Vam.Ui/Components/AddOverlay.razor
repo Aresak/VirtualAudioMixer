@@ -24,12 +24,34 @@
         <div class="knob">
             <div class="between"><span>@L["strip.device"]</span></div>
             <select @bind="captureId"
-                    title="@Captures.NameOf(captureId)"
+                    title="@SourceName(captureId)"
                     aria-label="@L["strip.device"]">
                 <option value="">—</option>
-                @foreach (DeviceInfo device in Captures)
+                @if (Programs.Count == 0)
                 {
-                    <option value="@device.Id">@device.Name @(device.IsInUse ? "·" : string.Empty)</option>
+                    @foreach (DeviceInfo device in Captures)
+                    {
+                        <option value="@device.Id">@device.Name @(device.IsInUse ? "·" : string.Empty)</option>
+                    }
+                }
+                else
+                {
+                    <optgroup label="@L["strip.devices"]">
+                        @foreach (DeviceInfo device in Captures)
+                        {
+                            <option value="@device.Id">@device.Name @(device.IsInUse ? "·" : string.Empty)</option>
+                        }
+                    </optgroup>
+
+                    @*
+                        By executable, so the strip follows the program when it is restarted. #95.
+                    *@
+                    <optgroup label="@L["strip.programs"]">
+                        @foreach (AudioProcess process in Programs)
+                        {
+                            <option value="@process.Id">@process.ToOptionLabel(L) @(process.IsInUse ? "·" : string.Empty)</option>
+                        }
+                    </optgroup>
                 }
             </select>
         </div>
