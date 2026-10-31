@@ -15,7 +15,12 @@ namespace Vam.Server.Tray;
 /// It reads what the engine publishes and sends commands only through the mediator, the same
 /// requests a console sends. It never touches the graph, and nothing here is near the audio path.
 /// </remarks>
-public sealed class EngineTray(VamEngine engine, IMediator mediator, IServer server, ILogger<EngineTray> logger)
+public sealed class EngineTray(
+    VamEngine engine,
+    MeetingBrowser meetingBrowser,
+    IMediator mediator,
+    IServer server,
+    ILogger<EngineTray> logger)
     : IHostedService, ITrayModel, IDisposable
 {
     readonly TrayText text = new(CultureInfo.CurrentUICulture);
@@ -60,6 +65,7 @@ public sealed class EngineTray(VamEngine engine, IMediator mediator, IServer ser
         TrayStatus status = new()
         {
             Address = Address(),
+            CanStartMeetingBrowser = meetingBrowser.IsConfigured,
             Dropouts = engine.Dropouts.TotalRecorded,
             FaultedStrips = engine.Faults?.FaultedCount ?? 0,
             RecordingFor = engine.Recording is { IsRecording: true } recording
@@ -81,6 +87,17 @@ public sealed class EngineTray(VamEngine engine, IMediator mediator, IServer ser
             {
                 logger.LogWarning("The console was not opened from the tray: {Problem}", problem);
                 icon?.Tell(text["tray.notDone"], text["tray.noConsole"]);
+            }
+
+            return;
+        }
+
+        if (command == TrayCommand.StartMeetingBrowser)
+        {
+            if (meetingBrowser.Start() is { } problem)
+            {
+                logger.LogWarning("The meeting browser was not started from the tray: {Problem}", problem);
+                icon?.Tell(text["tray.notDone"], text["tray.noMeetingBrowser"]);
             }
 
             return;

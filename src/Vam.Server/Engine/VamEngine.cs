@@ -129,6 +129,9 @@ public sealed class VamEngine : IDisposable
     /// </remarks>
     public IAudioBackend? Backend => backend;
 
+    /// <summary>The process sources, or null when the devices were supplied or the engine is stopped.</summary>
+    public ProcessLoopbackSources? ProcessSources { get; private set; }
+
     /// <summary>The programs with audio a console can pick as a strip's source, or null when there are none to ask.</summary>
     public AudioProcessCatalogue? AudioProcesses { get; }
 
@@ -376,6 +379,7 @@ public sealed class VamEngine : IDisposable
         }
 
         backend = null;
+        ProcessSources = null;
     }
 
     /// <inheritdoc />
@@ -1305,6 +1309,8 @@ public sealed class VamEngine : IDisposable
         ProcessLoopbackSources sources = new(
             new ToolhelpProcessSnapshot(),
             loggers.CreateLogger<ProcessLoopbackSources>());
+
+        ProcessSources = sources;
 
         return new ProcessLoopbackBackend(wasapi, wasapi, sources);
     }

@@ -75,16 +75,64 @@ public readonly record struct ProcessLoopbackId
     /// <remarks>
     /// By executable, it is the root of the tree: a process of that name whose parent is not one too.
     /// Chromium plays audio from a child, and capturing only a child's tree would miss the rest of the
-    /// browser. Two roots are two instances, and choosing between them is refused rather than guessed.
+    /// browser. Two roots are two instances, and choosing between them is refused rather than guessed,
+    /// unless VAM started one of them itself: then it is that one, and only that one.
     /// </remarks>
     /// <param name="processes">What is running.</param>
+    /// <param name="launchedProcessId">The PID VAM started this executable under, or 0.</param>
     /// <returns>The process, or why there is none.</returns>
-    public ProcessResolution Resolve(IReadOnlyList<ProcessEntry> processes)
+    public ProcessResolution Resolve(IReadOnlyList<ProcessEntry> processes, int launchedProcessId = 0)
     {
         ArgumentNullException.ThrowIfNull(processes);
 
-        return IsByProcessId ? ResolveProcessId(processes) : ResolveExecutable(processes);
+        if (IsByProcessId)
+        {
+            return ResolveProcessId(processes);
+        }
+
+        if (launchedProcessId <= 0)
+        {
+            return ResolveExecutable(processes);
+        }
+
+        return FindLaunched(processes, launchedProcessId, ExecutableName) is { } launched
+            ? new ProcessResolution(ProcessResolutionOutcome.Found, launched, 1)
+            : new ProcessResolution(ProcessResolutionOutcome.Missing, default, 0);
     }
+
+    /// <summary>Finds a process VAM started, while it is still the root of its own tree.</summary>
+    /// <remarks>
+    /// A root, because Windows reuses PIDs: once the browser VAM started has exited, its PID can go to
+    /// a child of another browser of the same name, and that is not the meeting.
+    /// </remarks>
+    /// <param name="processes">What is running.</param>
+    /// <param name="processId">The PID it was started under.</param>
+    /// <param name="executableName">Its executable.</param>
+    /// <returns>The process, or null when it is gone.</returns>
+    internal static ProcessEntry? FindLaunched(IReadOnlyList<ProcessEntry> processes, int processId, string executableName)
+    {
+        ProcessEntry? found = null;
+        bool hasSameNamedParent = false;
+
+        foreach (ProcessEntry process in processes)
+        {
+            if (process.ProcessId == processId && IsNamed(process, executableName))
+            {
+                found = process;
+            }
+        }
+
+        if (found is { } candidate)
+        {
+            hasSameNamedParent = processes.Any(process =>
+                process.ProcessId == candidate.ParentProcessId && IsNamed(process, executableName));
+        }
+
+        return hasSameNamedParent ? null : found;
+    }
+
+    static bool IsNamed(ProcessEntry process, string executableName) =>
+        string.Equals(process.ExecutableName, executableName, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>What the operator sees this source called.</summary>
     /// <param name="process">The process it resolved to.</param>

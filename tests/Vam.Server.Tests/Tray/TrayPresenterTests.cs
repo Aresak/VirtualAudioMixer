@@ -131,6 +131,20 @@ public class TrayPresenterTests
         Assert.Null(TrayPresenter.RequestFor(TrayCommand.None));
     }
 
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void TheMeetingBrowserIsOfferedOnlyWhenOneIsConfigured()
+    {
+        // #96.
+        TrayView configured = English.Present(Idle with { CanStartMeetingBrowser = true });
+
+        Assert.DoesNotContain(English.Present(Idle).Menu, item => item.Id == (int)TrayCommand.StartMeetingBrowser);
+        Assert.Equal(
+            "Start meeting browser",
+            configured.Menu.Single(item => item.Id == (int)TrayCommand.StartMeetingBrowser).Text);
+        Assert.Null(TrayPresenter.RequestFor(TrayCommand.StartMeetingBrowser));
+    }
+
     static TrayMenuItem StopEngine(TrayView view) => view.Menu.Single(item => item.Id == (int)TrayCommand.StopEngine);
 
     static TrayMenuItem Toggle(TrayView view) =>

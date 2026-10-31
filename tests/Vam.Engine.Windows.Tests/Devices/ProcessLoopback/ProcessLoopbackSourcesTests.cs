@@ -111,7 +111,7 @@ public class ProcessLoopbackSourcesTests
         ProcessLoopbackSources sources = new(processes, loggers.CreateLogger("sources"));
 
         Assert.Throws<DeviceNotFoundException>(() => sources.Lease(Meeting, Parse(Meeting)));
-        Assert.True(loggers.Mentions("own instance"));
+        Assert.True(loggers.Mentions("VAM's tray"));
         Assert.Empty(sources.Describe(SampleRate));
     }
 
@@ -189,6 +189,44 @@ public class ProcessLoopbackSourcesTests
 
         using ProcessCaptureLease reopened = sources.Lease(Meeting, Parse(Meeting));
         Assert.Equal(200, reopened.Process.ProcessId);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void AStartHandedToTheBrowserVamAlreadyStartedKeepsTheFirstTree()
+    {
+        // #96. A second start on the same profile passes the URL on to the first and exits.
+        ScriptedProcessSnapshot processes = new();
+        processes.Start(200, 1, "msedge.exe");
+        processes.Start(500, 4, "msedge.exe");
+
+        using RecordingLoggerFactory loggers = new();
+        ProcessLoopbackSources sources = new(processes, loggers.CreateLogger("sources"));
+        sources.Launched(500, "msedge.exe");
+
+        processes.Start(600, 4, "msedge.exe");
+        sources.Launched(600, "msedge.exe");
+        processes.Exit(600);
+
+        using ProcessCaptureLease lease = sources.Lease(Meeting, Parse(Meeting));
+        Assert.Equal(500, lease.Process.ProcessId);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void AStartedBrowserDoesNotChangeASourceNamedByProcessId()
+    {
+        AudioDeviceId byProcessId = new("process:200");
+        ScriptedProcessSnapshot processes = new();
+        processes.Start(200, 1, "msedge.exe");
+        processes.Start(500, 4, "msedge.exe");
+
+        using RecordingLoggerFactory loggers = new();
+        ProcessLoopbackSources sources = new(processes, loggers.CreateLogger("sources"));
+        sources.Launched(500, "msedge.exe");
+
+        using ProcessCaptureLease lease = sources.Lease(byProcessId, Parse(byProcessId));
+        Assert.Equal(200, lease.Process.ProcessId);
     }
 
     static ProcessLoopbackId Parse(AudioDeviceId deviceId)

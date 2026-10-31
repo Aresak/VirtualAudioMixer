@@ -16,5 +16,8 @@ public enum TrayCommand
     StopRecording = 3,
 
     /// <summary>Ends the engine.</summary>
-    StopEngine = 4
+    StopEngine = 4,
+
+    /// <summary>Starts the meeting browser.</summary>
+    StartMeetingBrowser = 5
 }
