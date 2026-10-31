@@ -62,9 +62,10 @@ public interface IPlatformServices
     /// <summary>
     /// Where a browser downloads a past session as one zip, or null when this host saves files itself. #118.
     /// </summary>
+    /// <param name="engine">The engine the console is connected to, which is the one that has the session.</param>
     /// <param name="directory">The session's folder, as the engine listed it.</param>
     /// <returns>An address relative to the page, or null.</returns>
-    string? ExportAddress(string directory);
+    string? ExportAddress(string engine, string directory);
 
     /// <summary>Whether this host can start an engine on the machine it is running on.</summary>
     /// <remarks>

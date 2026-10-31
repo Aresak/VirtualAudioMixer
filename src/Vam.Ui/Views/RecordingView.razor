@@ -333,7 +333,7 @@
                                                         @(exporting == session.Directory ? L["recording.exporting"] : L["recording.export"])
                                                     </button>
                                                 }
-                                                else if (Platform.ExportAddress(session.Directory) is { } address)
+                                                else if (Platform.ExportAddress(Session.EngineAddress, session.Directory) is { } address)
                                                 {
                                                     @*
                                                         A new tab, so a refusal is read there and the

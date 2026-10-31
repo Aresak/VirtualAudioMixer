@@ -32,6 +32,13 @@ public interface IVamSession
     /// <summary>What the engine calls itself.</summary>
     string ServerName { get; }
 
+    /// <summary>The address this session dialled, or empty before it has.</summary>
+    /// <remarks>
+    /// This session's own, not the shared options': in a web host several consoles share one set of
+    /// options, and the address there is whichever console was pointed somewhere last. #118.
+    /// </remarks>
+    string EngineAddress { get; }
+
     /// <summary>The rate the whole graph runs at.</summary>
     int SampleRate { get; }
 

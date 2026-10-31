@@ -95,7 +95,7 @@ public partial class RecordingView
     bool CanManage => Session.CanManagePastSessions();
 
     // Either this host saves the archive itself, or the browser downloads it from an address.
-    bool CanExport => Platform.CanSaveFiles || Platform.ExportAddress(string.Empty) is not null;
+    bool CanExport => Platform.CanSaveFiles || Platform.ExportAddress(string.Empty, string.Empty) is not null;
 
     static string Name(PastSession session) => session.Directory.FolderName();
 

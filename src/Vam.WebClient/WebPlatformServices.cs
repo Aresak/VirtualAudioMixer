@@ -49,8 +49,8 @@ public sealed class WebPlatformServices : IPlatformServices
     /// An address on this host, which streams the engine's export straight into the response. A
     /// session is gigabytes, which neither the Blazor circuit nor a script's blob can carry. #118.
     /// </remarks>
-    public string? ExportAddress(string directory) =>
-        PastSessionDownload.Path + "?directory=" + Uri.EscapeDataString(directory);
+    public string? ExportAddress(string engine, string directory) =>
+        PastSessionDownload.Path + "?engine=" + Uri.EscapeDataString(engine) + "&directory=" + Uri.EscapeDataString(directory);
 
     /// <inheritdoc />
     /// <remarks>

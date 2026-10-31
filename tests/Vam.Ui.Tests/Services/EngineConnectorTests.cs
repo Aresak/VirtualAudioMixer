@@ -205,7 +205,7 @@ public class EngineConnectorTests
         public ValueTask<Stream?> CreateFileAsync(string suggestedName, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public string? ExportAddress(string directory) => null;
+        public string? ExportAddress(string engine, string directory) => null;
 
         public ValueTask<string?> StartEngineAsync(string address, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
@@ -226,6 +226,8 @@ public class EngineConnectorTests
         public ConsoleState? Console => throw new NotSupportedException();
 
         public string ServerName => throw new NotSupportedException();
+
+        public string EngineAddress => throw new NotSupportedException();
 
         public int SampleRate => throw new NotSupportedException();
 

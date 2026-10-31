@@ -90,7 +90,7 @@ public sealed class DesktopPlatformServices(EngineLauncher launcher) : IPlatform
 
     /// <inheritdoc />
     /// <remarks>Null: this host asks where to save and writes the archive itself.</remarks>
-    public string? ExportAddress(string directory) => null;
+    public string? ExportAddress(string engine, string directory) => null;
 
     /// <inheritdoc />
     public async ValueTask<Stream?> CreateFileAsync(string suggestedName, CancellationToken cancellationToken = default)
