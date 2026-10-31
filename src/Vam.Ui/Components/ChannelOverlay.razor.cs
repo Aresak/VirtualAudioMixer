@@ -34,8 +34,12 @@ public partial class ChannelOverlay
             : null;
 
     /// <inheritdoc />
-    protected override async Task OnInitializedAsync() =>
+    protected override async Task OnInitializedAsync()
+    {
+        // Read again on every opening, so a device plugged in during the session is offered. #128.
+        await Session.RefreshDevicesAsync();
         processes = await Session.GetAudioProcessesAsync();
+    }
 
     static string Colour(ChannelState channel) => channel.ToStripColour();
 
