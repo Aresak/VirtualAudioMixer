@@ -23,6 +23,10 @@ public sealed class EngineSettingsStore(string path, ILogger<EngineSettingsStore
 {
     static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
 
+    // Saves come from gRPC threads and the control thread at once. Unguarded, an older snapshot
+    // could be moved into place after a newer one, and an operator's "no" would quietly become yes.
+    readonly Lock gate = new();
+
     /// <summary>Writes the four choices, atomically.</summary>
     /// <param name="options">The engine's current options.</param>
     /// <remarks>
@@ -33,27 +37,31 @@ public sealed class EngineSettingsStore(string path, ILogger<EngineSettingsStore
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        StoredSettings stored = new()
-        {
-            RecordAutomatically = options.RecordAutomatically,
-            LoadLastConsole = options.LoadLastConsole,
-            Capture = options.Capture,
-            RecordingDirectory = options.RecordingDirectory
-        };
-
         try
         {
-            string? directory = Path.GetDirectoryName(Path.GetFullPath(path));
-
-            if (!string.IsNullOrEmpty(directory))
+            lock (gate)
             {
-                Directory.CreateDirectory(directory);
+                // Taken under the lock, so whichever save writes last writes the latest of everything.
+                StoredSettings stored = new()
+                {
+                    RecordAutomatically = options.RecordAutomatically,
+                    LoadLastConsole = options.LoadLastConsole,
+                    Capture = options.Capture,
+                    RecordingDirectory = options.RecordingDirectory
+                };
+
+                string? directory = Path.GetDirectoryName(Path.GetFullPath(path));
+
+                if (!string.IsNullOrEmpty(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                string temporary = path + ".writing";
+
+                File.WriteAllText(temporary, JsonSerializer.Serialize(stored, Options));
+                File.Move(temporary, path, overwrite: true);
             }
-
-            string temporary = path + ".writing";
-
-            File.WriteAllText(temporary, JsonSerializer.Serialize(stored, Options));
-            File.Move(temporary, path, overwrite: true);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
@@ -98,32 +106,36 @@ public sealed class EngineSettingsStore(string path, ILogger<EngineSettingsStore
 
         if (stored.Capture is { } capture)
         {
-            if (VamEngine.AvailableFormats.Contains(capture.Format))
-            {
-                options.Capture = capture;
-            }
-            else
+            if (!VamEngine.AvailableFormats.Contains(capture.Format))
             {
                 logger.LogWarning(
                     "The saved recording format {Format} is not one this engine writes. Using the default capture.",
                     capture.Format);
             }
+            else if (!capture.Inputs && !capture.StreamBus && !capture.AllBuses)
+            {
+                // The console refuses this selection, so only a damaged or hand-edited file has it.
+                logger.LogWarning("The saved capture records nothing. Using the default capture.");
+            }
+            else
+            {
+                options.Capture = capture;
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(stored.RecordingDirectory))
         {
-            // The same rule SetRecordingDirectory applies. A folder that does not exist yet is fine:
-            // it is created when the next session starts.
-            if (Path.IsPathFullyQualified(stored.RecordingDirectory))
+            if (Usable(stored.RecordingDirectory) is { } problem)
             {
-                options.RecordingDirectory = stored.RecordingDirectory;
+                logger.LogWarning(
+                    "The saved recording folder {Saved} {Problem}. Recordings go to {Default}.",
+                    stored.RecordingDirectory,
+                    problem,
+                    options.RecordingDirectory);
             }
             else
             {
-                logger.LogWarning(
-                    "The saved recording folder {Saved} is not a full path. Recordings go to {Default}.",
-                    stored.RecordingDirectory,
-                    options.RecordingDirectory);
+                options.RecordingDirectory = stored.RecordingDirectory;
             }
         }
 
@@ -133,6 +145,25 @@ public sealed class EngineSettingsStore(string path, ILogger<EngineSettingsStore
             options.RecordAutomatically,
             options.LoadLastConsole,
             options.RecordingDirectory);
+    }
+
+    /// <summary>Why a saved recording folder cannot be used, or null when it can.</summary>
+    /// <remarks>
+    /// A folder that does not exist yet is fine: it is created when the next session starts. A folder
+    /// whose drive or share has gone is not, because the session would then fail to start at all and
+    /// the meeting would go unrecorded rather than recorded into the default folder.
+    /// </remarks>
+    static string? Usable(string directory)
+    {
+        // The same rule SetRecordingDirectory applies.
+        if (!Path.IsPathFullyQualified(directory))
+        {
+            return "is not a full path";
+        }
+
+        string? root = Path.GetPathRoot(directory);
+
+        return string.IsNullOrEmpty(root) || Directory.Exists(root) ? null : "is on a drive or share that is not there";
     }
 
     /// <summary>The saved shape. Separate from the options so the file format can move independently.</summary>

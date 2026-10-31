@@ -51,6 +51,35 @@ public sealed class EngineSettingsStoreTests : IDisposable
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
+    public void AFolderOnADriveThatIsGoneFallsBackToTheDefault()
+    {
+        // A drive letter nothing is mounted on, the way an unplugged USB disk looks.
+        char? absent = "ZYXWVUTSRQPONMLKJIHGFE".Cast<char?>().FirstOrDefault(letter => !Directory.Exists($"{letter}:\\"));
+
+        Assert.SkipWhen(absent is null, "Every drive letter is in use on this machine.");
+
+        Write($$"""{ "RecordingDirectory": "{{absent}}:\\recordings" }""");
+        EngineOptions options = Defaults();
+
+        Store().Restore(options);
+
+        Assert.Equal(Path.Combine(workspace, "recordings"), options.RecordingDirectory);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void ACaptureThatRecordsNothingFallsBackToTheDefault()
+    {
+        Write("""{ "Capture": { "Inputs": false, "StreamBus": false, "AllBuses": false, "Format": "wav24" } }""");
+        EngineOptions options = Defaults();
+
+        Store().Restore(options);
+
+        Assert.Equal(new CaptureSelection(), options.Capture);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
     public void AFileThatCannotBeReadLeavesTheDefaults()
     {
         Directory.CreateDirectory(workspace);
@@ -91,6 +120,12 @@ public sealed class EngineSettingsStoreTests : IDisposable
         {
             Directory.Delete(workspace, recursive: true);
         }
+    }
+
+    void Write(string json)
+    {
+        Directory.CreateDirectory(workspace);
+        File.WriteAllText(SettingsPath, json);
     }
 
     EngineSettingsStore Store() => new(SettingsPath, NullLogger<EngineSettingsStore>.Instance);
