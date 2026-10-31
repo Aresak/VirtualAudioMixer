@@ -1,6 +1,10 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Vam.Engine.Devices;
+using Vam.Engine.Devices.Abstractions;
+using Vam.Engine.Windows.Devices.ProcessLoopback;
 using Vam.Server.Engine;
 using Vam.TestKit.Devices;
 using Vam.TestKit.Harness;
@@ -12,6 +16,8 @@ namespace Vam.Server.Tests.Engine;
 public class MeetingBrowserTests
 {
     const string Chrome = @"C:\Program Files\Google\Chrome\Application\chrome.exe";
+
+    static readonly AudioDeviceId Meeting = new("process:chrome.exe");
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
@@ -44,6 +50,64 @@ public class MeetingBrowserTests
     public void TheBrowserIsKnownByTheNameAProcessSnapshotReports(string executable, string expected)
     {
         Assert.Equal(expected, MeetingBrowser.ExecutableName(new MeetingBrowserOptions { Executable = executable }));
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void AStartedBrowserIsRegisteredByItsPidAndFileName()
+    {
+        // #131. Two separate Chrome trees, so only the registration can say which one is the meeting.
+        ScriptedProcesses processes = new();
+        processes.Start(300, 1, "chrome.exe");
+        processes.Start(400, 1, "chrome.exe");
+
+        ProcessLoopbackSources sources = new(processes, NullLogger.Instance);
+        MeetingBrowser browser = new(
+            new MeetingBrowserOptions { Executable = Chrome },
+            () => sources,
+            _ => 400,
+            NullLogger<MeetingBrowser>.Instance);
+
+        Assert.Null(browser.Start());
+
+        // Registered under the full path instead of chrome.exe, or not at all, and this lease is
+        // ambiguous and throws.
+        using ProcessCaptureLease lease = sources.Lease(Meeting, Parse(Meeting));
+
+        Assert.Equal(400, lease.Process.ProcessId);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void WhenWindowsStartsNothingNothingIsRegisteredAndTheTrayIsToldWhy()
+    {
+        ScriptedProcesses processes = new();
+        processes.Start(300, 1, "chrome.exe");
+        processes.Start(400, 1, "chrome.exe");
+
+        ProcessLoopbackSources sources = new(processes, NullLogger.Instance);
+        MeetingBrowser browser = new(
+            new MeetingBrowserOptions { Executable = Chrome },
+            () => sources,
+            _ => null,
+            NullLogger<MeetingBrowser>.Instance);
+
+        Assert.Contains("did not start", browser.Start(), StringComparison.Ordinal);
+        Assert.Throws<DeviceNotFoundException>(() => sources.Lease(Meeting, Parse(Meeting)));
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
+    public void WhenStartingThrowsTheTrayIsGivenWindowsOwnSentence()
+    {
+        ProcessLoopbackSources sources = new(new ScriptedProcesses(), NullLogger.Instance);
+        MeetingBrowser browser = new(
+            new MeetingBrowserOptions { Executable = Chrome },
+            () => sources,
+            _ => throw new Win32Exception(2, "The system cannot find the file specified."),
+            NullLogger<MeetingBrowser>.Instance);
+
+        Assert.Equal("The system cannot find the file specified.", browser.Start());
     }
 
     [Fact]
@@ -91,5 +155,12 @@ public class MeetingBrowserTests
         Assert.Equal("https://meet.example/council", options.Url);
         Assert.Contains("--user-data-dir=", options.Arguments, StringComparison.Ordinal);
         Assert.False(new MeetingBrowserOptions().IsConfigured);
+    }
+
+    static ProcessLoopbackId Parse(AudioDeviceId deviceId)
+    {
+        Assert.True(ProcessLoopbackId.TryParse(deviceId, out ProcessLoopbackId target));
+
+        return target;
     }
 }
