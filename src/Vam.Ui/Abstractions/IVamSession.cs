@@ -119,6 +119,11 @@ public interface IVamSession
     /// <param name="cancellationToken">Gives up.</param>
     ValueTask RefreshPresetsAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>Reads the engine's devices again, so one plugged in or taken away since connecting shows. #128.</summary>
+    /// <param name="cancellationToken">Gives up.</param>
+    /// <remarks>Asked when a selector opens, against any engine: <c>ListDevices</c> is in protocol 1.</remarks>
+    ValueTask RefreshDevicesAsync(CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Asks for K1 to K7.
     /// </summary>
