@@ -189,6 +189,9 @@ public class VamSessionExtensionsTests
         public ValueTask RefreshPresetsAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+        public ValueTask RefreshDevicesAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public ValueTask<DiagnosticsState?> GetDiagnosticsAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
