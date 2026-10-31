@@ -156,6 +156,8 @@ public class VamSessionExtensionsTests
 
         public string ServerName => throw new NotSupportedException();
 
+        public string EngineAddress => throw new NotSupportedException();
+
         public int SampleRate => throw new NotSupportedException();
 
         public int BlockFrames => throw new NotSupportedException();
@@ -185,6 +187,9 @@ public class VamSessionExtensionsTests
             throw new NotSupportedException();
 
         public ValueTask RefreshPresetsAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask RefreshDevicesAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
         public ValueTask<DiagnosticsState?> GetDiagnosticsAsync(CancellationToken cancellationToken = default) =>

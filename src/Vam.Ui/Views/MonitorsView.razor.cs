@@ -64,6 +64,11 @@ public partial class MonitorsView
     IEnumerable<DeviceInfo> Renders =>
         Session.Devices.Where(device => device.Direction.Equals("Render", StringComparison.OrdinalIgnoreCase));
 
+    /// <inheritdoc />
+    protected override async Task OnInitializedAsync() =>
+        // Read again on every opening, so an output plugged in during the session is offered. #128.
+        await Session.RefreshDevicesAsync();
+
     async Task SetOutputAsync(BusState monitor, ChangeEventArgs arguments) =>
         await Session.ApplyAsync(new Command
         {
