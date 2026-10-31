@@ -24,6 +24,16 @@ public sealed class ProcessLoopbackSources(IProcessSnapshot snapshot, ILogger lo
     /// <summary>What the source carries unless asked otherwise. Windows converts whatever the process plays.</summary>
     public const int DefaultChannelCount = 2;
 
+    /// <summary>
+    /// The setting that puts "Start meeting browser" in the tray, named in the warning about an
+    /// ambiguous source. #132.
+    /// </summary>
+    /// <remarks>
+    /// Spelled out here because this layer does not read the engine's configuration. A test in
+    /// Vam.Server holds it to what the engine actually reads.
+    /// </remarks>
+    public const string MeetingBrowserSetting = "Vam:MeetingBrowser:Executable";
+
     readonly Lock gate = new();
     readonly Dictionary<AudioDeviceId, ProcessLoopbackId> named = [];
     readonly Dictionary<AudioDeviceId, int> captured = [];
@@ -102,11 +112,14 @@ public sealed class ProcessLoopbackSources(IProcessSnapshot snapshot, ILogger lo
 
         if (resolution.Outcome == ProcessResolutionOutcome.Ambiguous)
         {
+            // Both ways out, always. The tray item exists only once the browser is configured, and
+            // this layer cannot tell whether it is, so the setting is named rather than assumed.
             logger.LogWarning(
                 "{DeviceId} fits {Candidates} separate process trees, so none is captured. Start the meeting "
-                + "browser from VAM's tray, or name it by PID.",
+                + "browser from VAM's tray, which offers it once {Setting} names the browser, or name it by PID.",
                 deviceId.Value,
-                resolution.Candidates);
+                resolution.Candidates,
+                MeetingBrowserSetting);
         }
 
         if (resolution.Outcome != ProcessResolutionOutcome.Found)
