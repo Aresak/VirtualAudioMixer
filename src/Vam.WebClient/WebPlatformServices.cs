@@ -35,13 +35,22 @@ public sealed class WebPlatformServices : IPlatformServices
 
     /// <inheritdoc />
     /// <remarks>
-    /// Not yet. A file saved here would land on the web host, not with the person at the browser.
+    /// A file saved here would land on the web host, not with the person at the browser. The browser
+    /// downloads it instead, from <see cref="ExportAddress"/>.
     /// </remarks>
     public bool CanSaveFiles => false;
 
     /// <inheritdoc />
     public ValueTask<Stream?> CreateFileAsync(string suggestedName, CancellationToken cancellationToken = default) =>
         ValueTask.FromResult<Stream?>(null);
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// An address on this host, which streams the engine's export straight into the response. A
+    /// session is gigabytes, which neither the Blazor circuit nor a script's blob can carry. #118.
+    /// </remarks>
+    public string? ExportAddress(string directory) =>
+        PastSessionDownload.Path + "?directory=" + Uri.EscapeDataString(directory);
 
     /// <inheritdoc />
     /// <remarks>

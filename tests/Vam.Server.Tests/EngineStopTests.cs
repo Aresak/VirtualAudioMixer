@@ -182,6 +182,8 @@ public sealed class EngineStopTests : IAsyncDisposable
         public ValueTask<Stream?> CreateFileAsync(string suggestedName, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+        public string? ExportAddress(string directory) => null;
+
         public ValueTask<string?> StartEngineAsync(string address, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }

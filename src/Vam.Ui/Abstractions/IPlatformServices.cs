@@ -59,6 +59,13 @@ public interface IPlatformServices
     /// <returns>The file, empty and writable, or null if the person changed their mind.</returns>
     ValueTask<Stream?> CreateFileAsync(string suggestedName, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Where a browser downloads a past session as one zip, or null when this host saves files itself. #118.
+    /// </summary>
+    /// <param name="directory">The session's folder, as the engine listed it.</param>
+    /// <returns>An address relative to the page, or null.</returns>
+    string? ExportAddress(string directory);
+
     /// <summary>Whether this host can start an engine on the machine it is running on.</summary>
     /// <remarks>
     /// A desktop console can: the engine ships beside it and starting a process is what a desktop
