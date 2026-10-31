@@ -16,13 +16,14 @@ public class WasapiAudioSessionSnapshotTests
     [Trait("Category", TestCategories.Unit)]
     public void ASessionThatCannotBeReadDoesNotTakeTheRestOfItsOutputWithIt()
     {
-        StandInOutput speakers = new("Speakers", new AudioSessionEntry(100, true), null, new AudioSessionEntry(200, true));
+        StandInOutput speakers = new("Speakers", new AudioSessionEntry(100, true), null, new AudioSessionEntry(200, true), null);
         using RecordingLoggerFactory loggers = new();
 
         IReadOnlyList<AudioSessionEntry> sessions = WasapiAudioSessionSnapshot.Collect([speakers], loggers.CreateLogger("sessions"));
 
         Assert.Equal([new AudioSessionEntry(100, true), new AudioSessionEntry(200, true)], sessions);
 
+        // One line for the output, not one per broken session.
         string problem = Assert.Single(loggers.Problems).Message;
 
         Assert.Contains("Speakers", problem, StringComparison.Ordinal);

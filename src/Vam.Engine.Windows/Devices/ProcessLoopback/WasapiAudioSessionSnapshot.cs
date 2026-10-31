@@ -111,13 +111,23 @@ public sealed class WasapiAudioSessionSnapshot(ILogger logger) : IAudioSessionSn
         {
             get
             {
+                // Read only when something has already gone wrong, so it must not throw in turn: an
+                // output going away mid-read may not answer to either.
                 try
                 {
                     return device.FriendlyName;
                 }
                 catch (COMException)
                 {
+                }
+
+                try
+                {
                     return device.ID;
+                }
+                catch (COMException)
+                {
+                    return "an output";
                 }
             }
         }
