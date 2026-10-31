@@ -60,6 +60,11 @@ service Mixer {
   // The session's files one after another, so a console on another machine can keep a copy. The
   // console puts them together; the engine only reads.
   rpc ExportPastSession(PastSessionTarget) returns (stream PastSessionChunk);
+
+  // The running programs with audio open on the engine's machine, which a strip can take as its
+  // source. Asked when a selector opens rather than with ListDevices: programs come and go during a
+  // meeting, and endpoints do not.
+  rpc ListAudioProcesses(Empty) returns (AudioProcessList);
 }
 
 message Empty {}
@@ -421,6 +426,21 @@ message DeleteChainPreset { string name = 1; }
 
 message DeviceList {
   repeated DeviceInfo devices = 1;
+}
+
+message AudioProcessList {
+  repeated AudioProcess processes = 1;
+}
+
+message AudioProcess {
+  // A capture device ID by executable, such as process:msedge.exe. Set as a strip's device like any
+  // other, and it follows the program across a restart.
+  string id = 1;
+  string name = 2;
+  // Playing now, rather than open and quiet.
+  bool is_playing = 3;
+  // Whether a strip is already using it.
+  bool is_in_use = 4;
 }
 
 message DeviceInfo {

@@ -80,7 +80,15 @@ public sealed class VamEngine : IDisposable
     /// graph, the clock, the recording and the protocol on top of them — gets exercised on a machine
     /// with nothing plugged in, which is most machines and every CI runner.
     /// </param>
-    public VamEngine(EngineOptions options, ILoggerFactory loggers, IAudioBackend? backend = null)
+    /// <param name="audioProcesses">
+    /// The programs with audio a console can pick as a source. Null finds the real ones, unless a
+    /// backend was supplied, in which case there are none.
+    /// </param>
+    public VamEngine(
+        EngineOptions options,
+        ILoggerFactory loggers,
+        IAudioBackend? backend = null,
+        AudioProcessCatalogue? audioProcesses = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(loggers);
@@ -89,6 +97,10 @@ public sealed class VamEngine : IDisposable
         this.loggers = loggers;
 
         supplied = backend;
+        AudioProcesses = audioProcesses
+            ?? (backend is null
+                ? new AudioProcessCatalogue(new WasapiAudioSessionSnapshot(), new ToolhelpProcessSnapshot(), Environment.ProcessId)
+                : null);
         Presets = new ChainPresetStore(options.PresetPath);
 
         logger = loggers.CreateLogger<VamEngine>();
@@ -119,6 +131,9 @@ public sealed class VamEngine : IDisposable
 
     /// <summary>The process sources, or null when the devices were supplied or the engine is stopped.</summary>
     public ProcessLoopbackSources? ProcessSources { get; private set; }
+
+    /// <summary>The programs with audio a console can pick as a strip's source, or null when there are none to ask.</summary>
+    public AudioProcessCatalogue? AudioProcesses { get; }
 
     /// <summary>How long the render callback has been taking. K4.</summary>
     public CallbackHistogram Callbacks { get; } = new();

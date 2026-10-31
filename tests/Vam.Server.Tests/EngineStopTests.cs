@@ -157,7 +157,7 @@ public sealed class EngineStopTests : IAsyncDisposable
         return port;
     }
 
-    sealed class HeadlessPlatform : IPlatformServices
+    internal sealed class HeadlessPlatform : IPlatformServices
     {
         public string ClientName => "engine-stop-test";
 
