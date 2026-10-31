@@ -100,7 +100,7 @@ public sealed class VamEngine : IDisposable
         supplied = backend;
         AudioProcesses = audioProcesses
             ?? (backend is null
-                ? new AudioProcessCatalogue(new WasapiAudioSessionSnapshot(), new ToolhelpProcessSnapshot(), Environment.ProcessId)
+                ? new AudioProcessCatalogue(new WasapiAudioSessionSnapshot(loggers.CreateLogger<WasapiAudioSessionSnapshot>()), new ToolhelpProcessSnapshot(), Environment.ProcessId)
                 : null);
         Presets = new ChainPresetStore(options.PresetPath);
 
