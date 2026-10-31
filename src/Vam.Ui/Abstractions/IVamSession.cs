@@ -32,6 +32,13 @@ public interface IVamSession
     /// <summary>What the engine calls itself.</summary>
     string ServerName { get; }
 
+    /// <summary>The address this session dialled, or empty before it has.</summary>
+    /// <remarks>
+    /// This session's own, not the shared options': in a web host several consoles share one set of
+    /// options, and the address there is whichever console was pointed somewhere last. #118.
+    /// </remarks>
+    string EngineAddress { get; }
+
     /// <summary>The rate the whole graph runs at.</summary>
     int SampleRate { get; }
 
@@ -118,6 +125,11 @@ public interface IVamSession
     /// <summary>Reads the preset library back, after one was saved or deleted.</summary>
     /// <param name="cancellationToken">Gives up.</param>
     ValueTask RefreshPresetsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Reads the engine's devices again, so one plugged in or taken away since connecting shows. #128.</summary>
+    /// <param name="cancellationToken">Gives up.</param>
+    /// <remarks>Asked when a selector opens, against any engine: <c>ListDevices</c> is in protocol 1.</remarks>
+    ValueTask RefreshDevicesAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Asks for K1 to K7.

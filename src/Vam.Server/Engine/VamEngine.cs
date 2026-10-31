@@ -51,6 +51,7 @@ public sealed class VamEngine : IDisposable
     readonly ILoggerFactory loggers;
     readonly ILogger<VamEngine> logger;
     readonly ConsoleStore store;
+    readonly EngineSettingsStore settings;
     readonly MovedDeviceFinder moved;
     readonly CancellationTokenSource stopping = new();
     readonly Dictionary<(int Channel, int Link), long> overruns = [];
@@ -99,17 +100,21 @@ public sealed class VamEngine : IDisposable
         supplied = backend;
         AudioProcesses = audioProcesses
             ?? (backend is null
-                ? new AudioProcessCatalogue(new WasapiAudioSessionSnapshot(), new ToolhelpProcessSnapshot(), Environment.ProcessId)
+                ? new AudioProcessCatalogue(new WasapiAudioSessionSnapshot(loggers.CreateLogger<WasapiAudioSessionSnapshot>()), new ToolhelpProcessSnapshot(), Environment.ProcessId)
                 : null);
         Presets = new ChainPresetStore(options.PresetPath);
 
         logger = loggers.CreateLogger<VamEngine>();
         store = new ConsoleStore(loggers.CreateLogger<ConsoleStore>());
+        settings = new EngineSettingsStore(SettingsPathFor(options), loggers.CreateLogger<EngineSettingsStore>());
         moved = new MovedDeviceFinder(loggers.CreateLogger<MovedDeviceFinder>());
 
         Channels = new DeviceInputChannelRegistry();
         Modifiers = ModifierRegistry.CreateDefault();
         Dropouts = new DropoutLog();
+
+        // Before Start, so a console asking before the engine runs is told what the next start does.
+        settings.Restore(options);
     }
 
     /// <summary>The live input channels, for telemetry.</summary>
@@ -702,6 +707,7 @@ public sealed class VamEngine : IDisposable
         }
 
         options.RecordingDirectory = wanted;
+        settings.Save(options);
 
         logger.LogInformation("Recordings now go to {Path}.", wanted);
 
@@ -746,6 +752,7 @@ public sealed class VamEngine : IDisposable
     public void SetCapture(CaptureSelection selection)
     {
         options.Capture = selection;
+        settings.Save(options);
 
         logger.LogInformation(
             "Capture: inputs {Inputs}, stream bus {Stream}, all buses {Buses}, format {Format}. Takes effect at the next recording.",
@@ -783,12 +790,18 @@ public sealed class VamEngine : IDisposable
     {
         options.LoadLastConsole = loadLastConsole;
         options.RecordAutomatically = recordAutomatically;
+        settings.Save(options);
 
         logger.LogInformation(
             "Startup: load last console {Load}, record automatically {Record}. Both take effect at the next start.",
             loadLastConsole,
             recordAutomatically);
     }
+
+    /// <summary>Where the settings are kept: the configured file, or beside the console.</summary>
+    static string SettingsPathFor(EngineOptions options) =>
+        options.SettingsPath
+        ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(options.ConsolePath)) ?? string.Empty, "engine.json");
 
     GraphConfig LoadOrDiscover(IAudioBackend devices)
     {

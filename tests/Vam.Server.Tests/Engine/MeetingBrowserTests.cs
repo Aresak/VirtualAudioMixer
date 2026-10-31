@@ -112,6 +112,21 @@ public class MeetingBrowserTests
 
     [Fact]
     [Trait("Category", TestCategories.Unit)]
+    public void TheAmbiguityWarningNamesTheSettingTheEngineReads()
+    {
+        // #132. The device layer cannot read the engine's configuration, so it spells the key out;
+        // this is what keeps the two from drifting apart.
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { [ProcessLoopbackSources.MeetingBrowserSetting] = Chrome })
+            .Build();
+
+        MeetingBrowserOptions? options = configuration.GetSection(MeetingBrowserOptions.Section).Get<MeetingBrowserOptions>();
+
+        Assert.Equal(Chrome, options?.Executable);
+    }
+
+    [Fact]
+    [Trait("Category", TestCategories.Unit)]
     public void WithoutProcessSourcesNothingIsStartedAndTheTrayIsToldWhy()
     {
         string workspace = Path.Combine(Path.GetTempPath(), $"vam-{Guid.NewGuid():N}");

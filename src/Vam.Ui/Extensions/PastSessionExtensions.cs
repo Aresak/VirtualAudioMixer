@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using Grpc.Core;
 using Vam.Protocol.V1;
 
 namespace Vam.Ui.Extensions;
@@ -20,6 +21,55 @@ public static class PastSessionExtensions
         string trimmed = directory.TrimEnd('\\', '/');
 
         return trimmed[(trimmed.LastIndexOfAny(['\\', '/']) + 1)..];
+    }
+
+    /// <summary>
+    /// Exports a session into one zip archive, opening the destination only once the engine has
+    /// started sending. #118.
+    /// </summary>
+    /// <param name="client">The engine.</param>
+    /// <param name="directory">The session's folder, as the engine listed it.</param>
+    /// <param name="open">Opens the destination. Not called when the engine refuses.</param>
+    /// <param name="cancellationToken">Gives up.</param>
+    /// <returns>Null when the archive was written, otherwise the engine's reason for refusing.</returns>
+    /// <remarks>
+    /// A refusal arrives before the first file, and a download that has already sent its headers
+    /// cannot turn into a sentence any more. Waiting for the first chunk is what lets a browser be
+    /// told why. A failure after that throws, because half an archive has to be abandoned, not saved.
+    /// </remarks>
+    public static async Task<string?> ExportZipAsync(
+        this Mixer.MixerClient client,
+        string directory,
+        Func<Stream> open,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+        ArgumentNullException.ThrowIfNull(open);
+
+        using AsyncServerStreamingCall<PastSessionChunk> call = client.ExportPastSession(
+            new PastSessionTarget { Directory = directory },
+            cancellationToken: cancellationToken);
+
+        IAsyncEnumerator<PastSessionChunk> chunks = call.ResponseStream.ReadAllAsync(cancellationToken)
+            .GetAsyncEnumerator(cancellationToken);
+
+        await using (chunks)
+        {
+            bool any;
+
+            try
+            {
+                any = await chunks.MoveNextAsync();
+            }
+            catch (RpcException refused)
+            {
+                return refused.Status.Detail.Length > 0 ? refused.Status.Detail : refused.Status.StatusCode.ToString();
+            }
+
+            await RemainingAsync(chunks, any).WriteZipAsync(directory.FolderName(), open(), cancellationToken);
+        }
+
+        return null;
     }
 
     /// <summary>Writes an exported session into one zip archive, under a folder of its own.</summary>
@@ -71,5 +121,20 @@ public static class PastSessionExtensions
                 }
             }
         }
+    }
+
+    // The chunk already read, then the rest.
+    static async IAsyncEnumerable<PastSessionChunk> RemainingAsync(IAsyncEnumerator<PastSessionChunk> chunks, bool any)
+    {
+        if (!any)
+        {
+            yield break;
+        }
+
+        do
+        {
+            yield return chunks.Current;
+        }
+        while (await chunks.MoveNextAsync());
     }
 }

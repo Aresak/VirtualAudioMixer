@@ -60,6 +60,9 @@ public sealed class VamSessionClient(
     public string ServerName { get; private set; } = string.Empty;
 
     /// <inheritdoc />
+    public string EngineAddress { get; private set; } = string.Empty;
+
+    /// <inheritdoc />
     public int SampleRate { get; private set; }
 
     /// <inheritdoc />
@@ -189,6 +192,27 @@ public sealed class VamSessionClient(
         catch (RpcException failure)
         {
             logger.LogWarning(failure, "Could not read the preset library back.");
+        }
+    }
+
+    /// <inheritdoc />
+    public async ValueTask RefreshDevicesAsync(CancellationToken cancellationToken = default)
+    {
+        Mixer.MixerClient? current = client;
+
+        if (current is null)
+        {
+            return;
+        }
+
+        try
+        {
+            Devices = (await current.ListDevicesAsync(new Empty(), cancellationToken: cancellationToken)).Devices;
+            Changed?.Invoke();
+        }
+        catch (RpcException failure)
+        {
+            logger.LogWarning(failure, "Could not read the engine's devices again.");
         }
     }
 
@@ -456,7 +480,8 @@ public sealed class VamSessionClient(
             string.Empty);
 
         channel?.Dispose();
-        channel = GrpcChannel.ForAddress(options.Address);
+        EngineAddress = options.Address;
+        channel = GrpcChannel.ForAddress(EngineAddress);
         client = new Mixer.MixerClient(channel);
 
         HelloReply hello = await client.HelloAsync(
@@ -478,8 +503,8 @@ public sealed class VamSessionClient(
 
         Console = await client.GetConsoleAsync(new Empty(), cancellationToken: cancellationToken);
 
-        // Both are fixed for the life of a connection, so they are fetched once here rather than
-        // asked for again every time an overlay opens.
+        // The modifiers are fixed for the life of a connection. The devices are not, so a selector
+        // reads them again when it opens (#128); this is what a console shows before one has.
         Devices = (await client.ListDevicesAsync(new Empty(), cancellationToken: cancellationToken)).Devices;
         Modifiers = (await client.ListModifiersAsync(new Empty(), cancellationToken: cancellationToken)).Modifiers;
 
