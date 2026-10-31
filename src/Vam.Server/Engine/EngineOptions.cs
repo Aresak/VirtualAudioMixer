@@ -44,6 +44,15 @@ public sealed record EngineOptions
             "VAM",
             "presets.json");
 
+    /// <summary>
+    /// Where the operator's recording and startup choices are kept, or null for beside the console. #136.
+    /// </summary>
+    /// <remarks>
+    /// Beside the console rather than inside it. "Load the last console" can be turned off, and an
+    /// operator who turns it off has not asked for the recording folder to be forgotten as well.
+    /// </remarks>
+    public string? SettingsPath { get; init; }
+
     /// <summary>Where recordings go.</summary>
     public string RecordingDirectory { get; set; } =
         Path.Combine(
