@@ -112,6 +112,7 @@ public class ProcessLoopbackSourcesTests
 
         Assert.Throws<DeviceNotFoundException>(() => sources.Lease(Meeting, Parse(Meeting)));
         Assert.True(loggers.Mentions("VAM's tray"));
+        Assert.True(loggers.Mentions(ProcessLoopbackSources.MeetingBrowserSetting));
         Assert.Empty(sources.Describe(SampleRate));
     }
 
