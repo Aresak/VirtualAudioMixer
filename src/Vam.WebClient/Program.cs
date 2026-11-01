@@ -7,6 +7,10 @@ using Vam.WebClient.Components;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
+// A built console can run without a launch profile, which defaults to Production. Load the
+// referenced UI assets there too; without them Blazor leaves the non-prerendered console blank.
+builder.WebHost.UseStaticWebAssets();
+
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
 builder.Services.AddVamUi<WebPlatformServices>(options =>
